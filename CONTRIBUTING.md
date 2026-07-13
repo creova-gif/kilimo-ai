@@ -43,3 +43,21 @@ Found a security issue? See [`SECURITY.md`](./SECURITY.md) — don't open a publ
 ## Questions
 
 Open an issue or reach out to the maintainer directly if you're unsure where to start.
+
+## AI-Assisted Contributions
+
+AI tools (Copilot, Claude, ChatGPT, etc.) may be used to assist with contributions,
+but every submission must meet the same bar as human-authored code:
+
+- A human contributor must review, understand, and take ownership of any
+  AI-assisted change before opening a PR.
+- PRs should be described in terms of *what changed and why*, not how they
+  were generated.
+- Commit history should be clean and logical — squash exploratory or
+  AI-iteration commits before merging to main.
+- Security-critical paths, core architecture decisions, and public-facing
+  API contracts require human-authored review and rationale, regardless of
+  drafting assistance used.
+
+We welcome AI-assisted contributions in this spirit. What we don't accept
+is unreviewed, low-effort, or "drive-by" AI-generated PRs.
