@@ -10,7 +10,7 @@
 
 Kilimo AI is a React Native (Expo) mobile app aimed at helping smallholder farmers manage their operations and get expert guidance without needing to leave their fields. The app currently includes field management, a marketplace view, a calendar for farming activities, contract tracking, a consultations flow for connecting with agronomists, an AgroID feature, and an AI training hub with a voice-driven assistant.
 
-[ADD SCREENSHOT HERE]
+![Kilimo AI onboarding](docs/screenshots/dashboard.png)
 
 ## Status: In active development
 
