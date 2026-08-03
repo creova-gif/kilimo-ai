@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#2E6F40"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -30,7 +30,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#2E6F40"
       },
       "package": "com.jaymafie.kilimoai",
       "permissions": [
