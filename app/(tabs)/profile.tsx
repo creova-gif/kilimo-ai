@@ -49,41 +49,43 @@ const AGRO_ID_FALLBACK = {
   joinDate: '2023',
 };
 
-const showSafeAlert = (title: string, message: string, buttons?: AlertButton[]) => {
+const showSafeAlert = (
+  title: string,
+  message: string,
+  buttons?: AlertButton[],
+  // For irreversible actions (e.g. account deletion): when window.confirm is
+  // unavailable (sandboxed iframe throws), DEFAULT TO CANCEL instead of
+  // auto-running the destructive button. Never delete without explicit consent.
+  opts?: { cancelOnUnavailable?: boolean }
+) => {
+  const runCancel = () => {
+    const cancelBtn = buttons?.find((b) => b.style === 'cancel') || buttons?.[0];
+    cancelBtn?.onPress?.();
+  };
+  const runPrimary = () => {
+    const primaryBtn =
+      buttons?.find((b) => b.style === 'destructive') ||
+      buttons?.find(
+        (b) =>
+          b.text === 'Ondoka' ||
+          b.text === 'Discard' ||
+          b.text === 'Sync' ||
+          b.text === 'Kusawazisha'
+      ) ||
+      buttons?.[1] ||
+      buttons?.[0];
+    primaryBtn?.onPress?.();
+  };
+
   if (Platform.OS === 'web') {
     try {
-      const confirmResult = window.confirm(`${title}\n\n${message}`);
-      if (confirmResult) {
-        const primaryBtn =
-          buttons?.find((b) => b.style === 'destructive') ||
-          buttons?.find(
-            (b) =>
-              b.text === 'Ondoka' ||
-              b.text === 'Discard' ||
-              b.text === 'Sync' ||
-              b.text === 'Kusawazisha'
-          ) ||
-          buttons?.[1] ||
-          buttons?.[0];
-        primaryBtn?.onPress?.();
-      } else {
-        const cancelBtn = buttons?.find((b) => b.style === 'cancel') || buttons?.[0];
-        cancelBtn?.onPress?.();
-      }
+      if (window.confirm(`${title}\n\n${message}`)) runPrimary();
+      else runCancel();
     } catch (e) {
-      console.warn('Alert blocked by iframe sandbox, executing primary action automatically:', e);
-      const primaryBtn =
-        buttons?.find((b) => b.style === 'destructive') ||
-        buttons?.find(
-          (b) =>
-            b.text === 'Ondoka' ||
-            b.text === 'Discard' ||
-            b.text === 'Sync' ||
-            b.text === 'Kusawazisha'
-        ) ||
-        buttons?.[1] ||
-        buttons?.[0];
-      primaryBtn?.onPress?.();
+      console.warn('Alert blocked by iframe sandbox:', e);
+      // Fail safe: destructive flows cancel; non-destructive keep prior behavior.
+      if (opts?.cancelOnUnavailable) runCancel();
+      else runPrimary();
     }
   } else {
     Alert.alert(title, message, buttons);
@@ -534,7 +536,9 @@ export default function ProfileScreen() {
                           }
                         },
                       },
-                    ]
+                    ],
+                    // Irreversible: never auto-confirm if the web dialog is blocked.
+                    { cancelOnUnavailable: true }
                   );
                 }}
                 style={styles.deleteAccountBtn}

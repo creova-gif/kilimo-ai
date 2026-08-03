@@ -4,10 +4,23 @@ import OpenAI from 'https://esm.sh/openai@4.0.0'
 
 const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') })
 
+// This function runs with verify_jwt = false (pg_cron has no user JWT), so the
+// gateway does NOT authenticate callers — the function MUST do it itself, or the
+// endpoint is world-open (triggering OpenAI spend + notification inserts).
+// The pg_cron job must send  `x-cron-secret: <CRON_SECRET>`.
+// Set it once with:  supabase secrets set CRON_SECRET=<random>
+const CRON_SECRET = Deno.env.get('CRON_SECRET') ?? ''
+
 serve(async (req) => {
   // Only allow POST requests (usually from pg_cron)
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 })
+  }
+
+  // Require the shared cron secret. Fail closed if it isn't configured.
+  const provided = req.headers.get('x-cron-secret') ?? ''
+  if (!CRON_SECRET || provided !== CRON_SECRET) {
+    return new Response('Unauthorized', { status: 401 })
   }
 
   try {

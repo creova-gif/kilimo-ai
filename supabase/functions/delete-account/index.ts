@@ -23,7 +23,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
-const admin = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+// Fail fast at cold start rather than with an opaque 500 mid-request.
+if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+  throw new Error('delete-account: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
+}
+// Edge Functions are stateless — no session persistence for the admin client.
+const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false },
+});
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
