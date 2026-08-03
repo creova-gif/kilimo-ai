@@ -52,8 +52,10 @@ export default function PrivacyScreen() {
         transcription and are not stored by us after processing.{'\n\n'}
         <Bold>f) Financial Data{'\n'}</Bold>— Wallet transaction history and M-Pesa linked phone
         number (if you choose to link it). We do not store full M-Pesa credentials.{'\n\n'}
-        <Bold>g) Device & Usage Data{'\n'}</Bold>— Device type, operating system version, app
-        version, and anonymized usage analytics for app improvement.
+        <Bold>g) Device & Diagnostic Data{'\n'}</Bold>— Device type, operating system version, and
+        app version. If crash reporting is enabled for a release, we collect anonymized crash and
+        error diagnostics (stack traces and device context, via Sentry) to fix bugs. We do not use
+        third-party behavioural or advertising analytics.
       </Section>
 
       <Section title="3. How We Use Your Data" color={textColor} sub={subTextColor}>
@@ -111,7 +113,8 @@ export default function PrivacyScreen() {
         {'\n'}— Voice recordings: Deleted immediately after transcription.{'\n'}— Farm activity
         logs: Retained for 3 years to support historical yield analysis.{'\n'}— Financial
         transaction records: Retained for 7 years as required by Tanzanian financial regulations.
-        {'\n'}— Anonymized analytics: Retained indefinitely in aggregate form.
+        {'\n'}— Crash & error diagnostics: Retained by our error-reporting provider (Sentry) for up
+        to 90 days.
       </Section>
 
       <Section title="8. Your Rights" color={textColor} sub={subTextColor}>
@@ -150,10 +153,11 @@ export default function PrivacyScreen() {
         international transfers.
       </Section>
 
-      <Section title="12. Cookies & Analytics" color={textColor} sub={subTextColor}>
-        The mobile app does not use browser cookies. We use anonymized, aggregated analytics (not
-        linked to your identity) to understand feature usage and improve the app. You may opt out of
-        analytics in Profile → Settings → Analytics.
+      <Section title="12. Cookies & Diagnostics" color={textColor} sub={subTextColor}>
+        The mobile app does not use browser cookies, and we do not use third-party behavioural or
+        advertising analytics. Where crash reporting is enabled for a release, anonymized crash and
+        error diagnostics (not linked to your identity) are collected via Sentry solely to diagnose
+        and fix problems.
       </Section>
 
       <Section title="13. SMS Notifications" color={textColor} sub={subTextColor}>
