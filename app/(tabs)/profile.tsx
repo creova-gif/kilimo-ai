@@ -25,6 +25,7 @@ import {
   Bot,
   Award,
   Tv,
+  Trash2,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -33,6 +34,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../constants/Theme';
 import Animated, { FadeIn, FadeOut, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useKilimoStore } from '../../store/useKilimoStore';
+import { useAgroAuth } from '../../hooks/useAgroAuth';
 import { ArrowUpRight } from 'lucide-react-native';
 import { Alert, AlertButton } from 'react-native';
 
@@ -47,41 +49,43 @@ const AGRO_ID_FALLBACK = {
   joinDate: '2023',
 };
 
-const showSafeAlert = (title: string, message: string, buttons?: AlertButton[]) => {
+const showSafeAlert = (
+  title: string,
+  message: string,
+  buttons?: AlertButton[],
+  // For irreversible actions (e.g. account deletion): when window.confirm is
+  // unavailable (sandboxed iframe throws), DEFAULT TO CANCEL instead of
+  // auto-running the destructive button. Never delete without explicit consent.
+  opts?: { cancelOnUnavailable?: boolean }
+) => {
+  const runCancel = () => {
+    const cancelBtn = buttons?.find((b) => b.style === 'cancel') || buttons?.[0];
+    cancelBtn?.onPress?.();
+  };
+  const runPrimary = () => {
+    const primaryBtn =
+      buttons?.find((b) => b.style === 'destructive') ||
+      buttons?.find(
+        (b) =>
+          b.text === 'Ondoka' ||
+          b.text === 'Discard' ||
+          b.text === 'Sync' ||
+          b.text === 'Kusawazisha'
+      ) ||
+      buttons?.[1] ||
+      buttons?.[0];
+    primaryBtn?.onPress?.();
+  };
+
   if (Platform.OS === 'web') {
     try {
-      const confirmResult = window.confirm(`${title}\n\n${message}`);
-      if (confirmResult) {
-        const primaryBtn =
-          buttons?.find((b) => b.style === 'destructive') ||
-          buttons?.find(
-            (b) =>
-              b.text === 'Ondoka' ||
-              b.text === 'Discard' ||
-              b.text === 'Sync' ||
-              b.text === 'Kusawazisha'
-          ) ||
-          buttons?.[1] ||
-          buttons?.[0];
-        primaryBtn?.onPress?.();
-      } else {
-        const cancelBtn = buttons?.find((b) => b.style === 'cancel') || buttons?.[0];
-        cancelBtn?.onPress?.();
-      }
+      if (window.confirm(`${title}\n\n${message}`)) runPrimary();
+      else runCancel();
     } catch (e) {
-      console.warn('Alert blocked by iframe sandbox, executing primary action automatically:', e);
-      const primaryBtn =
-        buttons?.find((b) => b.style === 'destructive') ||
-        buttons?.find(
-          (b) =>
-            b.text === 'Ondoka' ||
-            b.text === 'Discard' ||
-            b.text === 'Sync' ||
-            b.text === 'Kusawazisha'
-        ) ||
-        buttons?.[1] ||
-        buttons?.[0];
-      primaryBtn?.onPress?.();
+      console.warn('Alert blocked by iframe sandbox:', e);
+      // Fail safe: destructive flows cancel; non-destructive keep prior behavior.
+      if (opts?.cancelOnUnavailable) runCancel();
+      else runPrimary();
     }
   } else {
     Alert.alert(title, message, buttons);
@@ -97,6 +101,7 @@ export default function ProfileScreen() {
   const resetOnboarding = useKilimoStore((s) => s.resetOnboarding);
   const language = useKilimoStore((s) => s.language);
   const setLanguage = useKilimoStore((s) => s.setLanguage);
+  const { deleteAccount, loading: authLoading } = useAgroAuth();
   const aiCertified = useKilimoStore((s) => s.aiCertified);
 
   const [biometric, setBiometric] = useState(true);
@@ -498,6 +503,59 @@ export default function ProfileScreen() {
                 <Text style={styles.logoutText}>Ondoka (Log Out)</Text>
               </TouchableOpacity>
             </View>
+
+            {/* Delete account (required by App Store 5.1.1(v) / Google Play) */}
+            <View style={{ marginTop: 12 }}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                disabled={authLoading}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                  const isSw = language === 'sw';
+                  showSafeAlert(
+                    isSw ? 'Futa Akaunti' : 'Delete Account',
+                    isSw
+                      ? 'Hii itafuta kabisa akaunti yako na taarifa zako zote (rekodi za fedha, Agro ID). Haiwezi kutenduliwa.'
+                      : 'This permanently deletes your account and all your data (financial records, Agro ID). This cannot be undone.',
+                    [
+                      { text: isSw ? 'Ghairi' : 'Cancel', style: 'cancel' },
+                      {
+                        text: isSw ? 'Futa Kabisa' : 'Delete Forever',
+                        style: 'destructive',
+                        onPress: async () => {
+                          const res = await deleteAccount();
+                          if (res.ok) {
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                            resetOnboarding();
+                          } else {
+                            showSafeAlert(
+                              isSw ? 'Imeshindikana' : 'Deletion failed',
+                              (isSw ? 'Tafadhali jaribu tena. ' : 'Please try again. ') +
+                                (res.error ?? '')
+                            );
+                          }
+                        },
+                      },
+                    ],
+                    // Irreversible: never auto-confirm if the web dialog is blocked.
+                    { cancelOnUnavailable: true }
+                  );
+                }}
+                style={styles.deleteAccountBtn}
+                accessibilityRole="button"
+                accessibilityLabel={language === 'sw' ? 'Futa akaunti' : 'Delete account'}
+                accessibilityHint={
+                  language === 'sw'
+                    ? 'Kufuta akaunti yako na taarifa zote kabisa'
+                    : 'Permanently deletes your account and all data'
+                }
+              >
+                <Trash2 size={16} color="#ef4444" />
+                <Text style={styles.deleteAccountText}>
+                  {language === 'sw' ? 'Futa Akaunti (Delete Account)' : 'Delete Account'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={{ height: 100 }} />
@@ -687,5 +745,21 @@ const styles = StyleSheet.create({
     color: '#ef4444',
     fontSize: 15,
     fontFamily: 'Inter_800ExtraBold',
+  },
+  deleteAccountBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    backgroundColor: 'transparent',
+    gap: 8,
+  },
+  deleteAccountText: {
+    color: '#ef4444',
+    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
   },
 });
