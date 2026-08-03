@@ -76,7 +76,8 @@
         }
       ],
       "expo-audio",
-      "expo-asset"
+      "expo-asset",
+      "@sentry/react-native"
     ],
     "scheme": "kilimoai",
     "extra": {
