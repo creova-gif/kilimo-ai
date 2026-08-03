@@ -25,6 +25,7 @@ import {
   Bot,
   Award,
   Tv,
+  Trash2,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -33,6 +34,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../constants/Theme';
 import Animated, { FadeIn, FadeOut, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useKilimoStore } from '../../store/useKilimoStore';
+import { useAgroAuth } from '../../hooks/useAgroAuth';
 import { ArrowUpRight } from 'lucide-react-native';
 import { Alert, AlertButton } from 'react-native';
 
@@ -97,6 +99,7 @@ export default function ProfileScreen() {
   const resetOnboarding = useKilimoStore((s) => s.resetOnboarding);
   const language = useKilimoStore((s) => s.language);
   const setLanguage = useKilimoStore((s) => s.setLanguage);
+  const { deleteAccount, loading: authLoading } = useAgroAuth();
   const aiCertified = useKilimoStore((s) => s.aiCertified);
 
   const [biometric, setBiometric] = useState(true);
@@ -498,6 +501,57 @@ export default function ProfileScreen() {
                 <Text style={styles.logoutText}>Ondoka (Log Out)</Text>
               </TouchableOpacity>
             </View>
+
+            {/* Delete account (required by App Store 5.1.1(v) / Google Play) */}
+            <View style={{ marginTop: 12 }}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                disabled={authLoading}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                  const isSw = language === 'sw';
+                  showSafeAlert(
+                    isSw ? 'Futa Akaunti' : 'Delete Account',
+                    isSw
+                      ? 'Hii itafuta kabisa akaunti yako na taarifa zako zote (rekodi za fedha, Agro ID). Haiwezi kutenduliwa.'
+                      : 'This permanently deletes your account and all your data (financial records, Agro ID). This cannot be undone.',
+                    [
+                      { text: isSw ? 'Ghairi' : 'Cancel', style: 'cancel' },
+                      {
+                        text: isSw ? 'Futa Kabisa' : 'Delete Forever',
+                        style: 'destructive',
+                        onPress: async () => {
+                          const res = await deleteAccount();
+                          if (res.ok) {
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                            resetOnboarding();
+                          } else {
+                            showSafeAlert(
+                              isSw ? 'Imeshindikana' : 'Deletion failed',
+                              (isSw ? 'Tafadhali jaribu tena. ' : 'Please try again. ') +
+                                (res.error ?? '')
+                            );
+                          }
+                        },
+                      },
+                    ]
+                  );
+                }}
+                style={styles.deleteAccountBtn}
+                accessibilityRole="button"
+                accessibilityLabel={language === 'sw' ? 'Futa akaunti' : 'Delete account'}
+                accessibilityHint={
+                  language === 'sw'
+                    ? 'Kufuta akaunti yako na taarifa zote kabisa'
+                    : 'Permanently deletes your account and all data'
+                }
+              >
+                <Trash2 size={16} color="#ef4444" />
+                <Text style={styles.deleteAccountText}>
+                  {language === 'sw' ? 'Futa Akaunti (Delete Account)' : 'Delete Account'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={{ height: 100 }} />
@@ -687,5 +741,21 @@ const styles = StyleSheet.create({
     color: '#ef4444',
     fontSize: 15,
     fontFamily: 'Inter_800ExtraBold',
+  },
+  deleteAccountBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    backgroundColor: 'transparent',
+    gap: 8,
+  },
+  deleteAccountText: {
+    color: '#ef4444',
+    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
   },
 });

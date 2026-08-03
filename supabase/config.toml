@@ -1,5 +1,31 @@
 # Supabase project-local config. Project linking handled separately via
 # `supabase link --project-ref <ref>`. This file declares per-function settings.
+#
+# Supabase defaults edge functions to verify_jwt = true. Endpoints that must be
+# reachable WITHOUT a user session declare verify_jwt = false explicitly below.
 
+# Authenticated app calls (user JWT required).
 [functions.openai-proxy]
 verify_jwt = true
+
+[functions.mint-agro-id]
+verify_jwt = true
+
+[functions.rag-chat]
+verify_jwt = true
+
+[functions.sms-send]
+verify_jwt = true
+
+# Destructive, authenticated: deletes the caller's account + data.
+[functions.delete-account]
+verify_jwt = true
+
+# PUBLIC: banks / buyers / cooperatives scan the Agro-ID QR with no account.
+# Must be reachable unauthenticated (returns only non-PII aggregates).
+[functions.verify-agro-id]
+verify_jwt = false
+
+# Triggered server-side by pg_cron (no user JWT); guarded by service role.
+[functions.process-notifications]
+verify_jwt = false
