@@ -21,6 +21,10 @@ verify_jwt = true
 [functions.delete-account]
 verify_jwt = true
 
+# Authenticated: files the caller's KYC verification request.
+[functions.submit-verification]
+verify_jwt = true
+
 # PUBLIC: banks / buyers / cooperatives scan the Agro-ID QR with no account.
 # Must be reachable unauthenticated (returns only non-PII aggregates).
 [functions.verify-agro-id]
