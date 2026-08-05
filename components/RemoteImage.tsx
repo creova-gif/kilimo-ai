@@ -25,6 +25,8 @@ type Props = {
   contentFit?: ImageContentFit;
   transition?: number;
   accessibilityLabel?: string;
+  /** Rendered instead of the default leaf tile when uri is missing/failed. */
+  fallback?: React.ReactNode;
 };
 
 const RESIZE_TO_FIT: Record<NonNullable<Props['resizeMode']>, ImageContentFit> = {
@@ -41,11 +43,13 @@ export default function RemoteImage({
   contentFit,
   transition = 250,
   accessibilityLabel,
+  fallback,
 }: Props) {
   const { colors } = useTheme();
   const [failed, setFailed] = useState(false);
 
   if (!uri || failed) {
+    if (fallback !== undefined) return <>{fallback}</>;
     return (
       <View
         style={[

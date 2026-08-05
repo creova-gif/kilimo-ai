@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Dimensions,
-  Image,
   StatusBar,
   Platform,
   Alert,
@@ -35,6 +34,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../constants/Theme';
+import RemoteImage from '../components/RemoteImage';
 import Animated, {
   FadeIn,
   FadeOut,
@@ -375,7 +375,12 @@ export default function ScanScreen() {
 
       {/* Cinematic Camera View */}
       <Animated.View entering={FadeIn.duration(600)} style={styles.cameraView}>
-        <Image source={{ uri: photoUri ?? MOCK_BG }} style={styles.mockCamera} />
+        <RemoteImage
+          uri={photoUri ?? MOCK_BG}
+          style={styles.mockCamera}
+          resizeMode="cover"
+          fallback={<View style={[styles.mockCamera, { backgroundColor: '#0b0f0b' }]} />}
+        />
 
         {/* Dynamic Scan Line Overlay */}
 
