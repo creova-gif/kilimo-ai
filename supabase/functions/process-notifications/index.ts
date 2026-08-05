@@ -2,7 +2,19 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import OpenAI from 'https://esm.sh/openai@4.0.0'
 
-const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') })
+// Lazily construct the OpenAI client INSIDE the handler. Building it at module
+// load with a missing OPENAI_API_KEY throws at cold start, which crashes the
+// whole function (500) before the auth guard below can run. Lazy init keeps the
+// endpoint locked (401) even when the key isn't configured yet.
+let _openai: OpenAI | null = null
+function getOpenAI(): OpenAI {
+  if (!_openai) {
+    const apiKey = Deno.env.get('OPENAI_API_KEY')
+    if (!apiKey) throw new Error('OPENAI_API_KEY is not configured')
+    _openai = new OpenAI({ apiKey })
+  }
+  return _openai
+}
 
 // This function runs with verify_jwt = false (pg_cron has no user JWT), so the
 // gateway does NOT authenticate callers — the function MUST do it itself, or the
@@ -51,7 +63,7 @@ serve(async (req) => {
       const triggerContext = "Heavy rain expected tomorrow in your registered farm area."
 
       // Generate localized, non-spammy message
-      const completion = await openai.chat.completions.create({
+      const completion = await getOpenAI().chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
           { role: "system", content: "You are a helpful agronomist sending a brief SMS/Push notification to a farmer. Keep it under 100 characters. Use Swahili." },
