@@ -15,6 +15,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
 } from 'react-native';
+import RemoteImage from '../components/RemoteImage';
 import {
   ChevronLeft,
   MapPin,
@@ -291,13 +292,17 @@ export default function AgroIdScreen() {
               </View>
 
               <View style={styles.heroAvatarBorder}>
-                {agroId?.avatarUrl ? (
-                  <Image source={{ uri: agroId.avatarUrl }} style={styles.heroAvatar} />
-                ) : (
-                  <View style={[styles.heroAvatar, { backgroundColor: colors.primary }]}>
-                    <Text style={styles.heroAvatarText}>{agroId?.name?.[0]}</Text>
-                  </View>
-                )}
+                <RemoteImage
+                  uri={agroId?.avatarUrl}
+                  style={styles.heroAvatar}
+                  resizeMode="cover"
+                  accessibilityLabel={agroId?.name ? `${agroId.name} avatar` : 'Profile avatar'}
+                  fallback={
+                    <View style={[styles.heroAvatar, { backgroundColor: colors.primary }]}>
+                      <Text style={styles.heroAvatarText}>{agroId?.name?.[0]}</Text>
+                    </View>
+                  }
+                />
               </View>
             </SafeAreaView>
           </View>
