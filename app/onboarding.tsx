@@ -56,6 +56,8 @@ import Animated, {
 import { useKilimoStore, FarmProfile, AppLanguage } from '../store/useKilimoStore';
 import { CanonicalRole, allRoles, roleLabel, ROLE_DESCRIPTIONS } from '../lib/access';
 import { useAgroAuth } from '../hooks/useAgroAuth';
+import { mintAgroId, DocTag } from '../lib/agro/mintId';
+import { getSupabase } from '../lib/supabase';
 import { useTheme } from '../constants/Theme';
 
 const { width: SW } = Dimensions.get('window');
@@ -386,7 +388,10 @@ export default function OnboardingWizard() {
       setStep((s) => Math.max(0, s - 1) as Step);
     }
   }
-  function finish() {
+  const [finishing, setFinishing] = useState(false);
+  async function finish() {
+    if (finishing) return;
+    setFinishing(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setFarmProfile({
       primaryCrops: crops,
@@ -398,8 +403,24 @@ export default function OnboardingWizard() {
     });
     const enteredId =
       idType === 'nida' ? nida.trim() : idType === 'tin' ? tin.trim() : license.trim();
+    const docTag: DocTag =
+      idType === 'nida' ? 'NIDA' : idType === 'tin' ? 'TIN' : idType === 'license' ? 'LIC' : 'REG';
+
+    // Mint the authoritative, server-side Agro-ID so the public QR is verifiable
+    // immediately after onboarding. Idempotent; falls back to a local CSPRNG id
+    // (serverMinted:false → provisional/pending) when offline.
+    let newId = userId || 'mock-user-id';
+    let serverMinted = false;
+    try {
+      const minted = await mintAgroId(docTag);
+      newId = minted.id;
+      serverMinted = minted.serverMinted;
+    } catch {
+      /* keep local fallback id */
+    }
+
     const newProfile = {
-      id: userId || 'mock-user-id',
+      id: newId,
       name,
       role,
       location: region,
@@ -407,12 +428,31 @@ export default function OnboardingWizard() {
       joinDate: new Date().getFullYear().toString(),
       mpesaLinked: false,
       biometricEnabled: false,
-      verificationStatus: 'pending',
+      // Only a server-minted id is authoritative; a provisional/offline id stays
+      // 'pending'. If KYC docs were supplied, review is pending regardless.
+      verificationStatus: serverMinted && !enteredId ? 'verified' : 'pending',
       nationalId: idType === 'nida' ? enteredId : undefined,
       tinNumber: idType === 'tin' ? enteredId : undefined,
       businessLicense: idType === 'license' ? enteredId : undefined,
     } as any;
     setAgroId(newProfile);
+
+    // File the KYC verification with the backend (best-effort, offline-safe).
+    if (enteredId) {
+      const businessRoles = ['commercial_farmer', 'agribusiness', 'commercial_admin'];
+      const verificationType = businessRoles.includes(role) ? 'business' : 'personal';
+      const idField = idType === 'nida' ? 'nationalId' : idType === 'tin' ? 'tin' : 'regNumber';
+      try {
+        const supabase = getSupabase();
+        await supabase?.functions.invoke('submit-verification', {
+          body: { verificationType, [idField]: enteredId },
+        });
+      } catch {
+        /* verification will be re-submittable from Profile; don't block onboarding */
+      }
+    }
+
+    setFinishing(false);
     setOnboardingComplete(true);
   }
   function toggleCrop(c: string) {
@@ -589,12 +629,12 @@ export default function OnboardingWizard() {
         <View style={s.footer}>
           <TouchableOpacity
             onPress={step === 6 ? finish : next}
-            disabled={!canContinue || loading}
+            disabled={!canContinue || loading || finishing}
             activeOpacity={0.88}
-            style={[s.ctaWrap, (!canContinue || loading) && { opacity: 0.38 }]}
+            style={[s.ctaWrap, (!canContinue || loading || finishing) && { opacity: 0.38 }]}
             accessibilityRole="button"
-            accessibilityLabel={loading ? 'Loading' : step === 6 ? t.done.cta : t.next}
-            accessibilityState={{ disabled: !canContinue || loading }}
+            accessibilityLabel={loading || finishing ? 'Loading' : step === 6 ? t.done.cta : t.next}
+            accessibilityState={{ disabled: !canContinue || loading || finishing }}
           >
             <LinearGradient
               colors={['#0a3d18', '#163f20']}
