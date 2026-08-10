@@ -63,7 +63,9 @@ import { useTheme } from '../constants/Theme';
 const { width: SW } = Dimensions.get('window');
 
 const LOGO = require('../assets/icon.png');
-const AUTH_ILLUSTRATION = require('../assets/images/onboarding_auth.png');
+// Was onboarding_auth.png, whose stock photo showed a phone branded "MAZAO APP"
+// (a competitor/placeholder name). Use a clean field image instead.
+const AUTH_ILLUSTRATION = require('../assets/images/rice-field-bg.png');
 const ROLES_ILLUSTRATION = require('../assets/images/onboarding_roles.png');
 const PROFILE_ILLUSTRATION = require('../assets/images/onboarding_profile.png');
 const DONE_ILLUSTRATION = require('../assets/images/onboarding_done.png');
