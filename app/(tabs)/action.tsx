@@ -1,20 +1,9 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { useTheme } from '../../constants/Theme';
+import { Redirect } from 'expo-router';
 
+// The center "+" tab uses a custom tabBarButton (see (tabs)/_layout.tsx) that
+// routes to /features, so this screen is normally never shown. If it is ever
+// reached directly (deep link, back-stack edge case), send the user to the
+// Features hub instead of a blank placeholder.
 export default function ActionScreen() {
-  const { colors } = useTheme();
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Text style={{ color: colors.text, fontFamily: 'Inter_500Medium' }}>Action Screen</Text>
-    </View>
-  );
+  return <Redirect href="/features" />;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-});
