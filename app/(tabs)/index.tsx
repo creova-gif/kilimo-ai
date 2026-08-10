@@ -1792,6 +1792,10 @@ export default function HomeScreen() {
 
   const [activatingHome, setActivatingHome] = useState(false);
   const [activationFinished, setActivationFinished] = useState(false);
+  // Activation is a prompt, not a wall — the user can dismiss it and use the app.
+  // (Also prevents a permanent trap when the server mint can't complete, e.g. in
+  // the web simulator / offline, which would otherwise keep status != 'verified'.)
+  const [dismissedActivation, setDismissedActivation] = useState(false);
   const progress = useSharedValue(0);
   const sweepY = useSharedValue(-100);
 
@@ -1839,6 +1843,7 @@ export default function HomeScreen() {
       setTimeout(() => {
         setActivatingHome(false);
         setActivationFinished(false);
+        setDismissedActivation(true); // proceed into the app even if mint was provisional
         progress.value = 0;
         sweepY.value = -100;
       }, 1000);
@@ -3735,7 +3740,7 @@ export default function HomeScreen() {
       </Modal>
 
       {/* Verification Gate Overlay */}
-      {agroId?.verificationStatus !== 'verified' && (
+      {agroId?.verificationStatus !== 'verified' && !dismissedActivation && (
         <View
           style={[
             StyleSheet.absoluteFill,
@@ -3915,6 +3920,26 @@ export default function HomeScreen() {
                   onPress={handleActivateHome}
                   style={{ width: '100%' }}
                 />
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setDismissedActivation(true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={language === 'sw' ? 'Baadaye' : 'Later'}
+                  style={{ marginTop: 14, paddingVertical: 8 }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: 'Inter_600SemiBold',
+                      fontSize: 14,
+                      color: colors.textMute,
+                      textAlign: 'center',
+                    }}
+                  >
+                    {language === 'sw' ? 'Baadaye' : 'Later'}
+                  </Text>
+                </TouchableOpacity>
               </View>
             )}
           </Card>
