@@ -6,15 +6,16 @@ import { Home, User, Bot, Tractor, Plus } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../constants/Theme';
 import { useKilimoStore } from '../../store/useKilimoStore';
-import Animated, {
+import {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withTiming,
-  interpolateColor,
 } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 
-const ICON_ACTIVE = '#10b981';
+// Brand forest green (DESIGN.md) — replaces the generic emerald so the nav
+// matches the rest of the product.
+const ICON_ACTIVE = '#2E6F40';
 
 function TabIcon({
   focused,
@@ -25,40 +26,31 @@ function TabIcon({
   label: string;
   children: React.ReactNode;
 }) {
-  const { colors, isDark } = useTheme();
-  const scale = useSharedValue(focused ? 1 : 0);
-  const iconScale = useSharedValue(focused ? 1.1 : 1);
+  const { colors } = useTheme();
+  const iconScale = useSharedValue(focused ? 1 : 1);
 
   useEffect(() => {
-    scale.value = withSpring(focused ? 1 : 0, { damping: 15, stiffness: 150 });
-    iconScale.value = withSpring(focused ? 1.15 : 1, { damping: 12, stiffness: 200 });
+    iconScale.value = withSpring(focused ? 1.08 : 1, { damping: 14, stiffness: 200 });
   }, [focused]);
 
-  const pillStyle = useAnimatedStyle(() => ({
-    transform: [{ scaleX: scale.value }],
-    opacity: scale.value,
-  }));
-
   const iconAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: iconScale.value }, { translateY: focused ? -4 : 0 }] as any,
+    transform: [{ scale: iconScale.value }] as any,
   }));
 
   return (
-    <View style={{ alignItems: 'center', justifyContent: 'center', width: 60 }}>
+    <View style={{ alignItems: 'center', justifyContent: 'center', width: 64, gap: 3, paddingTop: 8 }}>
       <Animated.View style={iconAnimStyle}>{children}</Animated.View>
-      <Animated.View
-        style={[
-          {
-            position: 'absolute',
-            bottom: -14,
-            width: 4,
-            height: 4,
-            borderRadius: 2,
-            backgroundColor: ICON_ACTIVE,
-          },
-          pillStyle,
-        ]}
-      />
+      <Text
+        numberOfLines={1}
+        style={{
+          fontFamily: focused ? 'Inter_700Bold' : 'Inter_500Medium',
+          fontSize: 10.5,
+          letterSpacing: 0.1,
+          color: focused ? ICON_ACTIVE : colors.textMute,
+        }}
+      >
+        {label}
+      </Text>
     </View>
   );
 }
@@ -80,10 +72,11 @@ export default function TabLayout() {
         tabBarStyle: {
           position: 'absolute',
           bottom: Platform.OS === 'ios' ? 24 : 16,
-          left: 20,
-          right: 20,
-          height: 64,
-          borderRadius: 20,
+          left: 16,
+          right: 16,
+          height: 76,
+          borderRadius: 24,
+          paddingBottom: 0,
           borderTopWidth: 1,
           borderColor: borderColor,
           backgroundColor: tabBarBg,
@@ -137,7 +130,7 @@ export default function TabLayout() {
               }}
             >
               <LinearGradient
-                colors={['#34d399', '#059669']}
+                colors={['#3A8D52', '#2E6F40']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={{
@@ -146,7 +139,7 @@ export default function TabLayout() {
                   borderRadius: 28,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  shadowColor: '#10b981',
+                  shadowColor: '#2E6F40',
                   shadowOpacity: 0.4,
                   shadowRadius: 12,
                   shadowOffset: { width: 0, height: 6 },
@@ -165,7 +158,7 @@ export default function TabLayout() {
         name="ai"
         options={{
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon focused={focused} label="Sankofa AI">
+            <TabIcon focused={focused} label="Sankofa">
               <Bot color={color} size={24} strokeWidth={focused ? 2.5 : 2} />
             </TabIcon>
           ),
