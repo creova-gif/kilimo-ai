@@ -15,6 +15,11 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://vwestumjbrpwlbsewupz.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "REPLACE_WITH_SUPABASE_ANON_KEY",
+        "EXPO_PUBLIC_OPENWEATHER_API_KEY": "REPLACE_WITH_OPENWEATHER_KEY"
       }
     },
     "production": {
@@ -24,6 +29,11 @@
       },
       "ios": {
         "resourceClass": "m-medium"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://vwestumjbrpwlbsewupz.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "REPLACE_WITH_SUPABASE_ANON_KEY",
+        "EXPO_PUBLIC_OPENWEATHER_API_KEY": "REPLACE_WITH_OPENWEATHER_KEY"
       }
     }
   },
