@@ -66,7 +66,6 @@ import {
 } from '../../lib/ai';
 import { demoChat } from '../../lib/ai-demo';
 import { useKilimoStore } from '../../store/useKilimoStore';
-import { RequireVerification } from '../../components/RequireVerification';
 import {
   useAudioRecorder,
   RecordingPresets,
@@ -460,7 +459,6 @@ export default function SankofaScreen() {
   };
 
   return (
-    <RequireVerification>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
@@ -915,7 +913,6 @@ export default function SankofaScreen() {
           </View>
         )}
       </View>
-    </RequireVerification>
   );
 }
 
