@@ -921,7 +921,10 @@ const DailyOrganizerStrip = ({ colors, isDark, language }: any) => {
 // Growth Rates vertical bar chart component
 const GrowthChart = ({ colors, isDark, language }: any) => {
   const [selectedRange, setSelectedRange] = useState('M');
-  const screenWidth = Dimensions.get('window').width;
+  // Dimensions.get('window').width can read 0 on first web hydration (before
+  // the window is measured). 0 is never a real device width, so fall back to
+  // a sane default rather than letting it flow into negative chart math.
+  const screenWidth = Dimensions.get('window').width || 360;
 
   const exportReport = async () => {
     try {
@@ -943,16 +946,19 @@ const GrowthChart = ({ colors, isDark, language }: any) => {
     }
   };
 
-  const chartW = screenWidth - 80;
+  const chartW = Math.max(100, screenWidth - 80);
   const chartH = 160;
   const padL = 8;
   const padR = 8;
   const padTop = 20;
   const padBot = 28;
-  const barAreaW = chartW - padL - padR;
+  const barAreaW = Math.max(0, chartW - padL - padR);
   const n = GROWTH_DATA.length;
-  const barW = Math.floor((barAreaW / n) * 0.55);
-  const gap = Math.floor(barAreaW / n);
+  // Defense in depth: even with chartW/barAreaW floored above, clamp the
+  // derived per-bar values too so a future edit upstream can't reintroduce a
+  // negative <Rect>/<Svg> width (a real bug this session — see git history).
+  const barW = Math.max(0, Math.floor((barAreaW / n) * 0.55));
+  const gap = Math.max(0, Math.floor(barAreaW / n));
   const maxVal = Math.max(...GROWTH_DATA.map((d) => d.value));
 
   return (
@@ -2710,7 +2716,7 @@ export default function HomeScreen() {
                     >
                       {language === 'sw' ? 'KUVUNA' : 'HARVEST'} ·{' '}
                       {cropMeta.harvestDays - cropMeta.currentDay}{' '}
-                      {language === 'sw' ? 'SIKU ZILIZO' : 'DAYS LEFT'}
+                      {language === 'sw' ? 'SIKU ZILIZOBAKI' : 'DAYS LEFT'}
                     </Text>
                   </View>
 

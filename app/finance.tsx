@@ -211,7 +211,10 @@ function MonthlyChart({
   months: { label: string; income: number; expense: number }[];
   colors: any;
 }) {
-  const CW = Dimensions.get('window').width - 64;
+  // `|| 360` guards against Dimensions.get('window').width reading 0 on
+  // first web hydration — an unguarded 0 here flowed into a negative SVG
+  // chart width downstream (real console error + broken chart flash).
+  const CW = Math.max(100, (Dimensions.get('window').width || 360) - 64);
   const H = 110;
   const PAD_LEFT = 42;
   const PAD_BOT = 24;

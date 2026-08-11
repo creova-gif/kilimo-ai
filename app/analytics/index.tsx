@@ -31,7 +31,10 @@ import { runAnalytics, PriceTrend } from '../../lib/analytics/predictions';
 
 const fmtTZS = (n: number) => `TSh ${new Intl.NumberFormat('en-US').format(Math.round(n))}`;
 
-const SCREEN_W = Dimensions.get('window').width;
+// `|| 360` guards against Dimensions.get('window').width reading 0 on first
+// web hydration — an unguarded 0 here flowed into negative <Svg>/<Rect>
+// widths downstream (real console error + broken chart flash).
+const SCREEN_W = Dimensions.get('window').width || 360;
 
 // Full-width projection chart with axes, gridlines, labels and legend
 function YieldProjectionChart({
@@ -45,7 +48,9 @@ function YieldProjectionChart({
   trend: 'up' | 'down' | 'flat';
   color: string;
 }) {
-  const W = SCREEN_W - 64; // card has 16px margin + 16px padding each side
+  // Clamp: window width can read 0 on first web hydration, which fed a
+  // negative width into the SVG chart (console error + broken flash).
+  const W = Math.max(1, SCREEN_W - 64); // card has 16px margin + 16px padding each side
   const H = 110;
   const PAD_LEFT = 34;
   const PAD_BOT = 22;

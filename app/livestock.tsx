@@ -40,7 +40,10 @@ import { useFarmDataStore, LivestockAnimal, LivestockSpecies } from '../store/us
 import { Gate } from '../lib/access';
 import Svg, { Polyline, Circle as SvgCircle, Rect } from 'react-native-svg';
 
-const { width: SW } = Dimensions.get('window');
+// `|| 360` guards against Dimensions.get('window').width reading 0 on first
+// web hydration — an unguarded 0 here flowed into negative <Svg>/<Rect>
+// widths downstream (real console error + broken chart flash).
+const SW = Dimensions.get('window').width || 360;
 
 // ─── Species config ───────────────────────────────────────────────────────────
 const SPECIES: { key: LivestockSpecies; label: string; swahili: string; color: string }[] = [
@@ -80,7 +83,9 @@ function daysUntil(iso: string) {
 
 // ─── RIFT Micro Chart ───────────────────────────────────────────────────────────
 function VitalTrendChart({ data, color }: { data: number[]; color: string }) {
-  const chartW = SW - 80;
+  // Clamp: window width can read 0 on first web hydration, which fed a
+  // negative width into the SVG chart (console error + broken flash).
+  const chartW = Math.max(1, SW - 80);
   const chartH = 60;
   const max = Math.max(...data, 1);
   const min = Math.min(...data, 0);

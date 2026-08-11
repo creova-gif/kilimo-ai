@@ -39,7 +39,10 @@ import Svg, {
   Text as SvgText,
 } from 'react-native-svg';
 
-const { width: SW } = Dimensions.get('window');
+// `|| 360` guards against Dimensions.get('window').width reading 0 on first
+// web hydration — an unguarded 0 here flowed into negative <Svg> widths
+// downstream (both the gauge size and the chart width derive from SW).
+const SW = Dimensions.get('window').width || 360;
 const GAUGE_SIZE = Math.min(100, Math.floor((SW - 96) / 3));
 
 function polarToXY(cx: number, cy: number, r: number, angleDeg: number) {
