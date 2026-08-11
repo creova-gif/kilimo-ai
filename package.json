@@ -53,7 +53,7 @@
     "expo-local-authentication": "~17.0.7",
     "expo-notifications": "~0.32.11",
     "expo-print": "~15.0.8",
-    "expo-router": "~6.0.24",
+    "expo-router": "~57.0.11",
     "expo-secure-store": "~15.0.7",
     "expo-sharing": "~14.0.8",
     "expo-splash-screen": "~31.0.10",
