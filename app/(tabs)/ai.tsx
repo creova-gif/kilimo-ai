@@ -505,11 +505,23 @@ export default function SankofaScreen() {
                   <View
                     style={[
                       styles.statusDot,
-                      { backgroundColor: isOffline ? '#ef4444' : colors.primary },
+                      {
+                        backgroundColor: isOffline
+                          ? '#ef4444'
+                          : !aiConfigured()
+                            ? '#f59e0b'
+                            : colors.primary,
+                      },
                     ]}
                   />
                   <Text style={styles.statusLabel}>
-                    {isOffline ? 'SMS Fallback' : 'Neural Link Active'}
+                    {isOffline
+                      ? 'SMS Fallback'
+                      : !aiConfigured()
+                        ? language === 'sw'
+                          ? 'Hali ya Onyesho'
+                          : 'Demo Mode'
+                        : 'Neural Link Active'}
                   </Text>
                 </View>
               </View>
