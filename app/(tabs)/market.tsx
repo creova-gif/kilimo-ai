@@ -61,7 +61,6 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../constants/Theme';
 import { useKilimoStore } from '../../store/useKilimoStore';
 import { GlassCard } from '../../components/PageScaffold';
-import { RequireVerification } from '../../components/RequireVerification';
 import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -579,7 +578,6 @@ export default function MarketScreen() {
   }, [comparedIds]);
 
   return (
-    <RequireVerification>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
@@ -1617,7 +1615,6 @@ export default function MarketScreen() {
           </View>
         </Modal>
       </View>
-    </RequireVerification>
   );
 }
 
