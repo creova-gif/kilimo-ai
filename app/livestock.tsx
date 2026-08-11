@@ -791,7 +791,7 @@ export default function LivestockScreen() {
                 {dueSoon.length > 0 && (
                   <SummaryPill
                     count={dueSoon.length}
-                    label="Chanjo Hivi Karibuni"
+                    label="Chanjo Karibuni"
                     color="#3b82f6"
                   />
                 )}
@@ -931,7 +931,7 @@ function SummaryPill({ count, label, color }: { count: number; label: string; co
   return (
     <View style={{ alignItems: 'center', flex: 1 }}>
       <Text style={[s.pillCount, { color }]}>{count}</Text>
-      <Text style={[s.pillLabel, { color: colors.textMute }]} numberOfLines={1}>
+      <Text style={[s.pillLabel, { color: colors.textMute }]} numberOfLines={2}>
         {label}
       </Text>
     </View>
