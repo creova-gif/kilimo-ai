@@ -248,7 +248,7 @@ function MonthlyChart({
         <SvgDefs>
           <SvgGrad id="incGrad" x1="0" y1="0" x2="0" y2="1">
             <SvgStop offset="0%" stopColor={colors.primary} stopOpacity="1" />
-            <SvgStop offset="100%" stopColor="#16a34a" stopOpacity="0.9" />
+            <SvgStop offset="100%" stopColor="#3A8D52" stopOpacity="0.9" />
           </SvgGrad>
           <SvgGrad id="expGrad" x1="0" y1="0" x2="0" y2="1">
             <SvgStop offset="0%" stopColor="#ef4444" stopOpacity="0.85" />

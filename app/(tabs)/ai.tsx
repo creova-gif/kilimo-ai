@@ -631,7 +631,7 @@ export default function SankofaScreen() {
                   <LinearGradient
                     colors={
                       voiceState === 'LISTENING'
-                        ? [colors.primary, '#16a34a']
+                        ? [colors.primary, '#3A8D52']
                         : voiceState === 'PROCESSING'
                           ? ['rgba(139,92,246,0.4)', 'rgba(139,92,246,0.1)']
                           : [colors.primary + '33', colors.primary + '0D']
