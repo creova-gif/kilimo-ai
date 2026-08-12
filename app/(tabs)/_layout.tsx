@@ -6,11 +6,7 @@ import { Home, User, Bot, Tractor, Plus } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../constants/Theme';
 import { useKilimoStore } from '../../store/useKilimoStore';
-import {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated';
+import { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import Animated from 'react-native-reanimated';
 
 // Brand forest green (DESIGN.md) — replaces the generic emerald so the nav
@@ -26,28 +22,44 @@ function TabIcon({
   label: string;
   children: React.ReactNode;
 }) {
-  const { colors } = useTheme();
-  const iconScale = useSharedValue(focused ? 1 : 1);
+  const { colors, isDark } = useTheme();
+  const progress = useSharedValue(focused ? 1 : 0);
 
   useEffect(() => {
-    iconScale.value = withSpring(focused ? 1.08 : 1, { damping: 14, stiffness: 200 });
+    progress.value = withSpring(focused ? 1 : 0, { damping: 16, stiffness: 220 });
   }, [focused]);
 
   const iconAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: iconScale.value }] as any,
+    transform: [{ scale: 1 + progress.value * 0.06 }] as any,
+  }));
+
+  // Soft pill highlight behind the active tab — replaces the old
+  // color-only active state, which had nothing to visually anchor the
+  // selection at a glance.
+  const pillAnimStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [{ scale: 0.85 + progress.value * 0.15 }] as any,
   }));
 
   return (
-    <View style={{ alignItems: 'center', justifyContent: 'center', width: 64, gap: 3, paddingTop: 8 }}>
+    <View style={styles.tabIconWrap}>
+      <Animated.View
+        style={[
+          styles.activePill,
+          pillAnimStyle,
+          { backgroundColor: isDark ? ICON_ACTIVE + '2A' : ICON_ACTIVE + '14' },
+        ]}
+      />
       <Animated.View style={iconAnimStyle}>{children}</Animated.View>
       <Text
         numberOfLines={1}
-        style={{
-          fontFamily: focused ? 'Inter_700Bold' : 'Inter_500Medium',
-          fontSize: 10.5,
-          letterSpacing: 0.1,
-          color: focused ? ICON_ACTIVE : colors.textMute,
-        }}
+        style={[
+          styles.tabLabel,
+          {
+            fontFamily: focused ? 'Inter_700Bold' : 'Inter_500Medium',
+            color: focused ? ICON_ACTIVE : colors.textMute,
+          },
+        ]}
       >
         {label}
       </Text>
@@ -74,17 +86,17 @@ export default function TabLayout() {
           bottom: Platform.OS === 'ios' ? 24 : 16,
           left: 16,
           right: 16,
-          height: 76,
-          borderRadius: 24,
+          height: 80,
+          borderRadius: 28,
           paddingBottom: 0,
-          borderTopWidth: 1,
+          borderWidth: 1,
           borderColor: borderColor,
           backgroundColor: tabBarBg,
           elevation: 10,
           shadowColor: '#000',
-          shadowOpacity: isDark ? 0.4 : 0.08,
-          shadowRadius: 16,
-          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: isDark ? 0.35 : 0.06,
+          shadowRadius: 20,
+          shadowOffset: { width: 0, height: 10 },
         },
       }}
     >
@@ -122,12 +134,14 @@ export default function TabLayout() {
               }}
               style={{
                 position: 'relative',
-                top: -24,
+                top: -26,
                 width: 60,
                 height: 60,
                 justifyContent: 'center',
                 alignItems: 'center',
               }}
+              accessibilityRole="button"
+              accessibilityLabel="Ongeza"
             >
               <LinearGradient
                 colors={['#3A8D52', '#2E6F40']}
@@ -140,15 +154,15 @@ export default function TabLayout() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   shadowColor: '#2E6F40',
-                  shadowOpacity: 0.4,
-                  shadowRadius: 12,
-                  shadowOffset: { width: 0, height: 6 },
+                  shadowOpacity: 0.35,
+                  shadowRadius: 14,
+                  shadowOffset: { width: 0, height: 8 },
                   elevation: 8,
-                  borderWidth: 4,
+                  borderWidth: 3,
                   borderColor: tabBarBg,
                 }}
               >
-                <Plus color="#ffffff" size={28} strokeWidth={3} />
+                <Plus color="#ffffff" size={26} strokeWidth={2.75} />
               </LinearGradient>
             </TouchableOpacity>
           ),
@@ -182,3 +196,24 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabIconWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 68,
+    gap: 4,
+    paddingTop: 10,
+  },
+  activePill: {
+    position: 'absolute',
+    top: 2,
+    width: 52,
+    height: 34,
+    borderRadius: 17,
+  },
+  tabLabel: {
+    fontSize: 11,
+    letterSpacing: 0.1,
+  },
+});
