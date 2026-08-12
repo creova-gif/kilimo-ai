@@ -1,5 +1,7 @@
 import NetInfo from '@react-native-community/netinfo';
 import { useKilimoStore } from '../store/useKilimoStore';
+import { supabase } from './supabase';
+import { listingToDbRow } from '../hooks/useMarketIntelligence';
 
 export function initializeOfflineManager() {
   if (__DEV__) console.log('[OfflineManager] Initializing network listener...');
@@ -37,8 +39,27 @@ export async function processSyncQueue() {
     try {
       if (__DEV__) console.log(`[OfflineManager] Syncing item: ${item.type} [${item.id}]`);
 
-      // Simulate network request to backend
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      if (item.type === 'market_order') {
+        // Real sync: market_order queue items back a farmer's crop listing
+        // (createListing() in hooks/useMarketIntelligence.ts queues here when
+        // offline). Previously this whole loop only simulated a network call
+        // and discarded every queued item regardless of type — a listing
+        // created offline was never actually saved anywhere once the device
+        // came back online. Other item types (scan_result, task_complete,
+        // irrigation_log, voice_note) still only simulate below; each needs
+        // its own real backend call and is tracked as a separate follow-up.
+        if (!supabase) throw new Error('Supabase not configured');
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) throw new Error('Not authenticated');
+        const row = listingToDbRow(item.payload as any, user.id);
+        const { error } = await supabase.from('market_listings').insert(row);
+        if (error) throw error;
+      } else {
+        // Simulate network request to backend
+        await new Promise((resolve) => setTimeout(resolve, 800));
+      }
 
       // Successfully synced! Remove from queue.
       store.dequeueAction(item.id);
