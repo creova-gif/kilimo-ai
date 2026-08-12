@@ -61,6 +61,8 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../constants/Theme';
 import { useKilimoStore } from '../../store/useKilimoStore';
 import { GlassCard } from '../../components/PageScaffold';
+import { useMarketIntelligence } from '../../hooks/useMarketIntelligence';
+import { getSupabase } from '../../lib/supabase';
 import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -228,7 +230,29 @@ const CROPS_SELL = [
   'Mpunga',
   'Kabichi',
 ];
+// English names for CROPS_SELL, used when creating a real market_listings
+// row (cropName) — CROPS_SELL itself only carries the Swahili label shown
+// in the picker (cropNameSw).
+const CROP_EN: Record<string, string> = {
+  Mahindi: 'Maize',
+  Mchele: 'Rice',
+  Maharage: 'Beans',
+  Nyanya: 'Tomatoes',
+  Vitunguu: 'Onions',
+  Kahawa: 'Coffee',
+  Alizeti: 'Sunflower',
+  Soya: 'Soybeans',
+  Mpunga: 'Paddy Rice',
+  Kabichi: 'Cabbage',
+};
 const fmt = (n: number) => new Intl.NumberFormat('en-US').format(n);
+const timeAgo = (iso: string, sw: boolean) => {
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 60) return sw ? `${mins}dk` : `${mins}m`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return sw ? `${hrs}saa` : `${hrs}h`;
+  return sw ? `${Math.round(hrs / 24)}siku` : `${Math.round(hrs / 24)}d`;
+};
 
 // ─── Pembejeo Store Data ──────────────────────────────────────────────────────
 interface Product {
@@ -432,6 +456,23 @@ export default function MarketScreen() {
   const router = useRouter();
   const addNotification = useKilimoStore((s) => s.addNotification);
   const language = useKilimoStore((s) => s.language);
+  const agroId = useKilimoStore((s) => s.agroId);
+  const {
+    listings,
+    loading: listingsLoading,
+    createListing,
+    refresh: refreshListings,
+  } = useMarketIntelligence();
+
+  // market_listings.seller_id is the Supabase auth user id, distinct from
+  // agroId.id (the app's own Agro-ID string) — resolved separately here so
+  // the "your listing" badge compares the right identifier.
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
+  React.useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) return;
+    sb.auth.getUser().then(({ data }: any) => setAuthUserId(data?.user?.id ?? null));
+  }, []);
 
   // Tab State
   const [activeTab, setActiveTab] = useState<'prices' | 'store' | 'orders'>('store');
@@ -480,8 +521,8 @@ export default function MarketScreen() {
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setTimeout(() => setRefreshing(false), 2000);
-  }, []);
+    refreshListings().finally(() => setTimeout(() => setRefreshing(false), 800));
+  }, [refreshListings]);
 
   const filteredPrices = MARKET_DATA.filter((item) => {
     const itemName = language === 'sw' ? item.nameSw : item.nameEn;
@@ -874,7 +915,162 @@ export default function MarketScreen() {
 
             {/* Crop Prices Tab Content */}
             {activeTab === 'prices' && (
-              <View style={styles.marketGrid}>
+              <View style={{ gap: 20 }}>
+                {/* Live Listings — real farmer-posted sell listings, backed by
+                    market_listings via useMarketIntelligence. Distinct from
+                    the price-benchmark cards below (MARKET_DATA), which are
+                    reference market-index content, not individual offers. */}
+                <View>
+                  <View style={styles.liveListingsHeaderRow}>
+                    <Text style={[styles.sectionHeading, { color: colors.text }]}>
+                      {language === 'sw' ? 'Wanaouza Sasa' : 'Live Sell Listings'}
+                    </Text>
+                    {listingsLoading && listings.length > 0 && (
+                      <Activity size={14} color={colors.textMute} />
+                    )}
+                  </View>
+
+                  {listingsLoading && listings.length === 0 ? (
+                    <View style={[styles.listingsEmpty, { borderColor: colors.border }]}>
+                      <Text style={{ color: colors.textMute, fontFamily: 'Inter_500Medium' }}>
+                        {language === 'sw' ? 'Inapakia matangazo...' : 'Loading listings...'}
+                      </Text>
+                    </View>
+                  ) : listings.length === 0 ? (
+                    <View style={[styles.listingsEmpty, { borderColor: colors.border }]}>
+                      <Package size={22} color={colors.textMute} />
+                      <Text
+                        style={{
+                          color: colors.textMute,
+                          fontFamily: 'Inter_600SemiBold',
+                          fontSize: 12,
+                          textAlign: 'center',
+                        }}
+                      >
+                        {language === 'sw'
+                          ? 'Hakuna tangazo bado. Kuwa wa kwanza kuuza!'
+                          : 'No listings yet. Be the first to sell!'}
+                      </Text>
+                    </View>
+                  ) : (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{ gap: 10, paddingVertical: 4 }}
+                    >
+                      {listings.map((l) => {
+                        const isMine = !!authUserId && l.sellerId === authUserId;
+                        return (
+                          <View
+                            key={l.id}
+                            style={[
+                              styles.listingCard,
+                              {
+                                borderColor: isMine ? colors.primary : colors.border,
+                                backgroundColor: colors.card,
+                              },
+                            ]}
+                          >
+                            <View
+                              style={{
+                                flexDirection: 'row',
+                                justifyContent: 'space-between',
+                                alignItems: 'flex-start',
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  fontFamily: 'Inter_800ExtraBold',
+                                  fontSize: 13,
+                                  color: colors.text,
+                                }}
+                                numberOfLines={1}
+                              >
+                                {language === 'sw' ? l.cropNameSw : l.cropName}
+                              </Text>
+                              <View
+                                style={{
+                                  paddingHorizontal: 6,
+                                  paddingVertical: 2,
+                                  borderRadius: 6,
+                                  backgroundColor: colors.primary + '15',
+                                }}
+                              >
+                                <Text
+                                  style={{
+                                    fontSize: 9,
+                                    fontFamily: 'Inter_700Bold',
+                                    color: colors.primary,
+                                  }}
+                                >
+                                  {l.qualityGrade}
+                                </Text>
+                              </View>
+                            </View>
+                            <Text
+                              style={{
+                                fontFamily: 'Inter_700Bold',
+                                fontSize: 15,
+                                color: colors.primary,
+                                marginTop: 4,
+                              }}
+                            >
+                              {l.currency} {fmt(l.pricePerKg)}/kg
+                            </Text>
+                            <Text
+                              style={{
+                                fontFamily: 'Inter_500Medium',
+                                fontSize: 11,
+                                color: colors.textMute,
+                                marginTop: 2,
+                              }}
+                            >
+                              {fmt(l.quantityKg)}kg
+                            </Text>
+                            <View
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4,
+                                marginTop: 8,
+                              }}
+                            >
+                              <MapPin size={11} color={colors.textMute} />
+                              <Text
+                                style={{
+                                  fontSize: 10,
+                                  fontFamily: 'Inter_500Medium',
+                                  color: colors.textMute,
+                                }}
+                                numberOfLines={1}
+                              >
+                                {l.location || (language === 'sw' ? 'Haijulikani' : 'Unknown')}
+                              </Text>
+                              <Clock size={11} color={colors.textMute} style={{ marginLeft: 4 }} />
+                              <Text style={{ fontSize: 10, color: colors.textMute }}>
+                                {timeAgo(l.createdAt, language === 'sw')}
+                              </Text>
+                            </View>
+                            {isMine && (
+                              <Text
+                                style={{
+                                  marginTop: 6,
+                                  fontSize: 9,
+                                  fontFamily: 'Inter_700Bold',
+                                  color: colors.primary,
+                                }}
+                              >
+                                {language === 'sw' ? 'TANGAZO LAKO' : 'YOUR LISTING'}
+                              </Text>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </ScrollView>
+                  )}
+                </View>
+
+                <View style={styles.marketGrid}>
                 {filteredPrices.map((item) => {
                   const isExpanded = expandedId === item.id;
                   const sparkData = [40, 45, 42, 48, 52, 50, 58, 62, 60, 65].map((v) =>
@@ -1082,6 +1278,7 @@ export default function MarketScreen() {
                     </TouchableOpacity>
                   );
                 })}
+                </View>
               </View>
             )}
 
@@ -1304,6 +1501,8 @@ export default function MarketScreen() {
           isDark={isDark}
           addNotification={addNotification}
           language={language}
+          createListing={createListing}
+          defaultLocation={agroId?.location ?? ''}
         />
 
         {/* Product Comparison Modal */}
@@ -2091,13 +2290,23 @@ function MakeOfferModal({ item, onClose, colors, isDark, addNotification, langua
 }
 
 // ─── Sell Listing Modal ───────────────────────────────────────────────────────
-function SellListingModal({ visible, onClose, colors, isDark, addNotification, language }: any) {
+function SellListingModal({
+  visible,
+  onClose,
+  colors,
+  isDark,
+  addNotification,
+  language,
+  createListing,
+  defaultLocation,
+}: any) {
   const [crop, setCrop] = useState('Mahindi');
   const [qty, setQty] = useState('');
   const [price, setPrice] = useState('');
   const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  function publish() {
+  async function publish() {
     if (!qty || parseFloat(qty) <= 0) {
       Alert.alert(language === 'sw' ? 'Kiasi kinahitajika' : 'Quantity required');
       return;
@@ -2106,19 +2315,48 @@ function SellListingModal({ visible, onClose, colors, isDark, addNotification, l
       Alert.alert(language === 'sw' ? 'Bei inahitajika' : 'Price required');
       return;
     }
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    addNotification({
-      title: language === 'sw' ? '📦 Tangazo Limewekwa' : '📦 Listing Posted',
-      body:
+    setSubmitting(true);
+    try {
+      await createListing({
+        cropName: CROP_EN[crop] ?? crop,
+        cropNameSw: crop,
+        quantityKg: parseFloat(qty),
+        pricePerKg: parseFloat(price),
+        currency: 'TZS',
+        location: defaultLocation || '',
+        qualityGrade: 'A',
+        status: 'active',
+        // No real escrow/smart-contract enforcement exists anywhere in the
+        // codebase yet (checked app/contracts/*, lib/*) — never let a
+        // listing claim protection that isn't actually backed by anything.
+        smartContract: false,
+        escrowFunded: false,
+        notes: notes.trim() || null,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      addNotification({
+        title: language === 'sw' ? '📦 Tangazo Limewekwa' : '📦 Listing Posted',
+        body:
+          language === 'sw'
+            ? `${crop} ${qty}kg @ TZS ${fmt(parseFloat(price))}/kg limetangazwa kwenye soko.`
+            : `${crop} ${qty}kg @ TZS ${fmt(parseFloat(price))}/kg listed on the marketplace.`,
+        type: 'success',
+      });
+      setQty('');
+      setPrice('');
+      setNotes('');
+      onClose();
+    } catch (err) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        language === 'sw' ? 'Imeshindikana' : 'Failed',
         language === 'sw'
-          ? `${crop} ${qty}kg @ TZS ${fmt(parseFloat(price))}/kg limetangazwa kwenye soko.`
-          : `${crop} ${qty}kg @ TZS ${fmt(parseFloat(price))}/kg listed on the marketplace.`,
-      type: 'success',
-    });
-    setQty('');
-    setPrice('');
-    setNotes('');
-    onClose();
+          ? 'Imeshindwa kuchapisha tangazo. Jaribu tena.'
+          : 'Failed to publish listing. Please try again.'
+      );
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -2277,7 +2515,14 @@ function SellListingModal({ visible, onClose, colors, isDark, addNotification, l
             )}
             <TouchableOpacity
               onPress={publish}
-              style={[pm.saveBtn, { backgroundColor: colors.success, marginTop: 16 }]}
+              disabled={submitting}
+              style={[
+                pm.saveBtn,
+                { backgroundColor: colors.success, marginTop: 16, opacity: submitting ? 0.6 : 1 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={language === 'sw' ? 'Chapisha tangazo' : 'Publish listing'}
+              accessibilityState={{ disabled: submitting, busy: submitting }}
             >
               <Globe size={16} color={isDark ? '#000' : '#fff'} />
               <Text
@@ -2287,7 +2532,13 @@ function SellListingModal({ visible, onClose, colors, isDark, addNotification, l
                   fontSize: 15,
                 }}
               >
-                {language === 'sw' ? 'Chapisha Tangazo' : 'Publish Listing'}
+                {submitting
+                  ? language === 'sw'
+                    ? 'Inachapisha...'
+                    : 'Publishing...'
+                  : language === 'sw'
+                    ? 'Chapisha Tangazo'
+                    : 'Publish Listing'}
               </Text>
             </TouchableOpacity>
             <View style={{ height: 32 }} />
@@ -2465,6 +2716,29 @@ const styles = StyleSheet.create({
   cartTotalSection: { borderTopWidth: 1, paddingTop: 16, marginTop: 10, gap: 10 },
   mobiMoneyNote: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   mobiMoneyText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
+
+  // Live Listings (real market_listings data)
+  liveListingsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  sectionHeading: { fontSize: 16, fontFamily: 'InstrumentSerif_400Regular' },
+  listingsEmpty: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    gap: 8,
+  },
+  listingCard: {
+    width: 160,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 12,
+  },
 
   // Original Feed Styling
   marketGrid: { gap: 16 },

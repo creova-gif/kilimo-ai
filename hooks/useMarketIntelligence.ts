@@ -12,6 +12,7 @@ import { useKilimoStore } from '../store/useKilimoStore';
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface MarketListing {
   id: string;
+  sellerId?: string | null;
   cropName: string;
   cropNameSw: string;
   quantityKg: number;
@@ -22,6 +23,7 @@ export interface MarketListing {
   status: 'active' | 'sold' | 'cancelled';
   smartContract: boolean;
   escrowFunded: boolean;
+  notes?: string | null;
   trend: 'up' | 'down' | 'stable';
   changePercent: number;
   createdAt: string;
@@ -173,11 +175,7 @@ export function useMarketIntelligence() {
   // ── Create listing (offline-aware) ────────────────────────────────────────
   const createListing = useCallback(
     async (listing: Omit<MarketListing, 'id' | 'createdAt' | 'trend' | 'changePercent'>) => {
-      const payload = { ...listing, created_at: new Date().toISOString() };
-
-      if (isOffline) {
-        addToSyncQueue({ type: 'market_order', payload });
-        // Optimistically add to local state
+      const addLocalOptimistic = () => {
         setListings((prev) => [
           {
             ...listing,
@@ -188,13 +186,36 @@ export function useMarketIntelligence() {
           },
           ...prev,
         ]);
+      };
+
+      if (isOffline) {
+        // sellerId is resolved from the live session at sync time (lib/offline.ts),
+        // not here — there is no session to ask while offline.
+        addToSyncQueue({ type: 'market_order', payload: listing });
+        addLocalOptimistic();
         return;
       }
 
-      if (supabase) {
-        const { error } = await supabase.from('market_listings').insert(payload);
-        if (error) throw error;
+      if (!supabase) {
+        // No backend configured (e.g. local dev without EXPO_PUBLIC_SUPABASE_*).
+        // Previously this branch did nothing at all — the caller saw no error
+        // and assumed success, but the listing was never saved anywhere, not
+        // even locally. Degrade the same way the rest of the app does when
+        // unconfigured (see lib/ai.ts's demo fallback): keep it visible for
+        // this session instead of silently discarding it.
+        addLocalOptimistic();
+        return;
       }
+
+      // market_listings' RLS insert policy requires seller_id = auth.uid();
+      // without it every real insert is silently rejected by RLS.
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+      const payload = listingToDbRow(listing, user.id);
+      const { error } = await supabase.from('market_listings').insert(payload);
+      if (error) throw error;
     },
     [isOffline, addToSyncQueue]
   );
@@ -208,9 +229,37 @@ export function useMarketIntelligence() {
   };
 }
 
+/**
+ * Maps a client-side listing (camelCase) to market_listings' snake_case
+ * columns. Exported so lib/offline.ts's sync-queue processor can insert a
+ * queued market_order with the exact same shape createListing() uses online
+ * — previously the queue stored (and, when "synced," discarded) the raw
+ * camelCase object, which market_listings' schema doesn't recognize.
+ */
+export function listingToDbRow(
+  listing: Omit<MarketListing, 'id' | 'createdAt' | 'trend' | 'changePercent'>,
+  sellerId?: string | null
+) {
+  return {
+    seller_id: sellerId ?? null,
+    crop_name: listing.cropName,
+    crop_name_sw: listing.cropNameSw,
+    quantity_kg: listing.quantityKg,
+    price_per_kg: listing.pricePerKg,
+    currency: listing.currency,
+    location: listing.location,
+    quality_grade: listing.qualityGrade,
+    status: listing.status,
+    smart_contract: listing.smartContract,
+    escrow_funded: listing.escrowFunded,
+    notes: listing.notes ?? null,
+  };
+}
+
 function mapDbToListing(row: any): MarketListing {
   return {
     id: row.id,
+    sellerId: row.seller_id ?? null,
     cropName: row.crop_name,
     cropNameSw: row.crop_name_sw ?? row.crop_name,
     quantityKg: Number(row.quantity_kg),
@@ -221,6 +270,7 @@ function mapDbToListing(row: any): MarketListing {
     status: row.status,
     smartContract: row.smart_contract ?? false,
     escrowFunded: row.escrow_funded ?? false,
+    notes: row.notes ?? null,
     trend: 'stable',
     changePercent: 0,
     createdAt: row.created_at,
