@@ -102,6 +102,24 @@ const TIERS = [
   },
 ];
 
+// No M-Pesa (or any) payment gateway is wired up anywhere in this codebase —
+// confirmed by searching for a payment/billing edge function and finding
+// none. Before this fix, handleUpgrade() granted Premium/Cooperative tier
+// instantly and for free the moment a user tapped the CTA, while this
+// screen's own footer claimed "Payments processed securely via M-Pesa." That
+// claim was entirely false, and — because agroId.tier (like agroId.role) is
+// unauthenticated client-side state with no server verification anywhere —
+// tapping this button was a genuine free privilege escalation, not just
+// misleading copy. Flip this to true only once a real payment flow
+// (Safaricom/Vodacom M-Pesa Daraja-style integration, server-verified
+// webhook, tier written server-side on confirmed payment) actually exists.
+const PAYMENT_INTEGRATION_LIVE = false;
+const TIER_RANK: Record<'Free' | 'Premium' | 'Cooperative', number> = {
+  Free: 0,
+  Premium: 1,
+  Cooperative: 2,
+};
+
 export default function UpgradeScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
@@ -113,19 +131,41 @@ export default function UpgradeScreen() {
 
   const [selected, setSelected] = useState<'Free' | 'Premium' | 'Cooperative'>(currentTier);
 
+  // A downgrade (moving to a lower-ranked tier, e.g. Cooperative → Premium
+  // or anything → Free) only ever removes privilege, so it's safe to apply
+  // locally without payment. Only an upward move needs real billing.
+  const isDowngrade = TIER_RANK[selected] < TIER_RANK[currentTier];
+  const requiresUnavailablePayment =
+    selected !== currentTier && !isDowngrade && !PAYMENT_INTEGRATION_LIVE;
+
   const handleUpgrade = () => {
     if (selected === currentTier) {
       if (router.canGoBack()) router.back();
       else router.replace('/');
       return;
     }
+    if (requiresUnavailablePayment) {
+      // Nothing charges, nothing unlocks — be honest that this isn't live
+      // rather than either silently granting it or leaving a dead button.
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      addNotification({
+        title: isSw ? 'Malipo Bado Hayapatikani' : 'Payments Not Yet Available',
+        body: isSw
+          ? 'Uwezo wa kulipia kupitia M-Pesa unakuja hivi karibuni. Bado hujatozwa chochote.'
+          : 'M-Pesa billing is coming soon. You have not been charged.',
+        type: 'warning',
+      });
+      return;
+    }
+    // Only reachable for a downgrade — removing paid-tier privileges is safe
+    // to apply locally; it can't grant anything.
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     updateAgroId({ tier: selected });
     addNotification({
       title: isSw ? 'Kiwango Kimebadilishwa' : 'Tier Updated',
       body: isSw
-        ? `Umebadilisha kwa ${selected}. Vipengele vipya vinapatikana sasa.`
-        : `Switched to ${selected}. New features are now unlocked.`,
+        ? `Umebadilisha kwa ${selected}.`
+        : `Switched to ${selected}.`,
       type: 'success',
     });
     if (router.canGoBack()) router.back();
@@ -246,9 +286,13 @@ export default function UpgradeScreen() {
           <View style={s.noteWrap}>
             <Lock size={13} color={colors.textMute} />
             <Text style={[s.noteText, { color: colors.textMute }]}>
-              {isSw
-                ? 'Malipo yanashughulikiwa kwa usalama kupitia M-Pesa. Ghairi wakati wowote.'
-                : 'Payments processed securely via M-Pesa. Cancel anytime.'}
+              {PAYMENT_INTEGRATION_LIVE
+                ? isSw
+                  ? 'Malipo yanashughulikiwa kwa usalama kupitia M-Pesa. Ghairi wakati wowote.'
+                  : 'Payments processed securely via M-Pesa. Cancel anytime.'
+                : isSw
+                  ? 'Malipo kupitia M-Pesa yanakuja hivi karibuni. Hakuna malipo yanayochukuliwa sasa.'
+                  : 'M-Pesa billing is launching soon. No payment is taken right now.'}
             </Text>
           </View>
 
@@ -257,7 +301,7 @@ export default function UpgradeScreen() {
               s.ctaBtn,
               {
                 backgroundColor:
-                  selected === 'Free'
+                  selected === currentTier || requiresUnavailablePayment
                     ? colors.border
                     : (TIERS.find((t) => t.id === selected)?.color ?? colors.primary),
               },
@@ -266,18 +310,28 @@ export default function UpgradeScreen() {
             activeOpacity={0.85}
             accessibilityLabel={isSw ? 'Thibitisha kiwango' : 'Confirm plan'}
           >
-            <Text style={[s.ctaText, { color: selected === 'Free' ? colors.textMute : '#fff' }]}>
+            <Text
+              style={[
+                s.ctaText,
+                {
+                  color:
+                    selected === currentTier || requiresUnavailablePayment
+                      ? colors.textMute
+                      : '#fff',
+                },
+              ]}
+            >
               {selected === currentTier
                 ? isSw
                   ? 'Endelea na kiwango cha sasa'
                   : 'Continue with current plan'
-                : selected === 'Free'
+                : requiresUnavailablePayment
                   ? isSw
-                    ? 'Shuka kwa Bure'
-                    : 'Downgrade to Free'
+                    ? 'Inakuja Hivi Karibuni'
+                    : 'Coming Soon'
                   : isSw
-                    ? `Pata ${selected}`
-                    : `Get ${selected}`}
+                    ? 'Shuka kwa Bure'
+                    : 'Downgrade to Free'}
             </Text>
           </TouchableOpacity>
 
