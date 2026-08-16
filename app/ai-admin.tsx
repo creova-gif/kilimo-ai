@@ -165,14 +165,25 @@ export default function AIAdminScreen() {
   ] as const;
 
   // Handle system prompt save
+  // NOTE: customSystemPrompt is local-device Zustand state only (see
+  // store/useKilimoStore.ts). Nothing in the real chat pipeline
+  // (app/(tabs)/ai.tsx, lib/ai.ts's chat(), or the openai-proxy/rag-chat
+  // edge functions) ever reads it — the alert below used to claim this
+  // took effect "immediately," which was never true. openai-proxy also
+  // explicitly strips any client-supplied system prompt server-side by
+  // design, so wiring this up as-is would be a defense-in-depth violation,
+  // not just a missing connection. Left honestly labeled rather than wired
+  // in — a real prompt-management surface needs to be a properly
+  // authenticated, server-side, staff-only capability, not a value any
+  // client can set for itself.
   const handleSavePrompt = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setCustomSystemPrompt(promptText);
     Alert.alert(
-      language === 'sw' ? 'Prompt Imesasishwa!' : 'Prompt Saved Successfully!',
+      language === 'sw' ? 'Imehifadhiwa kwenye Kifaa Hiki' : 'Saved On This Device Only',
       language === 'sw'
-        ? 'Mabadiliko yatatumika sasa hivi kwenye majibu ya chatbot.'
-        : 'The changes will apply immediately to the chatbot replies.'
+        ? 'Hii ni onyesho la mfano — bado halijaunganishwa na mfumo halisi wa Sankofa AI.'
+        : 'This is a prototype view — it is not yet connected to the live Sankofa AI system.'
     );
   };
 
@@ -342,6 +353,28 @@ export default function AIAdminScreen() {
             </Text>
           </View>
           <View style={{ width: 44 }} />
+        </View>
+
+        {/* Prototype notice — nothing on this screen (system prompt, RAG
+            documents, retraining pipeline, feedback triage) is wired to a
+            real backend. All of it is local-device state; see the comment
+            on handleSavePrompt below for why. This screen was previously
+            reachable from every farmer's own Profile menu with no role
+            gate at all — removed from that nav in the same change that
+            added this notice. Kept in the codebase, honestly labeled,
+            rather than deleted, since real internal tooling likely belongs
+            here eventually behind proper staff authentication. */}
+        <View
+          style={[
+            styles.protoBanner,
+            { backgroundColor: '#f59e0b18', borderColor: '#f59e0b40' },
+          ]}
+        >
+          <Text style={[styles.protoBannerText, { color: '#b45309' }]}>
+            {language === 'sw'
+              ? 'ONYESHO LA MFANO — hakuna kinachobadilika kwenye Sankofa AI halisi.'
+              : 'PROTOTYPE — nothing here changes the live Sankofa AI.'}
+          </Text>
         </View>
 
         {/* Tabs navigation */}
@@ -929,6 +962,20 @@ export default function AIAdminScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  protoBanner: {
+    marginHorizontal: 24,
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  protoBannerText: {
+    fontSize: 11,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.3,
+    textAlign: 'center',
   },
   safeArea: {
     flex: 1,
