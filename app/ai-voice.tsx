@@ -12,6 +12,7 @@ import {
   Platform,
   Dimensions,
   StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -39,8 +40,17 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  useAudioRecorder,
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+} from 'expo-audio';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '../constants/Theme';
 import { useKilimoStore } from '../store/useKilimoStore';
+import { chat as aiChat, transcribeAudio, aiConfigured, AIError } from '../lib/ai';
+import { demoChat } from '../lib/ai-demo';
 
 const { width: SW } = Dimensions.get('window');
 const PRIMARY = '#2E6F40';
@@ -56,22 +66,8 @@ const QUICK_PHRASES = [
   { sw: 'Mbolea inayofaa?', en: 'Best fertilizer?', icon: '🧪' },
 ];
 
-const SAMPLE_RESPONSES = [
-  {
-    q: 'Hali ya hewa leo?',
-    a: 'Leo Dodoma kuna joto la 26°C na anga angavu. Mvua inatarajiwa Alhamisi usiku — wastani wa 12mm. Fuatilia dalili za upepo mkali kabla ya dhoruba.',
-  },
-  {
-    q: "Today's weather?",
-    a: 'Today in Dodoma: 26°C, clear skies. Rain expected Thursday evening — approx 12mm. Watch for wind gusts ahead of the front.',
-  },
-  {
-    q: 'Bei za soko sasa?',
-    a: 'Mahindi: TSh 420/kg (Kariakoo), TSh 390/kg (Mbeya). Maharage: TSh 1,800/kg. Alizeti: TSh 2,100/kg. Bei za mahindi zimepanda 8% wiki hii.',
-  },
-];
-
 type Message = { role: 'user' | 'ai'; text: string; ts: number };
+type VoiceState = 'IDLE' | 'LISTENING' | 'PROCESSING';
 
 // ─── Single pulse ring (one per instance) ────────────────────────────────────
 function OrbRing({
@@ -322,66 +318,190 @@ export default function AiVoiceScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const language = useKilimoStore((s) => s.language);
-  const [recording, setRecording] = useState(false);
+  // Real pipeline throughout — this screen used to fake everything (no
+  // microphone, no transcription, a 3-entry canned-answer table covering
+  // only 2 of the 6 quick phrases, with the other 4 dead-ending into a
+  // generic "researching..." message that never resolved). It now reuses
+  // the exact same recorder/transcribe/chat pipeline already built and
+  // working in app/(tabs)/ai.tsx, rather than maintaining a second,
+  // independent (and fake) implementation of the same feature.
+  const [voiceState, setVoiceState] = useState<VoiceState>('IDLE');
+  const recording = voiceState === 'LISTENING';
+  const processing = voiceState === 'PROCESSING';
   const [messages, setMessages] = useState<Message[]>([]);
   const [phraseIdx, setPhraseIdx] = useState<number | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+  const addNotification = useKilimoStore((s) => s.addNotification);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const requestSeqRef = useRef(0);
 
   const orbScale = useSharedValue(1);
+
+  const appendExchange = (question: string, answer: string) => {
+    const now = Date.now();
+    setMessages((prev) => [
+      ...prev,
+      { role: 'user', text: question, ts: now },
+      { role: 'ai', text: answer, ts: now + 1 },
+    ]);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120);
+  };
+
+  /** Ask the real AI (or the honestly-labeled demo fallback) a known text
+   * question — used by the quick-phrase chips, which don't need speech
+   * input since the question text is already fixed. */
+  const askText = async (question: string) => {
+    setVoiceState('PROCESSING');
+    try {
+      const answer = aiConfigured()
+        ? await aiChat([{ role: 'user', content: question }])
+        : await demoChat(question);
+      appendExchange(
+        question,
+        aiConfigured()
+          ? answer
+          : `${answer}\n\n${language === 'sw' ? '(Hali ya Onyesho)' : '(Demo Mode)'}`
+      );
+    } catch (err) {
+      const e = err as AIError;
+      addNotification({
+        title: 'Sauti AI',
+        body:
+          e?.kind === 'network'
+            ? language === 'sw'
+              ? 'Hakuna mtandao. Jaribu tena.'
+              : 'No connection. Try again.'
+            : language === 'sw'
+              ? 'Samahani, imeshindikana kujibu. Jaribu tena.'
+              : 'Sorry, could not get a response. Try again.',
+        type: 'warning',
+      });
+    } finally {
+      setVoiceState('IDLE');
+    }
+  };
+
+  const handlePhrase = (idx: number) => {
+    if (voiceState !== 'IDLE') return;
+    Haptics.selectionAsync();
+    setPhraseIdx(idx);
+    const phrase = QUICK_PHRASES[idx];
+    const q = language === 'sw' ? phrase.sw : phrase.en;
+    askText(q).finally(() => setPhraseIdx(null));
+  };
+
+  const startRecording = async () => {
+    try {
+      const perm = await requestRecordingPermissionsAsync();
+      if (!perm.granted) {
+        addNotification({
+          title: 'Sauti AI',
+          body:
+            language === 'sw'
+              ? 'Tafadhali ruhusu kipaza sauti kwenye mipangilio.'
+              : 'Please allow microphone access in settings.',
+          type: 'warning',
+        });
+        return;
+      }
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      setVoiceState('LISTENING');
+    } catch {
+      addNotification({
+        title: 'Sauti AI',
+        body: language === 'sw' ? 'Kipaza sauti hakikuanzishwa.' : 'Could not start the microphone.',
+        type: 'warning',
+      });
+      setVoiceState('IDLE');
+    }
+  };
+
+  const stopRecordingAndAsk = async () => {
+    const opId = ++requestSeqRef.current;
+    const stale = () => requestSeqRef.current !== opId;
+    try {
+      setVoiceState('PROCESSING');
+      await recorder.stop();
+      if (stale()) return;
+      const uri = recorder.uri;
+      if (!uri) throw new AIError('Hakuna rekodi iliyopatikana.', 'validation');
+
+      if (!aiConfigured()) {
+        // Real STT (transcribeAudio) requires the live backend — there is
+        // no offline/demo speech-to-text to fall back to, unlike text
+        // questions (which demoChat can still answer). Be upfront about
+        // that instead of pretending to transcribe.
+        addNotification({
+          title: 'Sauti AI',
+          body:
+            language === 'sw'
+              ? 'Kuandika sauti kunahitaji muunganisho wa AI. Tumia maswali ya haraka kwa sasa.'
+              : 'Voice transcription needs the live AI backend. Use a quick phrase for now.',
+          type: 'info',
+        });
+        setVoiceState('IDLE');
+        return;
+      }
+
+      const info = await FileSystem.getInfoAsync(uri);
+      if (info.exists && typeof info.size === 'number' && info.size > 5_000_000) {
+        throw new AIError('Sauti ni ndefu sana. Jaribu kwa muda mfupi.', 'validation');
+      }
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      if (stale()) return;
+      const mimeType = uri.toLowerCase().endsWith('.wav') ? 'audio/wav' : 'audio/m4a';
+      const transcript = await transcribeAudio(base64, { mimeType, language });
+      if (stale()) return;
+
+      if (!transcript || !transcript.trim()) {
+        addNotification({
+          title: 'Sauti AI',
+          body: language === 'sw' ? 'Sikukusikia. Jaribu tena.' : "Didn't catch that. Try again.",
+          type: 'warning',
+        });
+        setVoiceState('IDLE');
+        return;
+      }
+
+      const answer = await aiChat([{ role: 'user', content: transcript }]);
+      if (stale()) return;
+      appendExchange(transcript, answer);
+      setVoiceState('IDLE');
+    } catch (err) {
+      if (stale()) return;
+      const e = err as AIError;
+      addNotification({
+        title: 'Sauti AI',
+        body:
+          e?.kind === 'validation'
+            ? e.message
+            : e?.kind === 'network'
+              ? language === 'sw'
+                ? 'Hakuna mtandao. Jaribu tena.'
+                : 'No connection. Try again.'
+              : language === 'sw'
+                ? 'Samahani, sauti haijachanganuliwa. Jaribu tena.'
+                : 'Sorry, the recording could not be processed. Try again.',
+        type: 'warning',
+      });
+      setVoiceState('IDLE');
+    }
+  };
 
   const handleMicPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     orbScale.value = withSpring(0.93, { damping: 10 }, () => {
       orbScale.value = withSpring(1, { damping: 12 });
     });
-    if (recording) {
-      setRecording(false);
-      if (phraseIdx !== null) {
-        const phrase = QUICK_PHRASES[phraseIdx];
-        const q = language === 'sw' ? phrase.sw : phrase.en;
-        const resp = SAMPLE_RESPONSES.find((r) => r.q === q);
-        const answer =
-          resp?.a ??
-          (language === 'sw'
-            ? 'Naelewa swali lako. Ninafanya utafiti wa hali ya shamba lako...'
-            : 'Understood. Analyzing your farm conditions...');
-        const now = Date.now();
-        setMessages((prev) => [
-          ...prev,
-          { role: 'user', text: q, ts: now },
-          { role: 'ai', text: answer, ts: now + 1 },
-        ]);
-        setPhraseIdx(null);
-        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120);
-      }
-    } else {
-      setRecording(true);
+    if (voiceState === 'LISTENING') {
+      stopRecordingAndAsk();
+    } else if (voiceState === 'IDLE') {
+      startRecording();
     }
-  };
-
-  const handlePhrase = (idx: number) => {
-    Haptics.selectionAsync();
-    setPhraseIdx(idx);
-    setRecording(true);
-    setTimeout(() => {
-      setRecording(false);
-      const phrase = QUICK_PHRASES[idx];
-      const q = language === 'sw' ? phrase.sw : phrase.en;
-      const resp = SAMPLE_RESPONSES.find((r) => r.q === q);
-      const answer =
-        resp?.a ??
-        (language === 'sw'
-          ? 'Naelewa swali lako. Ninafanya utafiti...'
-          : 'Understood. Analyzing...');
-      const now = Date.now();
-      setMessages((prev) => [
-        ...prev,
-        { role: 'user', text: q, ts: now },
-        { role: 'ai', text: answer, ts: now + 1 },
-      ]);
-      setPhraseIdx(null);
-      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120);
-    }, 1800);
   };
 
   const orbAnimStyle = useAnimatedStyle(() => ({ transform: [{ scale: orbScale.value }] }));
@@ -433,26 +553,40 @@ export default function AiVoiceScreen() {
             style={[
               S.statusPill,
               {
-                backgroundColor: recording
-                  ? `${PRIMARY}18`
-                  : isDark
-                    ? 'rgba(255,255,255,0.07)'
-                    : 'rgba(0,0,0,0.05)',
-                borderColor: recording ? `${PRIMARY}50` : colors.border,
+                backgroundColor:
+                  recording || processing
+                    ? `${PRIMARY}18`
+                    : isDark
+                      ? 'rgba(255,255,255,0.07)'
+                      : 'rgba(0,0,0,0.05)',
+                borderColor: recording || processing ? `${PRIMARY}50` : colors.border,
               },
             ]}
           >
             <View
-              style={[S.statusDot, { backgroundColor: recording ? PRIMARY : colors.textMute }]}
+              style={[
+                S.statusDot,
+                { backgroundColor: recording || processing ? PRIMARY : colors.textMute },
+              ]}
             />
-            <Text style={[S.statusText, { color: recording ? PRIMARY : colors.textMute }]}>
+            <Text
+              style={[S.statusText, { color: recording || processing ? PRIMARY : colors.textMute }]}
+            >
               {recording
                 ? language === 'sw'
                   ? 'INASIKILIZA'
                   : 'LISTENING'
-                : language === 'sw'
-                  ? 'TAYARI'
-                  : 'READY'}
+                : processing
+                  ? language === 'sw'
+                    ? 'INACHAKATA'
+                    : 'THINKING'
+                  : !aiConfigured()
+                    ? language === 'sw'
+                      ? 'ONYESHO'
+                      : 'DEMO'
+                    : language === 'sw'
+                      ? 'TAYARI'
+                      : 'READY'}
             </Text>
           </View>
         </Animated.View>
@@ -521,7 +655,7 @@ export default function AiVoiceScreen() {
                 onPress={() => {
                   setMessages([]);
                   setPhraseIdx(null);
-                  setRecording(false);
+                  setVoiceState('IDLE');
                   Haptics.selectionAsync();
                 }}
                 style={[S.clearBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
@@ -548,18 +682,24 @@ export default function AiVoiceScreen() {
             <Animated.View style={orbAnimStyle}>
               <TouchableOpacity
                 onPress={handleMicPress}
+                disabled={processing}
                 activeOpacity={0.9}
                 accessibilityRole="button"
+                accessibilityState={{ disabled: processing }}
                 accessibilityLabel={
                   recording
                     ? language === 'sw'
                       ? 'Simama'
                       : 'Stop recording'
-                    : language === 'sw'
-                      ? 'Anza kuzungumza'
-                      : 'Start speaking'
+                    : processing
+                      ? language === 'sw'
+                        ? 'Inachakata'
+                        : 'Processing'
+                      : language === 'sw'
+                        ? 'Anza kuzungumza'
+                        : 'Start speaking'
                 }
-                style={S.orbTouchable}
+                style={[S.orbTouchable, processing && { opacity: 0.6 }]}
               >
                 <LinearGradient
                   colors={
@@ -571,7 +711,7 @@ export default function AiVoiceScreen() {
                   }
                   style={S.orb}
                 >
-                  {!recording && <OrbShimmer colors={colors} isDark={isDark} />}
+                  {!recording && !processing && <OrbShimmer colors={colors} isDark={isDark} />}
 
                   {recording ? (
                     <View style={S.waveRow}>
@@ -579,6 +719,8 @@ export default function AiVoiceScreen() {
                         <WaveBar key={i} index={i} active={recording} />
                       ))}
                     </View>
+                  ) : processing ? (
+                    <ActivityIndicator size="small" color={PRIMARY} />
                   ) : (
                     <View style={S.orbIdleInner}>
                       <Mic size={34} color={PRIMARY} />
@@ -605,9 +747,13 @@ export default function AiVoiceScreen() {
               ? language === 'sw'
                 ? 'Inasikiliza — gusa kusimama'
                 : 'Listening — tap to stop'
-              : language === 'sw'
-                ? 'Gusa kuanza kuzungumza'
-                : 'Tap to start speaking'}
+              : processing
+                ? language === 'sw'
+                  ? 'Inachakata jibu...'
+                  : 'Getting your answer...'
+                : language === 'sw'
+                  ? 'Gusa kuanza kuzungumza'
+                  : 'Tap to start speaking'}
           </Text>
         </View>
       </SafeAreaView>
