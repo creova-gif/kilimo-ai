@@ -7,10 +7,19 @@ import { useKilimoStore } from '../store/useKilimoStore';
 import { ZONES } from '../constants/FarmData';
 import MapView, { Polygon, PROVIDER_GOOGLE } from '../components/MapViewWrapper';
 import * as Haptics from 'expo-haptics';
-import Animated, { FadeInUp, FadeInDown, Layout } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import Slider from '@react-native-community/slider';
 
 const { width: SW } = Dimensions.get('window');
+
+// No connection to real farm equipment (ISOBUS/ISO-XML export, a
+// spreader/sprayer controller API, or any equipment vendor integration)
+// exists anywhere in this codebase. Before this fix, handlePush() faked a
+// 2-second "sending" delay and then claimed "Synced Successfully" —
+// nothing was ever sent anywhere. Real equipment integration is a genuine
+// hardware/business decision (which controllers to support, what export
+// format, dealer partnerships) — flagged, not invented here.
+const VRA_EQUIPMENT_SYNC_LIVE = false;
 
 const INPUT_TYPES = [
   { id: 'fertilizer', labelEn: 'Fertilizer', labelSw: 'Mbolea', icon: Target },
@@ -23,6 +32,7 @@ export default function VRASetupScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const language = useKilimoStore((s) => s.language);
+  const addNotification = useKilimoStore((s) => s.addNotification);
 
   const [activeInput, setActiveInput] = useState('fertilizer');
   const [baseRate, setBaseRate] = useState(150); // kg/ha or L/ha
@@ -59,6 +69,18 @@ export default function VRASetupScreen() {
   const maxLng = Math.max(...zone.coordinates.map((c) => c.longitude));
 
   const handlePush = () => {
+    if (!VRA_EQUIPMENT_SYNC_LIVE) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      addNotification({
+        title: language === 'sw' ? 'Bado Haipatikani' : 'Coming Soon',
+        body:
+          language === 'sw'
+            ? 'Kuunganisha moja kwa moja na mtambo bado hakujawezeshwa. Ramani hii ni onyesho tu.'
+            : 'Direct equipment sync is not live yet. This map is a preview only.',
+        type: 'warning',
+      });
+      return;
+    }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setIsPushing(true);
     setTimeout(() => {
@@ -126,7 +148,7 @@ export default function VRASetupScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <Animated.View entering={FadeInUp.delay(100)} style={styles.section}>
+        <Animated.View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Select Input Type</Text>
           <View style={styles.segmentedControl}>
             {INPUT_TYPES.map((input) => {
@@ -157,12 +179,13 @@ export default function VRASetupScreen() {
           </View>
         </Animated.View>
 
-        <Animated.View
-          entering={FadeInUp.delay(200)}
-          layout={Layout.springify()}
-          style={styles.section}
-        >
+        <Animated.View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Prescription Map</Text>
+          <Text style={[styles.sectionSubtitle, { color: colors.text + '70' }]}>
+            {language === 'sw'
+              ? 'Onyesho la mfano — si data ya vihisi vya udongo au setilaiti ya moja kwa moja.'
+              : 'Illustrative preview — not derived from live soil sensor or satellite data.'}
+          </Text>
           <View style={styles.mapWrapper}>
             <MapView
               provider={PROVIDER_GOOGLE}
@@ -191,7 +214,7 @@ export default function VRASetupScreen() {
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInUp.delay(300)} style={styles.section}>
+        <Animated.View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Application Rate</Text>
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.sliderHeader}>
@@ -278,6 +301,12 @@ const styles = StyleSheet.create({
     fontFamily: 'InstrumentSerif_400Regular',
     fontSize: 24,
     marginBottom: 16,
+  },
+  sectionSubtitle: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11.5,
+    marginTop: -12,
+    marginBottom: 12,
   },
   segmentedControl: {
     flexDirection: 'row',
