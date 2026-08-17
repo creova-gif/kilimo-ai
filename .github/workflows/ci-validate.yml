@@ -1,0 +1,66 @@
+name: CI/CD Branching Pipeline
+
+on:
+  push:
+    branches:
+      - dev
+      - staging
+      - main
+  pull_request:
+    branches:
+      - dev
+      - staging
+      - main
+
+jobs:
+  # VALIDATION: runs on every PR targeting dev, staging, or main.
+  validate:
+    name: Validate Code Changes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Linter
+        run: npm run lint
+
+      - name: Run Tests
+        run: npm run test
+
+  # STAGING: dress-rehearsal signal on merge to staging.
+  # No deploy step yet — this repo ships via EAS builds (see eas-build.yml,
+  # triggered by version tags or manual dispatch), not a continuous web
+  # deploy target. This job exists so staging pushes get the same validation
+  # gate as everything else; wire an actual staging build/notify step here
+  # once there's a defined staging distribution channel (e.g. an EAS
+  # "staging" build profile).
+  staging-check:
+    name: Staging Merge Check
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Staging validated
+        run: echo "staging branch passed validation — trigger an EAS staging build manually or via workflow_dispatch on eas-build.yml"
+
+  # PRODUCTION: sacred main branch — validated merge only.
+  # Actual production distribution is the tag-triggered EAS build
+  # (eas-build.yml, on push of a v* tag), kept as a deliberate, separate,
+  # human-triggered step rather than automatic on every main push.
+  production-check:
+    name: Production Merge Check
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Production validated
+        run: echo "main branch passed validation — cut a v* tag to trigger an EAS production build"
