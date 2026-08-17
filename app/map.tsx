@@ -59,6 +59,7 @@ export default function MapScreen() {
   const language = useKilimoStore((s) => s.language);
   const farmProfile = useKilimoStore((s) => s.farmProfile);
   const agroId = useKilimoStore((s) => s.agroId);
+  const farmVitals = useKilimoStore((s) => s.farmVitals);
 
   const [activeLayer, setActiveLayer] = useState<'ndvi' | 'moisture' | 'standard'>('standard');
   const [selectedField, setSelectedField] = useState('2');
@@ -117,16 +118,25 @@ export default function MapScreen() {
     speak(text);
   };
 
+  // No device geolocation is wired anywhere in this codebase (expo-location
+  // isn't even a dependency) — before this fix, this button faked a "GPS
+  // position confirmed" claim with hardcoded coordinates (8.9° S, 33.4° E)
+  // regardless of where the device actually was. Real GPS requires a new
+  // native permission + dependency — a genuine product decision, flagged
+  // separately rather than invented here. This just recenters the known
+  // farm region pin, honestly.
   const handleLocate = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const text =
       language === 'sw'
-        ? `Nafasi ya GPS imethibitishwa. Upo mkoa wa ${farmProfile?.region || 'Tanzania'}, kitalu A.`
-        : `GPS position confirmed. You are located in ${farmProfile?.region || 'Tanzania'}, Block A.`;
+        ? `Eneo la shamba lako: ${farmProfile?.region || 'Tanzania'}.`
+        : `Your farm's region: ${farmProfile?.region || 'Tanzania'}.`;
     speak(text);
     Alert.alert(
-      'GPS',
-      `Eneo lako: ${farmProfile?.region || 'Tanzania'}, Kitalu A\nHekta 2.4\n8.9° S, 33.4° E`
+      language === 'sw' ? 'Eneo la Shamba' : 'Farm Region',
+      language === 'sw'
+        ? `${farmProfile?.region || 'Tanzania'}\nGPS halisi bado haijawezeshwa kwenye onyesho hili.`
+        : `${farmProfile?.region || 'Tanzania'}\nLive GPS is not enabled in this preview yet.`
     );
   };
 
@@ -229,6 +239,9 @@ export default function MapScreen() {
                   <Text style={styles.detailText}>5 mm Rain</Text>
                 </View>
               </View>
+              <Text style={styles.weatherDemoLabel}>
+                {language === 'sw' ? 'MFANO' : 'EXAMPLE'}
+              </Text>
             </BlurView>
           </Animated.View>
 
@@ -304,9 +317,7 @@ export default function MapScreen() {
               </View>
             </View>
             <BlurView intensity={40} tint="dark" style={styles.pinLabel}>
-              <Text style={styles.pinText}>
-                {farmProfile?.primaryCrops?.[0] || 'Rice Farming'} • 15g/m²
-              </Text>
+              <Text style={styles.pinText}>{farmProfile?.primaryCrops?.[0] || 'Rice Farming'}</Text>
             </BlurView>
           </Animated.View>
 
@@ -403,17 +414,23 @@ export default function MapScreen() {
               >
                 <View style={styles.statItem}>
                   <Text style={[styles.statLabel, { color: colors.textMute }]}>MOISTURE</Text>
-                  <Text style={[styles.statValue, { color: colors.text }]}>18.4%</Text>
+                  <Text style={[styles.statValue, { color: colors.text }]}>
+                    {farmVitals.moisture.toFixed(1)}%
+                  </Text>
                 </View>
                 <View style={[styles.divider, { backgroundColor: colors.border }]} />
                 <View style={styles.statItem}>
-                  <Text style={[styles.statLabel, { color: colors.textMute }]}>HEALTH (NDVI)</Text>
-                  <Text style={[styles.statValue, { color: colors.text }]}>0.82</Text>
+                  <Text style={[styles.statLabel, { color: colors.textMute }]}>SOIL HEALTH</Text>
+                  <Text style={[styles.statValue, { color: colors.text }]}>
+                    {farmVitals.soilHealth.toFixed(0)}
+                  </Text>
                 </View>
                 <View style={[styles.divider, { backgroundColor: colors.border }]} />
                 <View style={styles.statItem}>
                   <Text style={[styles.statLabel, { color: colors.textMute }]}>YIELD EST.</Text>
-                  <Text style={[styles.statValue, { color: colors.primary }]}>4.2T</Text>
+                  <Text style={[styles.statValue, { color: colors.primary }]}>
+                    {farmVitals.yieldEstimate.toFixed(1)}T
+                  </Text>
                 </View>
               </View>
 
@@ -498,6 +515,13 @@ const styles = StyleSheet.create({
   weatherDetails: { gap: 4 },
   detailItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   detailText: { color: 'rgba(255,255,255,0.8)', fontSize: 9, fontFamily: 'Inter_500Medium' },
+  weatherDemoLabel: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 7,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.5,
+    marginTop: 6,
+  },
 
   // Controls
   mapControls: { position: 'absolute', right: 16, top: 120, gap: 10 },
