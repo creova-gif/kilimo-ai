@@ -45,11 +45,7 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: 📦 Install dependencies
-        run: |
-          cd mobile
-          npm install
+        run: npm install
 
       - name: 🚀 Build on EAS
-        run: |
-          cd mobile
-          eas build --platform ${{ github.event.inputs.platform || 'android' }} --profile ${{ github.event.inputs.profile || 'preview' }} --non-interactive
+        run: eas build --platform ${{ github.event.inputs.platform || 'android' }} --profile ${{ github.event.inputs.profile || 'preview' }} --non-interactive
