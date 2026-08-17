@@ -38,10 +38,13 @@ import {
   AlertTriangle,
   Cpu,
   Tv,
+  ShieldCheck,
+  Radio,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../constants/Theme';
 import { useKilimoStore } from '../store/useKilimoStore';
+import { Gate } from '../lib/access';
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -1006,13 +1009,27 @@ const HARDWARE_DATA: Record<string, DeviceHardwareData> = {
   },
 };
 
+// No billing/payment gateway is wired up anywhere in this codebase for IoT
+// subscriptions (same finding as upgrade.tsx: no payment edge function
+// exists). Before this fix, handleSubscribe() showed "Subscription
+// Activated! TSh 15,000/Month will be billed" with zero actual charge ever
+// occurring — a fabricated billing confirmation. Flip this to true only once
+// a real payment flow (server-verified webhook, subscription state written
+// server-side on confirmed payment) actually exists.
+const IOT_BILLING_LIVE = false;
+
 export default function IOTSystems() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const language = useKilimoStore((s) => s.language);
   const agroId = useKilimoStore((s) => s.agroId);
+  const addNotification = useKilimoStore((s) => s.addNotification);
 
-  const [devices, setDevices] = useState<IoTDevice[]>(INITIAL_DEVICES);
+  // Real users own zero IoT hardware until they register a device below —
+  // INITIAL_DEVICES was fictional seed data (6 devices, incl. drones) shown
+  // to every user as if already connected. Start empty; registered devices
+  // are appended below via handleRegisterDevice.
+  const [devices, setDevices] = useState<IoTDevice[]>([]);
   const [droneActive, setDroneActive] = useState(false);
   const [irrigationActive, setIrrigationActive] = useState(true);
 
@@ -1107,14 +1124,20 @@ export default function IOTSystems() {
   };
 
   const handleSubscribe = (tier: 'monthly' | 'yearly') => {
+    if (!IOT_BILLING_LIVE) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      addNotification({
+        title: language === 'sw' ? 'Bado Haipatikani' : 'Coming Soon',
+        body:
+          language === 'sw'
+            ? 'Malipo ya huduma ya Premium IoT bado hayajawezeshwa. Hukutozwa chochote.'
+            : 'Premium IoT billing is not live yet. You have not been charged.',
+        type: 'warning',
+      });
+      return;
+    }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setSelectedSubTier(tier);
-    Alert.alert(
-      language === 'sw' ? 'Kusajiliwa Kufanikiwa!' : 'Subscription Activated!',
-      language === 'sw'
-        ? `Umesajili huduma ya Premium IoT. Malipo ya ${tier === 'monthly' ? 'TSh 15,000/Mwezi' : 'TSh 150,000/Mwaka'} yatakatwa.`
-        : `You subscribed to Premium IoT support. ${tier === 'monthly' ? 'TSh 15,000/Month' : 'TSh 150,000/Year'} will be billed.`
-    );
   };
 
   const handleAddWaypoint = () => {
@@ -1203,6 +1226,58 @@ export default function IOTSystems() {
   };
 
   return (
+    <Gate
+      feature="iot_systems"
+      fallback={
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+          <SafeAreaView style={styles.safeArea}>
+            <View style={styles.header}>
+              <TouchableOpacity
+                onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+                style={[
+                  styles.iconButton,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={language === 'sw' ? 'Rudi nyuma' : 'Go back'}
+              >
+                <ChevronLeft size={24} color={colors.text} />
+              </TouchableOpacity>
+              <Text style={[styles.headerTitle, { color: colors.text }]}>
+                {language === 'sw' ? 'Mifumo ya IoT & Drones' : 'IoT & Drone Systems'}
+              </Text>
+              <View style={{ width: 44 }} />
+            </View>
+            <View style={{ padding: 24, alignItems: 'center', gap: 12, marginTop: 40 }}>
+              <ShieldCheck size={32} color={colors.textMute} />
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontFamily: 'Inter_700Bold',
+                  color: colors.text,
+                  textAlign: 'center',
+                }}
+              >
+                {language === 'sw' ? 'Hairuhusiwi' : 'Not Available'}
+              </Text>
+              <Text
+                style={{
+                  fontSize: 13,
+                  fontFamily: 'Inter_500Medium',
+                  color: colors.textMute,
+                  textAlign: 'center',
+                  lineHeight: 19,
+                }}
+              >
+                {language === 'sw'
+                  ? 'Mifumo ya IoT & Drones inapatikana kwa Wakulima wa Biashara, Wasimamizi wa Shamba, na Kampuni za Kilimo.'
+                  : 'IoT & Drone Systems is available to Commercial Farmers, Farm Managers, and Agribusinesses.'}
+              </Text>
+            </View>
+          </SafeAreaView>
+        </View>
+      }
+    >
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ImageBackground
         source={require('../assets/images/welcome_bg.png')}
@@ -1246,6 +1321,26 @@ export default function IOTSystems() {
           >
             <Settings size={22} color={colors.text} />
           </TouchableOpacity>
+        </View>
+
+        {/* Prototype notice — the Drone Control, Smart Irrigation, Field
+            Sensors, and RIFT HerdTag panels below simulate hardware you
+            don't yet own (no BLE/MQTT pairing or IoT backend exists in this
+            codebase). Toggling them changes only local screen state, not
+            any real device. Real hardware integration is a separate
+            architectural decision (device shadow service, broker, drone
+            flight-control API) — flagged, not invented here. */}
+        <View
+          style={[
+            styles.protoBanner,
+            { backgroundColor: '#f59e0b18', borderColor: '#f59e0b40' },
+          ]}
+        >
+          <Text style={[styles.protoBannerText, { color: '#b45309' }]}>
+            {language === 'sw'
+              ? 'ONYESHO LA MFANO — vidhibiti hapa chini ni onyesho tu, hakuna maunzi halisi yaliyounganishwa.'
+              : 'PROTOTYPE — the controls below are a simulation; no real hardware is connected.'}
+          </Text>
         </View>
 
         <ScrollView
@@ -1312,6 +1407,34 @@ export default function IOTSystems() {
                   </Text>
                 </TouchableOpacity>
               </View>
+
+              {devices.length === 0 && (
+                <View style={{ padding: 24, alignItems: 'center', gap: 8 }}>
+                  <Radio size={28} color={colors.textMute} />
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontFamily: 'Inter_600SemiBold',
+                      color: colors.text,
+                      textAlign: 'center',
+                    }}
+                  >
+                    {language === 'sw' ? 'Hakuna Kifaa Bado' : 'No Devices Yet'}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontFamily: 'Inter_500Medium',
+                      color: colors.textMute,
+                      textAlign: 'center',
+                    }}
+                  >
+                    {language === 'sw'
+                      ? 'Bonyeza "Sajili" hapo juu kuongeza kifaa chako cha kwanza.'
+                      : 'Tap "Register" above to add your first device.'}
+                  </Text>
+                </View>
+              )}
 
               {devices.map((device, i) => {
                 const color = getDeviceColor(device.type);
@@ -1433,9 +1556,13 @@ export default function IOTSystems() {
                   ]}
                 />
                 <Text style={[styles.deviceHubFooterText, { color: colors.textMute }]}>
-                  {language === 'sw'
-                    ? 'Salama · LoRaWAN + 4G LTE · Vifaa vyote vinajibu'
-                    : 'Encrypted · LoRaWAN + 4G LTE · All nodes responding'}
+                  {devices.length > 0
+                    ? language === 'sw'
+                      ? 'Salama · LoRaWAN + 4G LTE · Vifaa vyote vinajibu'
+                      : 'Encrypted · LoRaWAN + 4G LTE · All nodes responding'
+                    : language === 'sw'
+                      ? 'Hakuna kifaa kilichosajiliwa'
+                      : 'No devices registered'}
                 </Text>
               </View>
             </View>
@@ -2648,12 +2775,12 @@ export default function IOTSystems() {
               <View style={styles.successWrapper}>
                 <CheckCircle2 size={64} color={colors.primary} />
                 <Text style={[styles.successTitle, { color: colors.text }]}>
-                  {language === 'sw' ? 'Kifaa Kimesajiliwa!' : 'Device Linked!'}
+                  {language === 'sw' ? 'Kifaa Kimeongezwa!' : 'Device Added!'}
                 </Text>
                 <Text style={[styles.successDesc, { color: colors.textMute }]}>
                   {language === 'sw'
-                    ? 'Kifaa chako kipya kimeunganishwa na Agro ID yako na kimeanza kurusha vipimo.'
-                    : 'Your new device is linked to your Agro ID profile and is transmitting telemetry.'}
+                    ? 'Kifaa chako kimeongezwa kwenye orodha yako. Hii ni onyesho la mfano — hakuna muunganisho wa kweli wa maunzi bado.'
+                    : 'Your device has been added to your list. This is a prototype interface — there is no real hardware connection yet.'}
                 </Text>
                 <TouchableOpacity
                   onPress={() => {
@@ -2679,6 +2806,7 @@ export default function IOTSystems() {
         </View>
       </Modal>
     </View>
+    </Gate>
   );
 }
 
@@ -2688,6 +2816,18 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+  },
+  protoBanner: {
+    marginHorizontal: 24,
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  protoBannerText: {
+    fontSize: 11,
+    fontFamily: 'Inter_700Bold',
   },
   header: {
     flexDirection: 'row',
