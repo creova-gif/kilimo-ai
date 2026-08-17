@@ -381,19 +381,16 @@ const SEED_SUPPLIERS: InputSupplier[] = [
   },
 ];
 
-const SEED_ORDERS: InputOrder[] = [
-  {
-    id: 'o1',
-    supplierId: 's1',
-    itemName: 'CAN Fertilizer',
-    qty: 6,
-    unit: 'bag',
-    totalTZS: 510_000,
-    status: 'dispatched',
-    expectedDelivery: new Date(Date.now() + 2 * 86400_000).toISOString(),
-    placedAt: new Date(Date.now() - 3 * 86400_000).toISOString(),
-  },
-];
+// No real supplier-ordering backend exists anywhere in this codebase (no
+// order-placement edge function, no email/SMS/API call to any supplier).
+// This used to pre-seed every user with a fake already-"dispatched" order
+// for CAN Fertilizer from a real company (YARA East Africa, supplierId
+// 's1'), complete with a "Confirm Delivery" button — an order the user
+// never placed, from a real named business, that would never actually
+// arrive since nothing was ever sent anywhere. Real users start with zero
+// orders; see handleOrderSample in app/input-supply.tsx for the matching
+// fix to the "Order Sample" button.
+const SEED_ORDERS: InputOrder[] = [];
 
 const SEED_GROUPS: PeerGroup[] = [
   {
