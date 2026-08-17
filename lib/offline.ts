@@ -42,12 +42,7 @@ export async function processSyncQueue() {
       if (item.type === 'market_order') {
         // Real sync: market_order queue items back a farmer's crop listing
         // (createListing() in hooks/useMarketIntelligence.ts queues here when
-        // offline). Previously this whole loop only simulated a network call
-        // and discarded every queued item regardless of type — a listing
-        // created offline was never actually saved anywhere once the device
-        // came back online. Other item types (scan_result, task_complete,
-        // irrigation_log, voice_note) still only simulate below; each needs
-        // its own real backend call and is tracked as a separate follow-up.
+        // offline).
         if (!supabase) throw new Error('Supabase not configured');
         const {
           data: { user },
@@ -56,8 +51,46 @@ export async function processSyncQueue() {
         const row = listingToDbRow(item.payload as any, user.id);
         const { error } = await supabase.from('market_listings').insert(row);
         if (error) throw error;
+      } else if (item.type === 'task_complete') {
+        // Real sync: hooks/useTasks.ts queues here for BOTH task creation
+        // and task completion done while offline, reusing this one type
+        // literal — distinguish by payload shape. Previously this branch
+        // only simulated a network call and then dequeued the item as if
+        // it had synced: a task created or completed offline was silently
+        // discarded the moment connectivity returned, with the UI showing
+        // a success checkmark the whole time.
+        if (!supabase) throw new Error('Supabase not configured');
+        const payload = item.payload as any;
+        if (payload && typeof payload.taskId === 'string') {
+          // Completion: { taskId, completedAt, userId }
+          const { error } = await supabase
+            .from('tasks')
+            .update({ status: 'done', completed_at: payload.completedAt })
+            .eq('id', payload.taskId);
+          if (error) throw error;
+        } else {
+          // Creation: full Task object (mirrors useTasks.ts's createTask)
+          const { error } = await supabase.from('tasks').insert({
+            title: payload.title,
+            title_sw: payload.titleSw,
+            category: payload.category,
+            priority: payload.priority,
+            status: payload.status,
+            due_date: payload.dueDate,
+            xp_reward: payload.xpReward,
+            farm_block: payload.farmBlock,
+            coop_id: payload.coopId,
+            synced_offline: true,
+            assigned_role: payload.assignedRole,
+          });
+          if (error) throw error;
+        }
       } else {
-        // Simulate network request to backend
+        // scan_result / irrigation_log / voice_note: no code path in this
+        // app currently enqueues these types (grep confirms zero producers),
+        // so this is unreachable today. Left as a simulated no-op rather
+        // than guessing at a schema for data nothing yet generates; wire a
+        // real backend call here if/when a producer for these types ships.
         await new Promise((resolve) => setTimeout(resolve, 800));
       }
 
