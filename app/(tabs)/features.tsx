@@ -50,6 +50,7 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { useTheme } from '../../constants/Theme';
 import { useKilimoStore } from '../../store/useKilimoStore';
 import { useAccess, useCan, Feature, roleLabel } from '../../lib/access';
+import { scorePestRisk } from '../../lib/analytics/predictions';
 
 // `|| 360` guards against Dimensions.get('window').width reading 0 on first
 // web hydration — an unguarded 0 here flowed into a negative <Svg> chart
@@ -60,6 +61,9 @@ const CHART_W = SW - CARD_PAD * 2 - 8;
 const CHART_H = 54;
 
 // ── Mini sparkline activity chart ─────────────────────────────────────────────
+// Sample values — no per-day farm-activity log exists anywhere in this
+// codebase to derive a real weekly series from; labeled "· SAMPLE" below
+// rather than presented as this user's real activity.
 const ACTIVITY_VALS = [42, 61, 55, 78, 65, 85, 74];
 
 function ActivitySparkline({ isDark }: { isDark: boolean }) {
@@ -95,45 +99,47 @@ function ActivitySparkline({ isDark }: { isDark: boolean }) {
 }
 
 // ── Stat chips (Dribbble "Overview Statistics" pattern) ───────────────────────
-const STAT_CHIPS = [
-  {
-    key: 'pest',
-    labelSw: 'WADUDU',
-    labelEn: 'PEST',
-    value: '18%',
-    subSw: 'Kiwango cha Kawaida',
-    subEn: 'Normal Level',
-    bg: '#2E6F40',
-    text: '#fff',
-  },
-  {
-    key: 'water',
-    labelSw: 'MAJI',
-    labelEn: 'WATER',
-    value: '74%',
-    subSw: 'Unyevu wa Udongo',
-    subEn: 'Soil Moisture',
-    bg: '#0a1d08',
-    text: '#fff',
-  },
-  {
-    key: 'soil',
-    labelSw: 'UDONGO',
-    labelEn: 'SOIL',
-    value: '8.3',
-    subSw: 'pH Bora',
-    subEn: 'Optimal pH',
-    bg: '#a3e635',
-    text: '#000',
-  },
-];
-
-// IoT device preview (top-3 drones)
-const IOT_PREVIEW = [
-  { name: 'RIFT AD-40', bat: 84 },
-  { name: 'RIFT SA6', bat: 92 },
-  { name: 'VaultSense', bat: 68 },
-];
+// Previously hardcoded to the same "18% pest / 74% water / 8.3 pH" for every
+// user regardless of their actual farm. Pest score now reuses the real
+// scorePestRisk() model (lib/analytics/predictions.ts, same one the
+// Analytics tab uses); water/soil read the real per-user farmVitals.
+function buildStatChips(
+  vitals: { moisture: number; soilPh: number },
+  pestScore: number
+) {
+  return [
+    {
+      key: 'pest',
+      labelSw: 'WADUDU',
+      labelEn: 'PEST',
+      value: `${pestScore}%`,
+      subSw: pestScore < 25 ? 'Kiwango cha Kawaida' : pestScore < 50 ? 'Kiwango cha Kati' : 'Kiwango cha Juu',
+      subEn: pestScore < 25 ? 'Normal Level' : pestScore < 50 ? 'Moderate Level' : 'High Level',
+      bg: '#2E6F40',
+      text: '#fff',
+    },
+    {
+      key: 'water',
+      labelSw: 'MAJI',
+      labelEn: 'WATER',
+      value: `${Math.round(vitals.moisture)}%`,
+      subSw: 'Unyevu wa Udongo',
+      subEn: 'Soil Moisture',
+      bg: '#0a1d08',
+      text: '#fff',
+    },
+    {
+      key: 'soil',
+      labelSw: 'UDONGO',
+      labelEn: 'SOIL',
+      value: vitals.soilPh.toFixed(1),
+      subSw: 'pH ya Udongo',
+      subEn: 'Soil pH',
+      bg: '#a3e635',
+      text: '#000',
+    },
+  ];
+}
 
 // ── Feature data ──────────────────────────────────────────────────────────────
 
@@ -539,9 +545,20 @@ export default function FeaturesScreen() {
   const { colors, isDark } = useTheme();
   const lang = useKilimoStore((s) => s.language);
   const agroId = useKilimoStore((s) => s.agroId);
+  const farmVitals = useKilimoStore((s) => s.farmVitals);
+  const farmProfile = useKilimoStore((s) => s.farmProfile);
   const role = (agroId?.role ?? 'farmer') as any;
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('ai');
+
+  const pestRisk = useMemo(
+    () => scorePestRisk(farmVitals, farmProfile),
+    [farmVitals, farmProfile]
+  );
+  const statChips = useMemo(
+    () => buildStatChips(farmVitals, pestRisk.score),
+    [farmVitals, pestRisk.score]
+  );
 
   const featureMap = useMemo(() => {
     const map: Record<string, FeatureEntry> = {};
@@ -635,6 +652,7 @@ export default function FeaturesScreen() {
                   }}
                 >
                   {lang === 'sw' ? 'SHUGHULI ZA WIKI HILI' : 'WEEKLY FARM ACTIVITY'}
+                  {lang === 'sw' ? ' · MFANO' : ' · SAMPLE'}
                 </Text>
               </View>
 
@@ -654,7 +672,7 @@ export default function FeaturesScreen() {
               style={{ marginHorizontal: -20 }}
               contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
             >
-              {STAT_CHIPS.map((chip) => (
+              {statChips.map((chip) => (
                 <View key={chip.key} style={[s.statChip, { backgroundColor: chip.bg }]}>
                   <Text style={[s.statChipLabel, { color: chip.text, opacity: 0.72 }]}>
                     {lang === 'sw' ? chip.labelSw : chip.labelEn}
@@ -668,25 +686,6 @@ export default function FeaturesScreen() {
                   </Text>
                 </View>
               ))}
-              {/* IoT devices chip */}
-              <View
-                style={[
-                  s.statChip,
-                  {
-                    backgroundColor: isDark ? '#091a09' : '#e8f5e9',
-                    borderWidth: 1,
-                    borderColor: isDark ? 'rgba(46, 111, 64,0.22)' : 'rgba(46, 111, 64,0.3)',
-                  },
-                ]}
-              >
-                <Text style={[s.statChipLabel, { color: '#2E6F40', opacity: 0.85 }]}>
-                  {lang === 'sw' ? 'VIFAA' : 'DEVICES'}
-                </Text>
-                <Text style={[s.statChipVal, { color: isDark ? '#fff' : colors.text }]}>6</Text>
-                <Text style={[s.statChipSub, { color: '#2E6F40', opacity: 0.8 }]}>
-                  {lang === 'sw' ? 'Mtandaoni' : 'Online'}
-                </Text>
-              </View>
             </ScrollView>
           </Animated.View>
 
@@ -744,65 +743,24 @@ export default function FeaturesScreen() {
                       </Text>
                     </View>
                   </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                    <View style={s.livePulse} />
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: '#2E6F40' }}>
-                      LIVE
-                    </Text>
-                    <ChevronRight size={14} color={colors.textMute} />
-                  </View>
+                  <ChevronRight size={14} color={colors.textMute} />
                 </View>
 
-                {/* Device list preview */}
-                {IOT_PREVIEW.map((dev, idx) => (
-                  <View key={dev.name}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                      <Wifi size={12} color="#0ea5e9" />
-                      <Text
-                        style={{
-                          fontFamily: 'Inter_600SemiBold',
-                          fontSize: 12,
-                          color: isDark ? '#e0f2e9' : colors.text,
-                          flex: 1,
-                        }}
-                      >
-                        {dev.name}
-                      </Text>
-                      <View style={s.batTrack}>
-                        <View
-                          style={[
-                            s.batFill,
-                            {
-                              width: `${dev.bat}%` as any,
-                              backgroundColor:
-                                dev.bat > 60 ? '#2E6F40' : dev.bat > 30 ? '#f59e0b' : '#ef4444',
-                            },
-                          ]}
-                        />
-                      </View>
-                      <Text
-                        style={{
-                          fontFamily: 'Inter_700Bold',
-                          fontSize: 10,
-                          width: 32,
-                          textAlign: 'right',
-                          color: dev.bat > 60 ? '#2E6F40' : '#f59e0b',
-                        }}
-                      >
-                        {dev.bat}%
-                      </Text>
-                    </View>
-                    {idx < IOT_PREVIEW.length - 1 && (
-                      <View
-                        style={{
-                          height: 1,
-                          backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
-                          marginVertical: 9,
-                        }}
-                      />
-                    )}
-                  </View>
-                ))}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Wifi size={12} color="#0ea5e9" />
+                  <Text
+                    style={{
+                      fontFamily: 'Inter_600SemiBold',
+                      fontSize: 12,
+                      color: isDark ? '#e0f2e9' : colors.text,
+                      flex: 1,
+                    }}
+                  >
+                    {lang === 'sw'
+                      ? 'Sajili na simamia vifaa vyako vya IoT na drones'
+                      : 'Register and manage your IoT devices and drones'}
+                  </Text>
+                </View>
               </LinearGradient>
             </TouchableOpacity>
           </Animated.View>
@@ -968,16 +926,6 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  livePulse: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#2E6F40' },
-  batTrack: {
-    width: 56,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(128,128,128,0.15)',
-    overflow: 'hidden',
-  },
-  batFill: { height: '100%', borderRadius: 2 },
-
   // Sections
   secLabel: {
     fontSize: 11,
