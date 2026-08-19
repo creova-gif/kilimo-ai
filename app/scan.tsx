@@ -89,7 +89,13 @@ export default function ScanScreen() {
 
   const [phase, setPhase] = useState<ScanPhase>('IDLE');
   const [analysisProgress, setAnalysisProgress] = useState(0);
-  const [isOffline, setIsOffline] = useState(false); // Mock offline state
+  // Real network status (OfflineManager/NetInfo-backed) — this used to be a
+  // local mock the header button silently flipped with no connection to the
+  // device's actual connectivity: a genuinely offline farmer saw no warning
+  // at all, while anyone could tap the button and see a fake "offline"
+  // state while fully connected. Status is now real; see below for why it's
+  // no longer a toggle a user can act on.
+  const isOffline = useKilimoStore((s) => s.isOffline);
   const [analysisText, setAnalysisText] = useState('Initiating quantum analysis...');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [diagnosis, setDiagnosis] = useState<VisionDiagnosis | null>(null);
@@ -276,7 +282,7 @@ export default function ScanScreen() {
           : e?.kind === 'unauthorized'
             ? 'Tafadhali ingia tena ili kutumia uchunguzi wa picha.'
             : e?.kind === 'network'
-              ? 'Hakuna mtandao. Picha itahifadhiwa na kuchanganuliwa baadaye.'
+              ? 'Hakuna mtandao. Hii app haihifadhi picha kwa uchunguzi wa baadaye — tafadhali jaribu tena ukiwa na mtandao.'
               : 'Samahani, uchunguzi wa picha umeshindikana. Jaribu tena.';
       setErrorMsg(friendly);
       setPhase('ERROR');
@@ -345,11 +351,6 @@ export default function ScanScreen() {
     setPhotoUri(null);
     setDiagnosis(null);
     setErrorMsg(null);
-  };
-
-  const toggleNetwork = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setIsOffline(!isOffline);
   };
 
   // Advanced Neural Orb for background aesthetics
@@ -426,11 +427,13 @@ export default function ScanScreen() {
             </BlurView>
           </View>
 
-          <TouchableOpacity
-            onPress={toggleNetwork}
-            activeOpacity={0.7}
-            accessibilityLabel="Toggle offline mode"
-            accessibilityRole="button"
+          {/* Real, read-only network status — not a toggle. A user cannot
+              make their device actually go on/offline by tapping a button,
+              and this app doesn't queue scans for later analysis (see the
+              honest copy below), so there is nothing for a tap here to do. */}
+          <View
+            accessibilityRole="text"
+            accessibilityLabel={isOffline ? 'Offline' : 'Online'}
           >
             <BlurView
               intensity={40}
@@ -443,7 +446,7 @@ export default function ScanScreen() {
                 <Zap size={22} color={colors.primary} />
               )}
             </BlurView>
-          </TouchableOpacity>
+          </View>
         </Animated.View>
 
         {/* Offline Warning Toast */}
@@ -453,7 +456,9 @@ export default function ScanScreen() {
             <BlurView intensity={60} tint="dark" style={styles.offlineInner}>
               <CloudOff size={16} color="#fbbf24" />
               <Text style={styles.offlineText}>
-                Offline Mode: Diagnosis will be queued and synced.
+                {language === 'sw'
+                  ? 'Hakuna mtandao — uchunguzi wa AI haupatikani sasa hivi.'
+                  : "No connection — AI diagnosis isn't available right now."}
               </Text>
             </BlurView>
           </Animated.View>
