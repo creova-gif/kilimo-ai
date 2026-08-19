@@ -40,7 +40,7 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../constants/Theme';
-import Animated, { FadeIn, FadeOut, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useKilimoStore } from '../store/useKilimoStore';
 import { useTasks, TaskCategory, TaskPriority, AssignedRole } from '../hooks/useTasks';
 import { GlassCard } from '../components/PageScaffold';
@@ -445,13 +445,13 @@ export default function TasksScreen() {
 
           {/* Offline Banner */}
           {isOffline && (
-            <Animated.View entering={FadeInDown} exiting={FadeOut} style={[st.offlineCard]}>
+            <View style={[st.offlineCard]}>
               <AlertCircle size={18} color="#ef4444" />
               <View style={{ flex: 1, marginLeft: 10 }}>
                 <Text style={st.offlineTitle}>Nje ya Mtandao</Text>
                 <Text style={st.offlineDesc}>Kazi zitahifadhiwa na kutumwa baadaye.</Text>
               </View>
-            </Animated.View>
+            </View>
           )}
 
           {/* Section Header */}
@@ -585,7 +585,7 @@ export default function TasksScreen() {
 
           {/* Calendar View */}
           {viewMode === 'calendar' && (
-            <Animated.View entering={FadeInDown} exiting={FadeOut} style={{ marginBottom: 20 }}>
+            <View style={{ marginBottom: 20 }}>
               <View
                 style={[
                   st.calCard,
@@ -755,7 +755,7 @@ export default function TasksScreen() {
                   </View>
                 )}
               </View>
-            </Animated.View>
+            </View>
           )}
 
           {/* Task cards list */}
