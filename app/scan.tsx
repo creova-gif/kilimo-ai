@@ -280,10 +280,16 @@ export default function ScanScreen() {
         e?.kind === 'validation'
           ? e.message
           : e?.kind === 'unauthorized'
-            ? 'Tafadhali ingia tena ili kutumia uchunguzi wa picha.'
+            ? language === 'sw'
+              ? 'Tafadhali ingia tena ili kutumia uchunguzi wa picha.'
+              : 'Please sign in again to use photo diagnosis.'
             : e?.kind === 'network'
-              ? 'Hakuna mtandao. Hii app haihifadhi picha kwa uchunguzi wa baadaye — tafadhali jaribu tena ukiwa na mtandao.'
-              : 'Samahani, uchunguzi wa picha umeshindikana. Jaribu tena.';
+              ? language === 'sw'
+                ? 'Hakuna mtandao. Hii app haihifadhi picha kwa uchunguzi wa baadaye — tafadhali jaribu tena ukiwa na mtandao.'
+                : 'No connection. This app does not save photos for later analysis — please try again when connected.'
+              : language === 'sw'
+                ? 'Samahani, uchunguzi wa picha umeshindikana. Jaribu tena.'
+                : 'Sorry, photo diagnosis failed. Please try again.';
       setErrorMsg(friendly);
       setPhase('ERROR');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -705,15 +711,6 @@ export default function ScanScreen() {
                             {language === 'sw'
                               ? 'Hali ya Onyesho: matokeo haya si uchambuzi wa picha yako halisi — ni mfano wa jinsi programu itakavyofanya kazi ukiunganishwa na AI. Usitumie ushauri huu wa dawa bila kushauriana na mtaalamu wa kilimo.'
                               : 'Demo mode: this result is not a real analysis of your photo — it illustrates how the feature will behave once connected to the AI backend. Do not act on this treatment advice without consulting an agronomist.'}
-                          </Text>
-                        </Animated.View>
-                      )}
-
-                      {isOffline && aiConfigured() && (
-                        <Animated.View entering={FadeInDown} style={styles.offlineNoticeBox}>
-                          <CloudOff size={16} color="#fbbf24" />
-                          <Text style={styles.offlineNoticeText}>
-                            Saved locally. Will sync to your Agro ID when online.
                           </Text>
                         </Animated.View>
                       )}
