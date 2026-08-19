@@ -37,6 +37,7 @@ import Animated, { FadeIn, FadeOut, FadeInDown, FadeInUp } from 'react-native-re
 import PageScaffold, { GlassCard, SectionHeader, EmptyState } from '../components/PageScaffold';
 import { useTheme } from '../constants/Theme';
 import { useFarmDataStore, LivestockAnimal, LivestockSpecies } from '../store/useFarmDataStore';
+import { useKilimoStore } from '../store/useKilimoStore';
 import { Gate } from '../lib/access';
 import Svg, { Polyline, Circle as SvgCircle, Rect } from 'react-native-svg';
 
@@ -328,6 +329,7 @@ function AnimalCard({
   onDelete: (id: string) => void;
 }) {
   const { colors, isDark } = useTheme();
+  const language = useKilimoStore((s) => s.language);
   const [expanded, setExpanded] = useState(false);
   const sc = speciesColor(a.species);
   const healthMeta = HEALTH.find((h) => h.key === a.healthStatus)!;
@@ -451,10 +453,22 @@ function AnimalCard({
               </TouchableOpacity>
             </View>
 
-            {/* RIFT HerdTag Vital Overview */}
+            {/* RIFT HerdTag Vital Overview — no real ear tag hardware exists;
+                these numbers are derived from healthStatus, not a sensor. */}
+            <Text
+              style={{
+                fontSize: 8,
+                color: '#b45309',
+                fontFamily: 'Inter_800ExtraBold',
+                marginTop: 10,
+                letterSpacing: 0.5,
+              }}
+            >
+              {language === 'sw' ? 'RIFT HERDTAG · ONYESHO LA MFANO' : 'RIFT HERDTAG · SIMULATED'}
+            </Text>
             <View
               style={{
-                marginTop: 10,
+                marginTop: 4,
                 flexDirection: 'row',
                 justifyContent: 'space-between',
                 backgroundColor: colors.background,
@@ -587,7 +601,7 @@ function AnimalCard({
                 borderColor: colors.primary + '33',
               }}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                 <Cpu size={14} color={colors.primary} />
                 <Text
                   style={{ fontSize: 11, fontFamily: 'Inter_800ExtraBold', color: colors.text }}
@@ -595,6 +609,18 @@ function AnimalCard({
                   RIFT HerdTag LoRa ear tag
                 </Text>
               </View>
+              <Text
+                style={{
+                  fontSize: 9,
+                  fontFamily: 'Inter_700Bold',
+                  color: '#b45309',
+                  marginBottom: 6,
+                }}
+              >
+                {language === 'sw'
+                  ? 'Onyesho la mfano — hakuna tagi halisi ilioyounganishwa'
+                  : 'Simulated — no real tag is connected'}
+              </Text>
               <Detail label="Serial Number" value={tagSerialNumber} />
               <Detail label="Ear Tag Battery" value={`${batteryPct}% (Solar-Charged)`} />
               <Detail label="Last Ping" value="2 minutes ago" />
@@ -956,22 +982,32 @@ const RIFT_FEATURES = [
 
 function RIFTHerdTagSection({ animals }: { animals: LivestockAnimal[] }) {
   const { colors, isDark } = useTheme();
-  const [registered, setRegistered] = React.useState<Set<string>>(new Set(['a1']));
-
-  function toggleTag(id: string) {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setRegistered((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
+  const language = useKilimoStore((s) => s.language);
 
   return (
     <>
       <SectionHeader title="RIFT HerdTag · IoT Masikio" />
       <View style={{ paddingHorizontal: 24, gap: 10 }}>
+        {/* No real RIFT HerdTag hardware integration exists — this section
+            showcases the concept, but the per-animal "register" toggle used
+            to fake a live-connected state after a tap. Disclosed honestly
+            instead, matching the iot-systems.tsx PROTOTYPE precedent. */}
+        <View
+          style={{
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: 10,
+            borderWidth: 1,
+            backgroundColor: '#f59e0b18',
+            borderColor: '#f59e0b40',
+          }}
+        >
+          <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: '#b45309' }}>
+            {language === 'sw'
+              ? 'ONYESHO LA MFANO — RIFT HerdTag bado haipatikani kwa maunzi halisi.'
+              : 'PROTOTYPE — RIFT HerdTag hardware isn’t available yet; this is a preview.'}
+          </Text>
+        </View>
         {/* Feature pills */}
         <View
           style={[
@@ -1006,9 +1042,10 @@ function RIFTHerdTagSection({ animals }: { animals: LivestockAnimal[] }) {
           </View>
         </View>
 
-        {/* Per-animal registration */}
+        {/* Per-animal registration — no real pairing exists, so this always
+            shows "not connected" and tapping honestly explains why rather
+            than faking a successful hardware connection. */}
         {animals.map((a) => {
-          const isReg = registered.has(a.id);
           const sp = SPECIES.find((x) => x.key === a.species);
           return (
             <GlassCard
@@ -1025,24 +1062,30 @@ function RIFTHerdTagSection({ animals }: { animals: LivestockAnimal[] }) {
                   {a.tag}
                   {a.name ? ` · ${a.name}` : ''}
                 </Text>
-                <Text style={[rt.animalSub, { color: isReg ? colors.primary : colors.textMute }]}>
-                  {isReg
-                    ? '📡 RIFT tag imeunganishwa · Ikiangaliwa'
-                    : 'Haijaunganishwa na RIFT tag'}
+                <Text style={[rt.animalSub, { color: colors.textMute }]}>
+                  {language === 'sw' ? 'Haijaunganishwa na RIFT tag' : 'Not connected to a RIFT tag'}
                 </Text>
               </View>
               <TouchableOpacity
-                onPress={() => toggleTag(a.id)}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  Alert.alert(
+                    language === 'sw' ? 'Bado Haipatikani' : 'Coming Soon',
+                    language === 'sw'
+                      ? `Maunzi ya RIFT HerdTag hayapatikani bado kwa ${a.tag}. Tutakujulisha yakiwa tayari.`
+                      : `RIFT HerdTag hardware isn’t available yet for ${a.tag}. We’ll let you know when it ships.`
+                  );
+                }}
                 style={[
                   rt.regBtn,
                   {
-                    backgroundColor: isReg ? colors.primary : colors.primary + '15',
-                    borderColor: isReg ? colors.primary : colors.primary + '40',
+                    backgroundColor: colors.primary + '15',
+                    borderColor: colors.primary + '40',
                   },
                 ]}
               >
-                <Text style={[rt.regText, { color: isReg ? '#fff' : colors.primary }]}>
-                  {isReg ? 'Imesajiliwa ✓' : 'Sajili'}
+                <Text style={[rt.regText, { color: colors.primary }]}>
+                  {language === 'sw' ? 'Sajili' : 'Register'}
                 </Text>
               </TouchableOpacity>
             </GlassCard>
