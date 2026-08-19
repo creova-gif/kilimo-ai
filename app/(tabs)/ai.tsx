@@ -65,6 +65,7 @@ import {
   ChatMessage as AIChatMessage,
 } from '../../lib/ai';
 import { demoChat } from '../../lib/ai-demo';
+import { askAgriExpert, formatAgriReply } from '../../lib/agri-ai';
 import { useKilimoStore } from '../../store/useKilimoStore';
 import {
   useAudioRecorder,
@@ -109,6 +110,7 @@ export default function SankofaScreen() {
 
   const addNotification = useKilimoStore((s) => s.addNotification);
   const language = useKilimoStore((s) => s.language);
+  const agroId = useKilimoStore((s) => s.agroId);
   const isOffline = useKilimoStore((s) => s.isOffline);
   const setOffline = useKilimoStore((s) => s.setOffline);
   const activeExcelData = useKilimoStore((s) => s.activeExcelData);
@@ -228,19 +230,27 @@ export default function SankofaScreen() {
         } else {
           reply = await demoChat(trimmed);
         }
-      } else {
-        const history: AIChatMessage[] = [];
-        if (activeExcel) {
-          history.push({
-            role: 'system',
-            content: `Farmer uploaded spreadsheet:\n${activeExcel.summaryText}`,
-          });
-        }
+      } else if (activeExcel) {
+        // Spreadsheet Q&A needs multi-turn conversation history and doesn't
+        // benefit from agriculture-knowledge retrieval — keep this on the
+        // general chat() path. askAgriExpert() below is single-turn by
+        // design (each question independently retrieves grounding
+        // knowledge), so it isn't a fit for "what about the row above?"
+        // follow-ups over an uploaded file.
+        const history: AIChatMessage[] = [
+          { role: 'system', content: `Farmer uploaded spreadsheet:\n${activeExcel.summaryText}` },
+        ];
         snapshot.slice(-16).forEach((m) => {
           if (m.sender === 'ai') history.push({ role: 'assistant', content: m.text });
           else if (m.sender === 'user') history.push({ role: 'user', content: m.text });
         });
         reply = await aiChat(history);
+      } else {
+        // General farmer Q&A — grounded in verified local agronomic
+        // knowledge via rag-chat, instead of an ungrounded free-form
+        // completion. See lib/agri-ai.ts.
+        const advice = await askAgriExpert(trimmed, { userId: agroId?.id, language });
+        reply = formatAgriReply(advice, language);
       }
       if (requestSeqRef.current !== reqId) return 'sent';
       appendAi(reply || 'Samahani, sikuelewa. Tafadhali jaribu tena.');
