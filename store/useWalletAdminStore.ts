@@ -6,9 +6,14 @@
  *  • Payout queue with approve / reject / mark-settled lifecycle
  *  • Member account list (linked phone, balance, status)
  *
- * Real M-Pesa wiring lands in T205 (Daraja). Until then `triggerPayout()` only
- * mutates local state and pushes an in-app notification + SMS stub so admins
- * can rehearse the full workflow end-to-end with deterministic mock data.
+ * Automated M-Pesa disbursement (Daraja STK push) lands in T205. Until then
+ * this is an honest manual-reconciliation tool, not a payment processor:
+ * approvePayout() only records the admin's decision; the admin then sends
+ * the real payment themselves via their own M-Pesa, and markSettled()
+ * requires them to type in the real receipt number they got back — it never
+ * fabricates one. Each step mirrors to an in-app notification and an SMS to
+ * the member (see lib/sms — itself honest: it logs a "would send" stub with
+ * no real credentials configured, rather than pretending to deliver).
  */
 
 import { create } from 'zustand';
@@ -66,144 +71,20 @@ export interface Member {
   joinedAt: string;
 }
 
-// ─── Seed data ───────────────────────────────────────────────────────────────
-// Realistic placeholder so empty-state never blocks demo / QA. Replaced by real
-// Supabase rows once the wallet admin service is implemented (T205+).
-
-const SEED_MEMBERS: Member[] = [
-  {
-    id: 'm1',
-    name: 'Asha Mwangi',
-    mpesaPhone: '+255712345001',
-    balanceTZS: 850_000,
-    status: 'active',
-    joinedAt: '2025-08-12',
-  },
-  {
-    id: 'm2',
-    name: 'Juma Said',
-    mpesaPhone: '+255712345002',
-    balanceTZS: 220_000,
-    status: 'active',
-    joinedAt: '2025-09-03',
-  },
-  {
-    id: 'm3',
-    name: 'Neema Okello',
-    mpesaPhone: '+255712345003',
-    balanceTZS: 1_400_000,
-    status: 'active',
-    joinedAt: '2025-10-21',
-  },
-  {
-    id: 'm4',
-    name: 'Hassan Mbaga',
-    mpesaPhone: '+255712345004',
-    balanceTZS: 0,
-    status: 'suspended',
-    joinedAt: '2025-07-04',
-  },
-  {
-    id: 'm5',
-    name: 'Grace Mushi',
-    mpesaPhone: '+255712345005',
-    balanceTZS: 640_000,
-    status: 'active',
-    joinedAt: '2026-01-18',
-  },
-];
-
+// ─── Initial state ───────────────────────────────────────────────────────────
+// This used to pre-populate every commercial_admin/coop_leader with 5
+// fictional cooperative members (with fake M-Pesa numbers and balances
+// totalling TSh 3.11M), 5 fake completed/pending transactions with fake
+// M-Pesa receipt numbers, and fake payout requests — all persisted to the
+// device indefinitely (Zustand `persist`), with nothing in the UI
+// disclosing any of it was fabricated. A real cooperative leader opening
+// this for the first time would see what looks like an existing
+// cooperative with real members and real money, none of which was real.
+// Real users start with none of this; every screen here (index.tsx,
+// payouts.tsx, transactions.tsx) already has an honest empty state for
+// zero members/transactions/payouts.
 const now = () => new Date().toISOString();
 const daysAgo = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString();
-
-const SEED_TXNS: Transaction[] = [
-  {
-    id: 't1',
-    memberId: 'm1',
-    memberName: 'Asha Mwangi',
-    type: 'deposit',
-    amountTZS: 250_000,
-    status: 'completed',
-    reference: 'NHJ4K9ZQX1',
-    createdAt: daysAgo(1),
-  },
-  {
-    id: 't2',
-    memberId: 'm3',
-    memberName: 'Neema Okello',
-    type: 'deposit',
-    amountTZS: 400_000,
-    status: 'completed',
-    reference: 'NHJ4L0AB23',
-    createdAt: daysAgo(2),
-  },
-  {
-    id: 't3',
-    memberId: 'm2',
-    memberName: 'Juma Said',
-    type: 'payout',
-    amountTZS: 80_000,
-    status: 'completed',
-    reference: 'NHJ4M1CD45',
-    note: 'Pembejeo',
-    createdAt: daysAgo(3),
-  },
-  {
-    id: 't4',
-    memberId: 'm1',
-    memberName: 'Asha Mwangi',
-    type: 'fee',
-    amountTZS: 2_500,
-    status: 'completed',
-    reference: 'FEE-AUG-25',
-    createdAt: daysAgo(5),
-  },
-  {
-    id: 't5',
-    memberId: 'm5',
-    memberName: 'Grace Mushi',
-    type: 'payout',
-    amountTZS: 120_000,
-    status: 'pending',
-    reference: 'PAY-PENDING-1',
-    createdAt: daysAgo(0),
-  },
-];
-
-const SEED_PAYOUTS: PayoutRequest[] = [
-  {
-    id: 'p1',
-    memberId: 'm5',
-    memberName: 'Grace Mushi',
-    amountTZS: 120_000,
-    mpesaPhone: '+255712345005',
-    reason: 'Mauzo ya mahindi — Mbeya soko',
-    status: 'requested',
-    requestedAt: daysAgo(0),
-  },
-  {
-    id: 'p2',
-    memberId: 'm2',
-    memberName: 'Juma Said',
-    amountTZS: 60_000,
-    mpesaPhone: '+255712345002',
-    reason: 'Bidhaa za nyumbani',
-    status: 'requested',
-    requestedAt: daysAgo(1),
-  },
-  {
-    id: 'p3',
-    memberId: 'm3',
-    memberName: 'Neema Okello',
-    amountTZS: 300_000,
-    mpesaPhone: '+255712345003',
-    reason: 'Ununuzi wa mbegu',
-    status: 'approved',
-    requestedAt: daysAgo(2),
-    decidedAt: daysAgo(1),
-    decidedBy: 'admin',
-  },
-];
 
 // ─── Store interface ─────────────────────────────────────────────────────────
 
@@ -225,10 +106,10 @@ export interface WalletAdminState {
   reset: () => void;
 }
 
-const fresh = () => ({
-  members: SEED_MEMBERS,
-  transactions: SEED_TXNS,
-  payouts: SEED_PAYOUTS,
+const fresh = (): Pick<WalletAdminState, 'members' | 'transactions' | 'payouts'> => ({
+  members: [],
+  transactions: [],
+  payouts: [],
 });
 
 export const useWalletAdminStore = create<WalletAdminState>()(
