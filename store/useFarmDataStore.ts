@@ -760,6 +760,48 @@ export const useFarmDataStore = create<FarmDataState>()(
     {
       name: 'kilimo-farm-data',
       storage: createJSONStorage(() => AsyncStorage),
+      version: 1,
+      // Zustand's persist rehydration shallow-merges persisted state over the
+      // module's fresh defaults — so any device that already opened this app
+      // before the fake-seed fixes (livestock a1-a3, inventory i1-i4,
+      // consultations co1, ledger l1-l7, groups g1 wrongly joined, insurance
+      // p2 wrongly active) would keep those exact fixtures forever, since
+      // the persisted copy always wins over the new empty/honest defaults.
+      // This strips only those specific known-legacy fixture ids/flags —
+      // never anything a real user created, which always carries a
+      // uid()-generated id (e.g. "a_1700000000000_ab12"), a shape none of
+      // the legacy fixtures share.
+      migrate: (persisted: any, _version) => {
+        if (!persisted) return persisted;
+        const stripLegacy = <T extends { id: string }>(arr: T[] | undefined, legacyIds: string[]) =>
+          Array.isArray(arr) ? arr.filter((x) => !legacyIds.includes(x.id)) : arr;
+
+        persisted.livestock = stripLegacy(persisted.livestock, ['a1', 'a2', 'a3']);
+        persisted.inventory = stripLegacy(persisted.inventory, ['i1', 'i2', 'i3', 'i4']);
+        persisted.consultations = stripLegacy(persisted.consultations, ['co1']);
+        persisted.ledger = stripLegacy(persisted.ledger, [
+          'l1',
+          'l2',
+          'l3',
+          'l4',
+          'l5',
+          'l6',
+          'l7',
+        ]);
+        if (Array.isArray(persisted.groups)) {
+          persisted.groups = persisted.groups.map((g: any) =>
+            g.id === 'g1' ? { ...g, joined: false } : g
+          );
+        }
+        if (Array.isArray(persisted.insurance)) {
+          persisted.insurance = persisted.insurance.map((p: any) =>
+            p.id === 'p2'
+              ? { ...p, status: 'browse', startedAt: undefined, expiresAt: undefined }
+              : p
+          );
+        }
+        return persisted;
+      },
     }
   )
 );
