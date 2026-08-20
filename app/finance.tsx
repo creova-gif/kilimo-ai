@@ -1119,10 +1119,14 @@ export default function FinanceScreen() {
 
             <TouchableOpacity
               onPress={handleGenerateInvoice}
-              disabled={!selectedContractId}
+              disabled={!INVOICE_GENERATION_LIVE || !selectedContractId}
               style={[
                 s.saveBtn,
-                { backgroundColor: colors.primary, marginTop: 12, opacity: selectedContractId ? 1 : 0.5 },
+                {
+                  backgroundColor: colors.primary,
+                  marginTop: 12,
+                  opacity: INVOICE_GENERATION_LIVE && selectedContractId ? 1 : 0.5,
+                },
               ]}
               accessibilityRole="button"
               accessibilityLabel={
@@ -1132,7 +1136,13 @@ export default function FinanceScreen() {
               }
             >
               <Text style={{ color: '#000', fontSize: 14, fontFamily: 'Inter_700Bold' }}>
-                {language === 'sw' ? 'Tengeneza Ankara' : 'Generate & Save'}
+                {INVOICE_GENERATION_LIVE
+                  ? language === 'sw'
+                    ? 'Tengeneza Ankara'
+                    : 'Generate & Save'
+                  : language === 'sw'
+                    ? 'Tengeneza Ankara (Hivi Karibuni)'
+                    : 'Generate & Save (Coming Soon)'}
               </Text>
             </TouchableOpacity>
           </View>
