@@ -230,46 +230,11 @@ const SEED_LIVESTOCK: LivestockAnimal[] = [
   },
 ];
 
-const SEED_INVENTORY: InventoryItem[] = [
-  {
-    id: 'i1',
-    name: 'DAP Fertilizer',
-    category: 'fertilizer',
-    unit: 'bag',
-    qty: 4,
-    lowStockAt: 2,
-    costPerUnitTZS: 95_000,
-    supplier: 'YARA',
-  },
-  {
-    id: 'i2',
-    name: 'Maize Seed — DK 8033',
-    category: 'seed',
-    unit: 'kg',
-    qty: 15,
-    lowStockAt: 5,
-    costPerUnitTZS: 12_000,
-    supplier: 'East African Seed',
-  },
-  {
-    id: 'i3',
-    name: 'Bee Repellent',
-    category: 'pesticide',
-    unit: 'L',
-    qty: 1,
-    lowStockAt: 2,
-    costPerUnitTZS: 18_000,
-  },
-  {
-    id: 'i4',
-    name: 'Layer Mash',
-    category: 'feed',
-    unit: 'bag',
-    qty: 6,
-    lowStockAt: 3,
-    costPerUnitTZS: 64_000,
-  },
-];
+// Inventory starts empty — a hardcoded stock list here would show every new
+// user 4 items they never bought, with real quantities and costs, same
+// anti-pattern as the other seeds already fixed this sweep. inventory.tsx
+// already has a real empty state wired for items.length === 0.
+const SEED_INVENTORY: InventoryItem[] = [];
 
 const SEED_INSURANCE: InsurancePolicy[] = [
   {
@@ -392,6 +357,12 @@ const SEED_SUPPLIERS: InputSupplier[] = [
 // fix to the "Order Sample" button.
 const SEED_ORDERS: InputOrder[] = [];
 
+// Public group directory (member counts, topics) is legitimate catalog
+// content, same as the real named supplier/expert lists below — a farmer
+// can genuinely browse and join any of these. But g1 was seeded as
+// `joined: true`, falsely showing every new user as already a member of a
+// 482-person community they never joined. Real membership only happens
+// through joinGroup().
 const SEED_GROUPS: PeerGroup[] = [
   {
     id: 'g1',
@@ -399,7 +370,7 @@ const SEED_GROUPS: PeerGroup[] = [
     topic: 'Maize · Arusha',
     region: 'Arusha',
     memberCount: 482,
-    joined: true,
+    joined: false,
     lastActivity: new Date(Date.now() - 30 * 60_000).toISOString(),
   },
   {
@@ -573,68 +544,23 @@ const SEED_EXPERTS: Expert[] = [
   },
 ];
 
-const SEED_CONSULTATIONS: Consultation[] = [
-  {
-    id: 'co1',
-    expertId: 'e1',
-    scheduledFor: new Date(Date.now() + 36 * 3600_000).toISOString(),
-    status: 'scheduled',
-    channel: 'video',
-    topic: 'Soil test review for Block B',
-  },
-];
+// Consultations start empty — a hardcoded "scheduled" appointment here
+// showed every new user a video call with a real-named expert they never
+// booked. consultations.tsx already only renders the upcoming section when
+// upcoming.length > 0.
+const SEED_CONSULTATIONS: Consultation[] = [];
 
-const SEED_LEDGER: LedgerEntry[] = [
-  {
-    id: 'l1',
-    date: new Date(Date.now() - 60 * 86400_000).toISOString(),
-    category: 'Input · Seed',
-    description: 'Maize seed DK 8033 — 30kg',
-    amountTZS: -360_000,
-  },
-  {
-    id: 'l2',
-    date: new Date(Date.now() - 58 * 86400_000).toISOString(),
-    category: 'Input · Fertilizer',
-    description: 'DAP fertilizer — 8 bags',
-    amountTZS: -760_000,
-  },
-  {
-    id: 'l3',
-    date: new Date(Date.now() - 40 * 86400_000).toISOString(),
-    category: 'Labour',
-    description: 'Planting crew — 6 days',
-    amountTZS: -180_000,
-  },
-  {
-    id: 'l4',
-    date: new Date(Date.now() - 30 * 86400_000).toISOString(),
-    category: 'Sale · Beans',
-    description: 'Beans to local market — 200kg',
-    amountTZS: 460_000,
-  },
-  {
-    id: 'l5',
-    date: new Date(Date.now() - 10 * 86400_000).toISOString(),
-    category: 'Sale · Maize',
-    description: 'Maize harvest — 1,200kg @ TZS 850',
-    amountTZS: 1_020_000,
-  },
-  {
-    id: 'l6',
-    date: new Date(Date.now() - 7 * 86400_000).toISOString(),
-    category: 'Cooperative',
-    description: 'AMCOS milestone payout',
-    amountTZS: 540_000,
-  },
-  {
-    id: 'l7',
-    date: new Date(Date.now() - 3 * 86400_000).toISOString(),
-    category: 'Input · Pesticide',
-    description: 'Bee repellent — 4L',
-    amountTZS: -72_000,
-  },
-];
+// Ledger starts empty. This one matters more than the other seed fixes: the
+// ledger doesn't just render on a P&L screen (app/finance.tsx doesn't even
+// read this store) — it's the direct input to lib/credit/score.ts's
+// computeCreditScore(), a real, transparent, rule-based credit score shown
+// on the Agro-ID screen as if it reflects the farmer's genuine financial
+// history, explicitly documented as something "a lender... can see exactly
+// why the score is what it is." With this seed, every new user's very first
+// Agro-ID view showed an already-established score built from 7 transactions
+// that never happened. agro-id.tsx already renders a real empty state for
+// ledger.length === 0.
+const SEED_LEDGER: LedgerEntry[] = [];
 
 const uid = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 
@@ -754,6 +680,48 @@ export const useFarmDataStore = create<FarmDataState>()(
     {
       name: 'kilimo-farm-data',
       storage: createJSONStorage(() => AsyncStorage),
+      version: 1,
+      // Zustand's persist rehydration shallow-merges persisted state over the
+      // module's fresh defaults — so any device that already opened this app
+      // before the fake-seed fixes (livestock a1-a3, inventory i1-i4,
+      // consultations co1, ledger l1-l7, groups g1 wrongly joined, insurance
+      // p2 wrongly active) would keep those exact fixtures forever, since
+      // the persisted copy always wins over the new empty/honest defaults.
+      // This strips only those specific known-legacy fixture ids/flags —
+      // never anything a real user created, which always carries a
+      // uid()-generated id (e.g. "a_1700000000000_ab12"), a shape none of
+      // the legacy fixtures share.
+      migrate: (persisted: any, _version) => {
+        if (!persisted) return persisted;
+        const stripLegacy = <T extends { id: string }>(arr: T[] | undefined, legacyIds: string[]) =>
+          Array.isArray(arr) ? arr.filter((x) => !legacyIds.includes(x.id)) : arr;
+
+        persisted.livestock = stripLegacy(persisted.livestock, ['a1', 'a2', 'a3']);
+        persisted.inventory = stripLegacy(persisted.inventory, ['i1', 'i2', 'i3', 'i4']);
+        persisted.consultations = stripLegacy(persisted.consultations, ['co1']);
+        persisted.ledger = stripLegacy(persisted.ledger, [
+          'l1',
+          'l2',
+          'l3',
+          'l4',
+          'l5',
+          'l6',
+          'l7',
+        ]);
+        if (Array.isArray(persisted.groups)) {
+          persisted.groups = persisted.groups.map((g: any) =>
+            g.id === 'g1' ? { ...g, joined: false } : g
+          );
+        }
+        if (Array.isArray(persisted.insurance)) {
+          persisted.insurance = persisted.insurance.map((p: any) =>
+            p.id === 'p2'
+              ? { ...p, status: 'browse', startedAt: undefined, expiresAt: undefined }
+              : p
+          );
+        }
+        return persisted;
+      },
     }
   )
 );
