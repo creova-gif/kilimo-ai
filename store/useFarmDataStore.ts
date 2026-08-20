@@ -271,6 +271,14 @@ const SEED_INVENTORY: InventoryItem[] = [
   },
 ];
 
+// A browsable product catalog (real insurer names, real-looking premiums) is
+// legitimate — same as the supplier/expert directories elsewhere in this
+// file. But p2 was seeded `status: 'active'` with fake startedAt/expiresAt
+// dates, showing every new user as already covered by a real livestock
+// policy they never bought — feeding a false `hasActiveInsurance: true`
+// into the credit-score engine too (see agro-id.tsx). All three policies
+// now start in the same 'browse' state; real coverage only exists once
+// INSURANCE_LIVE ships (see app/insurance.tsx).
 const SEED_INSURANCE: InsurancePolicy[] = [
   {
     id: 'p1',
@@ -290,9 +298,7 @@ const SEED_INSURANCE: InsurancePolicy[] = [
     premiumTZS: 80_000,
     payoutMaxTZS: 2_500_000,
     termMonths: 12,
-    status: 'active',
-    startedAt: new Date(Date.now() - 90 * 86400_000).toISOString(),
-    expiresAt: new Date(Date.now() + 275 * 86400_000).toISOString(),
+    status: 'browse',
   },
   {
     id: 'p3',

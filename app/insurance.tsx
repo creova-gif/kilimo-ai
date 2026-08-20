@@ -42,6 +42,15 @@ import { Gate } from '../lib/access';
 
 const fmt = (n: number) => new Intl.NumberFormat('en-US').format(n);
 
+// No real insurer integration exists anywhere in this codebase — no payment
+// gateway call, no API to Jubilee/NIC/Reliance/Britam/ACRE Africa. Enrollment
+// and claims used to fake success after a 1.5s delay, telling users their
+// mobile-money premium payment was "being verified" and that a real,
+// named insurer was reviewing their claim — neither of which ever happened.
+// Matches the honest IOT_BILLING_LIVE / SUPPLIER_ORDERING_LIVE pattern used
+// elsewhere in this app for the same class of not-yet-real integration.
+const INSURANCE_LIVE = false;
+
 const STATUS_META = {
   browse: { color: '#94a3b8', label: 'Available' },
   pending: { color: '#f59e0b', label: 'Pending' },
@@ -163,6 +172,19 @@ export default function InsuranceScreen() {
 
   function handleEnrollSubmit() {
     if (!selectedEnrollPolicy) return;
+
+    if (!INSURANCE_LIVE) {
+      setEnrollModalVisible(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert(
+        language === 'sw' ? 'Bado Haipatikani' : 'Coming Soon',
+        language === 'sw'
+          ? `Usajili wa moja kwa moja wa ${selectedEnrollPolicy.product} kupitia ${selectedEnrollPolicy.provider} haupatikani bado kwenye programu. Hakuna malipo yaliyofanywa.`
+          : `Direct enrollment in ${selectedEnrollPolicy.product} through ${selectedEnrollPolicy.provider} isn't available in the app yet. No payment was made.`
+      );
+      return;
+    }
+
     setLoadingEnroll(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
@@ -205,6 +227,19 @@ export default function InsuranceScreen() {
 
   function handleClaimSubmit() {
     if (!selectedClaimPolicy) return;
+
+    if (!INSURANCE_LIVE) {
+      setClaimModalVisible(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert(
+        language === 'sw' ? 'Bado Haipatikani' : 'Coming Soon',
+        language === 'sw'
+          ? `Uwasilishaji wa madai kwa ${selectedClaimPolicy.provider} haupatikani bado kwenye programu. Dai lako halijawasilishwa kwa kampuni ya bima.`
+          : `Filing claims with ${selectedClaimPolicy.provider} isn't available in the app yet. Your claim was not sent to the insurer.`
+      );
+      return;
+    }
+
     setLoadingClaim(true);
 
     const payoutRatio =
