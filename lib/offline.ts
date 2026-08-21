@@ -109,7 +109,7 @@ export async function processSyncQueue() {
           id: `log_${Date.now()}`,
           source: 'queued_scan',
           crop: diagnosis.crop,
-          disease: diagnosis.disease,
+          disease,
           severity: diagnosis.severity,
           confidence: diagnosis.confidence,
           actions: diagnosis.actions,

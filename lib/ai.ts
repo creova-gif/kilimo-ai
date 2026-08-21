@@ -15,6 +15,7 @@
  * shipped JS bundle and are trivially extractable from the APK.
  */
 
+import { FunctionsFetchError, FunctionsRelayError } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
 const AI_FN = 'openai-proxy';
@@ -40,21 +41,21 @@ export interface ChatMessage {
 /** Invoke the AI proxy edge function with an action discriminator. */
 async function invokeAI<T = any>(body: Record<string, unknown>): Promise<T> {
   if (!supabase) throw new AIError('AI backend not configured', 'not_configured');
-  let data: any;
-  let error: any;
-  try {
-    ({ data, error } = await supabase.functions.invoke(AI_FN, { body }));
-  } catch (e: any) {
-    // The invoke() call itself threw — the request never reached the server
-    // (no connectivity, DNS failure, etc.), distinct from a valid HTTP error
-    // response below. Callers (e.g. scan.tsx) branch on kind === 'network' to
-    // offer offline queueing; that branch was previously unreachable because
-    // every failure here — including genuine connectivity loss — surfaced as
-    // 'server'.
-    throw new AIError(e?.message ?? 'Network error', 'network');
-  }
+  const { data, error } = await supabase.functions.invoke(AI_FN, { body });
   if (error) {
-    // Supabase wraps non-2xx responses in FunctionsHttpError.
+    // FunctionsClient.invoke() (@supabase/functions-js) never rejects for a
+    // connectivity failure — its own internals catch the fetch() rejection,
+    // wrap it as FunctionsFetchError, and *return* it here as `error`, same
+    // as a relay-level failure (FunctionsRelayError) or a valid non-2xx
+    // response (FunctionsHttpError). A try/catch around the invoke() call
+    // above cannot distinguish these; only the error's class can. Callers
+    // (e.g. scan.tsx) branch on kind === 'network' to offer offline
+    // queueing — that branch was previously unreachable because every
+    // failure here, including genuine connectivity loss, surfaced as
+    // 'server'.
+    if (error instanceof FunctionsFetchError || error instanceof FunctionsRelayError) {
+      throw new AIError(error.message ?? 'Network error', 'network');
+    }
     throw new AIError(error.message ?? 'AI proxy error', 'server');
   }
   if (data && (data as any).error) {
