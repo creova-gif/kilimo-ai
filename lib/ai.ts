@@ -40,7 +40,19 @@ export interface ChatMessage {
 /** Invoke the AI proxy edge function with an action discriminator. */
 async function invokeAI<T = any>(body: Record<string, unknown>): Promise<T> {
   if (!supabase) throw new AIError('AI backend not configured', 'not_configured');
-  const { data, error } = await supabase.functions.invoke(AI_FN, { body });
+  let data: any;
+  let error: any;
+  try {
+    ({ data, error } = await supabase.functions.invoke(AI_FN, { body }));
+  } catch (e: any) {
+    // The invoke() call itself threw — the request never reached the server
+    // (no connectivity, DNS failure, etc.), distinct from a valid HTTP error
+    // response below. Callers (e.g. scan.tsx) branch on kind === 'network' to
+    // offer offline queueing; that branch was previously unreachable because
+    // every failure here — including genuine connectivity loss — surfaced as
+    // 'server'.
+    throw new AIError(e?.message ?? 'Network error', 'network');
+  }
   if (error) {
     // Supabase wraps non-2xx responses in FunctionsHttpError.
     throw new AIError(error.message ?? 'AI proxy error', 'server');
@@ -154,6 +166,9 @@ HAKIKISHA JSON YAKO NI SAHIHI.`;
 
     return { ...parsed, severity, confidence, imageQuality, consultExpert, raw: content };
   } catch (err: any) {
+    // Preserve the original kind (e.g. 'network' from invokeAI) instead of
+    // flattening every failure to 'server'.
+    if (err instanceof AIError) throw err;
     throw new AIError(err?.message ?? 'Vision Error', 'server');
   }
 }

@@ -28,6 +28,7 @@ import {
   Activity,
   Sun,
   Leaf,
+  Clock,
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -59,7 +60,7 @@ import { demoDiagnosis } from '../lib/ai-demo';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-type ScanPhase = 'IDLE' | 'SCANNING' | 'ANALYZING' | 'RESULT' | 'ERROR';
+type ScanPhase = 'IDLE' | 'SCANNING' | 'ANALYZING' | 'RESULT' | 'ERROR' | 'QUEUED';
 
 const MOCK_BG =
   'https://images.unsplash.com/photo-1594488651083-023b8a4a3b1e?q=80&w=2940&auto=format&fit=crop';
@@ -80,6 +81,7 @@ export default function ScanScreen() {
   const { createTask } = useTasks();
   const { scheduleReminder } = useNotifications();
   const addNotification = useKilimoStore((s) => s.addNotification);
+  const addToSyncQueue = useKilimoStore((s) => s.addToSyncQueue);
   const agroId = useKilimoStore((s) => s.agroId);
   const language = useKilimoStore((s) => s.language);
 
@@ -222,6 +224,11 @@ export default function ScanScreen() {
     if (scanSeq.current !== seq) return;
     setPhase('ANALYZING');
 
+    // Captured outside the IIFE below so the network-failure branch in the
+    // catch block can still reach the already-encoded photo to queue it —
+    // base64/mimeType are otherwise scoped to that closure.
+    let capturedPhoto: { base64: string; mimeType: string } | null = null;
+
     // Start AI analysis in the background
     const aiPromise = (async () => {
       if (!aiConfigured()) {
@@ -251,6 +258,7 @@ export default function ScanScreen() {
           });
           if (asset.uri.toLowerCase().endsWith('.png')) mimeType = 'image/png';
         }
+        capturedPhoto = { base64, mimeType };
         return await diagnoseCropPhoto(base64, { mimeType });
       }
     })();
@@ -276,6 +284,25 @@ export default function ScanScreen() {
     } catch (err) {
       if (scanSeq.current !== seq) return;
       const e = err as AIError;
+
+      // A real network failure with an already-encoded photo in hand: queue
+      // it for automatic analysis once connectivity returns (see
+      // lib/offline.ts's scan_result branch) instead of discarding it.
+      if (e?.kind === 'network' && capturedPhoto) {
+        addToSyncQueue({
+          type: 'scan_result',
+          payload: {
+            ...capturedPhoto,
+            language,
+            label: language === 'sw' ? 'Uchunguzi wa Picha' : 'Photo Diagnosis',
+            sub: language === 'sw' ? 'Inasubiri mtandao' : 'Waiting for connection',
+          },
+        });
+        setPhase('QUEUED');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        return;
+      }
+
       const friendly =
         e?.kind === 'validation'
           ? e.message
@@ -285,8 +312,8 @@ export default function ScanScreen() {
               : 'Please sign in again to use photo diagnosis.'
             : e?.kind === 'network'
               ? language === 'sw'
-                ? 'Hakuna mtandao. Hii app haihifadhi picha kwa uchunguzi wa baadaye — tafadhali jaribu tena ukiwa na mtandao.'
-                : 'No connection. This app does not save photos for later analysis — please try again when connected.'
+                ? 'Hakuna mtandao. Tafadhali jaribu tena ukiwa na mtandao.'
+                : 'No connection. Please try again when connected.'
               : language === 'sw'
                 ? 'Samahani, uchunguzi wa picha umeshindikana. Jaribu tena.'
                 : 'Sorry, photo diagnosis failed. Please try again.';
@@ -632,6 +659,63 @@ export default function ScanScreen() {
                 >
                   <RotateCw size={18} color={colors.textMute} />
                   <Text style={[styles.resetBtnText, { color: colors.textMute }]}>Jaribu Tena</Text>
+                </TouchableOpacity>
+              </BlurView>
+            </Animated.View>
+          )}
+
+          {/* QUEUED PHASE — a real network failure interrupted analysis
+              after the photo was already captured; it's been added to the
+              offline sync queue (lib/offline.ts) and will be analyzed
+              automatically once connectivity returns, surfaced via a real
+              notification (and SMS for critical results). */}
+          {phase === 'QUEUED' && (
+            <Animated.View
+              key="queued"
+              entering={FadeInDown}
+              exiting={FadeOut}
+              style={styles.resultWrapper}
+            >
+              <BlurView
+                intensity={isDark ? 40 : 90}
+                tint={isDark ? 'dark' : 'light'}
+                style={[styles.resultCard, { borderColor: 'rgba(59,130,246,0.3)' }]}
+              >
+                <View style={styles.resultHeader}>
+                  <View style={[styles.resultIcon, { backgroundColor: '#3b82f6' }]}>
+                    <Clock size={32} color="#fff" />
+                  </View>
+                  <View style={styles.resultMeta}>
+                    <Text style={[styles.resultName, { color: colors.text }]}>
+                      {language === 'sw' ? 'Imewekwa Foleni' : 'Queued'}
+                    </Text>
+                    <Text style={[styles.confText, { color: colors.textMute }]}>
+                      {language === 'sw' ? 'Itachanganuliwa baadaye' : 'Will analyze later'}
+                    </Text>
+                  </View>
+                </View>
+                <View
+                  style={[
+                    styles.detailCard,
+                    { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' },
+                  ]}
+                >
+                  <Text style={[styles.detailBody, { color: colors.textMute }]}>
+                    {language === 'sw'
+                      ? 'Hakuna mtandao kwa sasa. Picha yako imehifadhiwa na itachunguzwa moja kwa moja ukiwa na mtandao — utapata arifa hapa app.'
+                      : 'No connection right now. Your photo is saved and will be analyzed automatically once you’re back online — you’ll get a notification in the app.'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.resetBtn}
+                  onPress={handleReset}
+                  accessibilityLabel={language === 'sw' ? 'Sawa' : 'OK'}
+                  accessibilityRole="button"
+                >
+                  <CheckCircle2 size={18} color={colors.textMute} />
+                  <Text style={[styles.resetBtnText, { color: colors.textMute }]}>
+                    {language === 'sw' ? 'Sawa' : 'OK'}
+                  </Text>
                 </TouchableOpacity>
               </BlurView>
             </Animated.View>
