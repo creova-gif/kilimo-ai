@@ -151,34 +151,14 @@ export default function PeerGroupsScreen() {
     setDraft('');
   }
 
-  // Deep linking to WhatsApp / Telegram
+  // Community administrators have not configured verified external group links.
   function handleOpenLink(platform: 'whatsapp' | 'telegram', groupName: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const url =
-      platform === 'whatsapp'
-        ? `https://chat.whatsapp.com/mock-invite-${groupName.replace(/\s+/g, '-').toLowerCase()}`
-        : `https://t.me/mock_group_${groupName.replace(/\s+/g, '_').toLowerCase()}`;
-
     Alert.alert(
-      platform === 'whatsapp' ? 'Fungua Kikundi cha WhatsApp' : 'Fungua Kituo cha Telegram',
+      language === 'sw' ? 'Kiungo Hakijapatikana' : 'Link Unavailable',
       language === 'sw'
-        ? `Je, unataka kujiunga na ${groupName} kwenye ${platform === 'whatsapp' ? 'WhatsApp' : 'Telegram'}?`
-        : `Do you want to join ${groupName} on ${platform === 'whatsapp' ? 'WhatsApp' : 'Telegram'}?`,
-      [
-        { text: 'Hapana', style: 'cancel' },
-        {
-          text: 'Ndiyo',
-          onPress: () => {
-            if (Platform.OS === 'web') {
-              window.open(url, '_blank');
-            } else {
-              Linking.openURL(url).catch(() => {
-                Alert.alert('Makosa', 'Tafadhali sakinisha programu husika.');
-              });
-            }
-          },
-        },
-      ]
+        ? `Msimamizi wa ${groupName} bado hajaweka kiungo kilichothibitishwa cha ${platform === 'whatsapp' ? 'WhatsApp' : 'Telegram'}.`
+        : `${groupName}'s administrator has not configured a verified ${platform === 'whatsapp' ? 'WhatsApp' : 'Telegram'} link yet.`
     );
   }
 
