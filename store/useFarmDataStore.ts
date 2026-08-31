@@ -194,41 +194,11 @@ interface FarmDataState {
 }
 
 // ─── Seeds ───────────────────────────────────────────────────────────────────
-const SEED_LIVESTOCK: LivestockAnimal[] = [
-  {
-    id: 'a1',
-    tag: 'TZ-0421',
-    species: 'cattle',
-    name: 'Sita',
-    birthDate: '2022-03-12',
-    weightKg: 380,
-    lastVaccineDate: '2026-03-05',
-    nextVaccineDue: '2026-09-05',
-    healthStatus: 'healthy',
-  },
-  {
-    id: 'a2',
-    tag: 'TZ-0422',
-    species: 'cattle',
-    name: 'Bahati',
-    birthDate: '2023-08-01',
-    weightKg: 290,
-    lastVaccineDate: '2026-02-10',
-    nextVaccineDue: '2026-08-10',
-    healthStatus: 'attention',
-    notes: 'Slight limp on rear leg',
-  },
-  {
-    id: 'a3',
-    tag: 'GT-118',
-    species: 'goat',
-    birthDate: '2024-11-20',
-    weightKg: 32,
-    lastVaccineDate: '2026-04-15',
-    nextVaccineDue: '2026-10-15',
-    healthStatus: 'healthy',
-  },
-];
+// Livestock starts empty — a hardcoded fleet here would show every new user
+// three animals they never registered (same anti-pattern already fixed for
+// wallet-admin members and input-supply orders). livestock.tsx already has a
+// real empty state wired for animals.length === 0.
+const SEED_LIVESTOCK: LivestockAnimal[] = [];
 
 const SEED_INVENTORY: InventoryItem[] = [
   {
@@ -754,6 +724,48 @@ export const useFarmDataStore = create<FarmDataState>()(
     {
       name: 'kilimo-farm-data',
       storage: createJSONStorage(() => AsyncStorage),
+      version: 1,
+      // Zustand's persist rehydration shallow-merges persisted state over the
+      // module's fresh defaults — so any device that already opened this app
+      // before the fake-seed fixes (livestock a1-a3, inventory i1-i4,
+      // consultations co1, ledger l1-l7, groups g1 wrongly joined, insurance
+      // p2 wrongly active) would keep those exact fixtures forever, since
+      // the persisted copy always wins over the new empty/honest defaults.
+      // This strips only those specific known-legacy fixture ids/flags —
+      // never anything a real user created, which always carries a
+      // uid()-generated id (e.g. "a_1700000000000_ab12"), a shape none of
+      // the legacy fixtures share.
+      migrate: (persisted: any, _version) => {
+        if (!persisted) return persisted;
+        const stripLegacy = <T extends { id: string }>(arr: T[] | undefined, legacyIds: string[]) =>
+          Array.isArray(arr) ? arr.filter((x) => !legacyIds.includes(x.id)) : arr;
+
+        persisted.livestock = stripLegacy(persisted.livestock, ['a1', 'a2', 'a3']);
+        persisted.inventory = stripLegacy(persisted.inventory, ['i1', 'i2', 'i3', 'i4']);
+        persisted.consultations = stripLegacy(persisted.consultations, ['co1']);
+        persisted.ledger = stripLegacy(persisted.ledger, [
+          'l1',
+          'l2',
+          'l3',
+          'l4',
+          'l5',
+          'l6',
+          'l7',
+        ]);
+        if (Array.isArray(persisted.groups)) {
+          persisted.groups = persisted.groups.map((g: any) =>
+            g.id === 'g1' ? { ...g, joined: false } : g
+          );
+        }
+        if (Array.isArray(persisted.insurance)) {
+          persisted.insurance = persisted.insurance.map((p: any) =>
+            p.id === 'p2'
+              ? { ...p, status: 'browse', startedAt: undefined, expiresAt: undefined }
+              : p
+          );
+        }
+        return persisted;
+      },
     }
   )
 );
