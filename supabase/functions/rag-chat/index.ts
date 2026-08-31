@@ -57,9 +57,11 @@ function supabaseAdmin() {
 // the final word.
 const CHEMICAL_TERMS = /\b(pesticide|herbicide|fungicide|fertili[sz]er|insecticide|spray|dawa|mbolea|kemikali|dozi|dosage|rate)\b/i
 
+class BadRequest extends Error {}
+
 async function ask(payload: any) {
   const query = String(payload.query ?? '').trim()
-  if (!query) throw new Error('query is required')
+  if (!query) throw new BadRequest('query is required')
   const userId = payload.userId as string | undefined
   const language: 'sw' | 'en' = payload.language === 'en' ? 'en' : 'sw'
 
@@ -245,6 +247,7 @@ serve(async (req) => {
     return json({ error: `Unknown action: ${action}` }, 400)
   } catch (error: any) {
     console.error('[rag-chat] error', error)
-    return json({ error: error.message ?? 'internal error' }, 500)
+    if (error instanceof BadRequest) return json({ error: error.message }, 400)
+    return json({ error: 'internal error' }, 500)
   }
 })

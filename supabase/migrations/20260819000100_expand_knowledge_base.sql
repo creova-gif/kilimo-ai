@@ -18,7 +18,7 @@ values
    'planting_calendar', null),
   ('Maize — growth stages at a glance',
    'Maize development is commonly tracked in vegetative (V) and reproductive (R) stages: VE emergence, V6 knee-high with the growing point differentiating, VT tasseling, R1 silking (the most water-sensitive stage), R4 dough, R6 physiological maturity (black layer). Knowing the current stage helps time nitrogen top-dress (around V6-V8), scouting intensity (peaks V6-VT), and irrigation priority (R1-R3).',
-   'crop_disease', null),
+   'crop_management', null),
   ('Rice — blast disease',
    'Rice blast shows as diamond-shaped grey-centred lesions with brown borders on leaves, and can girdle the neck below the panicle causing whole-panicle death. Favoured by high nitrogen, dense planting, and prolonged leaf wetness. Use resistant varieties where available, avoid excess nitrogen, maintain adequate but not excessive plant spacing for airflow, and consult an agronomist on a registered fungicide if blast is confirmed early.',
    'crop_disease', null),
@@ -41,7 +41,7 @@ values
    'African bollworm larvae bore into cotton squares and bolls, causing shed squares and damaged, rotting bolls. Scout twice weekly during flowering and boll formation, checking for eggs on upper leaves and squares; hand-remove and destroy damaged bolls early in light infestations. Rotate any insecticide chemistry used and consult an agronomist on threshold-based spraying rather than a fixed calendar.',
    'crop_disease', null),
   ('Coffee — coffee berry disease',
-   'Coffee berry disease causes sunken, dark, often sunken lesions on green berries that can rot the whole berry, worse in cool, wet, high-altitude conditions. Prune to open the canopy for airflow and light penetration, remove and destroy infected berries and prunings, and consult an agronomist on protective fungicide timing keyed to the onset of rains in your zone.',
+   'Coffee berry disease causes sunken, dark lesions on green berries that can rot the whole berry, worse in cool, wet, high-altitude conditions. Prune to open the canopy for airflow and light penetration, remove and destroy infected berries and prunings, and consult an agronomist on protective fungicide timing keyed to the onset of rains in your zone.',
    'crop_disease', null),
   ('Tomato — bacterial wilt',
    'Bacterial wilt causes sudden, irreversible wilting of the whole plant, often with no yellowing beforehand — cutting the stem near the base and suspending it in clear water shows a milky bacterial ooze if this is the cause. There is no cure once infected; rotate away from solanaceous crops (tomato, potato, pepper, eggplant) for at least three seasons, improve drainage, and remove infected plants and roots completely rather than composting them on-site.',
@@ -63,8 +63,8 @@ values
    'post_harvest', null),
   ('Livestock — routine vaccination and deworming importance',
    'A consistent vaccination and deworming schedule (matched to the specific diseases and parasite burden common in your district) is one of the highest-return investments in smallholder livestock — treated animals gain weight faster and produce more milk than untreated ones carrying a hidden parasite or disease burden. Exact vaccines, dewormers, and timing vary by species, age, and local disease prevalence — get your schedule from a livestock officer or veterinary extension service rather than a generic calendar.',
-   'crop_disease', null),
+   'livestock', null),
   ('Market — reading price signals across markets',
    'Comparing the same crop''s price across two or three nearby markets, not just the closest one, often reveals a gap larger than the transport cost to reach the better market — worth checking before committing a harvest to the first buyer. Prices for a given crop tend to move together across a region on trend but can diverge sharply around local supply gluts right after a harvest window, which is often the best short-term selling opportunity if storage isn''t available.',
    'market_info', null)
-on conflict do nothing;
+on conflict (title) do nothing;

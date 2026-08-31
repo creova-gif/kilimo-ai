@@ -113,6 +113,12 @@ export function formatAgriReply(advice: AgriAdvice, language: 'sw' | 'en' = 'sw'
   if (advice.sources.length > 0) {
     const titles = advice.sources.map((s) => s.title).join(', ');
     parts.push(language === 'sw' ? `Vyanzo: ${titles}` : `Sources: ${titles}`);
+  } else if (!advice.hasKnowledge) {
+    parts.push(
+      language === 'sw'
+        ? 'Kumbuka: hakuna maarifa ya ndani yaliyopatikana kwa swali hili.'
+        : 'Note: no local verified knowledge matched this question.'
+    );
   }
 
   if (advice.disclaimer) parts.push(advice.disclaimer);

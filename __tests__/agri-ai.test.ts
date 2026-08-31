@@ -124,6 +124,11 @@ describe('formatAgriReply', () => {
 });
 
 describe('askAgriExpert', () => {
+  jest.mock('../lib/ai', () => {
+    const actual = jest.requireActual('../lib/ai');
+    return { ...actual, aiConfigured: () => false };
+  });
+
   it('throws a not_configured AIError when the backend is unavailable (no network call)', async () => {
     // In this test environment there's no real Supabase config, so
     // aiConfigured() is false — askAgriExpert must fail fast and honestly

@@ -53,7 +53,7 @@ returns table (
   similarity float
 )
 language sql stable
-set search_path = public
+set search_path = public, extensions
 as $$
   select
     knowledge_base.id,
