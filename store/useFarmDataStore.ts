@@ -584,57 +584,11 @@ const SEED_CONSULTATIONS: Consultation[] = [
   },
 ];
 
-const SEED_LEDGER: LedgerEntry[] = [
-  {
-    id: 'l1',
-    date: new Date(Date.now() - 60 * 86400_000).toISOString(),
-    category: 'Input · Seed',
-    description: 'Maize seed DK 8033 — 30kg',
-    amountTZS: -360_000,
-  },
-  {
-    id: 'l2',
-    date: new Date(Date.now() - 58 * 86400_000).toISOString(),
-    category: 'Input · Fertilizer',
-    description: 'DAP fertilizer — 8 bags',
-    amountTZS: -760_000,
-  },
-  {
-    id: 'l3',
-    date: new Date(Date.now() - 40 * 86400_000).toISOString(),
-    category: 'Labour',
-    description: 'Planting crew — 6 days',
-    amountTZS: -180_000,
-  },
-  {
-    id: 'l4',
-    date: new Date(Date.now() - 30 * 86400_000).toISOString(),
-    category: 'Sale · Beans',
-    description: 'Beans to local market — 200kg',
-    amountTZS: 460_000,
-  },
-  {
-    id: 'l5',
-    date: new Date(Date.now() - 10 * 86400_000).toISOString(),
-    category: 'Sale · Maize',
-    description: 'Maize harvest — 1,200kg @ TZS 850',
-    amountTZS: 1_020_000,
-  },
-  {
-    id: 'l6',
-    date: new Date(Date.now() - 7 * 86400_000).toISOString(),
-    category: 'Cooperative',
-    description: 'AMCOS milestone payout',
-    amountTZS: 540_000,
-  },
-  {
-    id: 'l7',
-    date: new Date(Date.now() - 3 * 86400_000).toISOString(),
-    category: 'Input · Pesticide',
-    description: 'Bee repellent — 4L',
-    amountTZS: -72_000,
-  },
-];
+// Ledger starts empty — see PR #64 for the full rationale (this array is
+// the direct input to the real credit-score engine on the Agro-ID screen).
+// Fixed here too since app/finance.tsx (this PR) now reads this same real
+// ledger, and this branch split off main before #64 merged.
+const SEED_LEDGER: LedgerEntry[] = [];
 
 const uid = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 
@@ -754,6 +708,21 @@ export const useFarmDataStore = create<FarmDataState>()(
     {
       name: 'kilimo-farm-data',
       storage: createJSONStorage(() => AsyncStorage),
+      version: 1,
+      // See PR #64 for the full rationale: persist rehydration merges cached
+      // device state over fresh code defaults, so a device that already
+      // opened this app would keep its fake SEED_LEDGER (l1-l7) forever
+      // without a version bump. Scoped to just the ledger here since that's
+      // the only seed this branch (split off main before #64 merged) fixes.
+      migrate: (persisted: any, _version) => {
+        if (!persisted) return persisted;
+        if (Array.isArray(persisted.ledger)) {
+          persisted.ledger = persisted.ledger.filter(
+            (l: any) => !['l1', 'l2', 'l3', 'l4', 'l5', 'l6', 'l7'].includes(l.id)
+          );
+        }
+        return persisted;
+      },
     }
   )
 );

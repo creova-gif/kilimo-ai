@@ -106,74 +106,13 @@ interface ContractsState {
   removeContract: (id: string) => void;
 }
 
-// Seed data — illustrates each lifecycle state
-const SEED: Contract[] = [
-  {
-    id: 'c1',
-    title: 'Mahindi Hifadhi ya 2026',
-    crop: 'Maize',
-    quantityKg: 5000,
-    pricePerKgTZS: 850,
-    buyer: 'NMB Foods Ltd',
-    buyerOrg: 'NMB',
-    region: 'Arusha',
-    status: 'active',
-    signedByFarmerAt: new Date(Date.now() - 14 * 86400_000).toISOString(),
-    signedByBuyerAt: new Date(Date.now() - 13 * 86400_000).toISOString(),
-    milestones: [
-      {
-        id: 'm1',
-        label: 'Mavuno ya Awali',
-        dueDate: new Date(Date.now() + 7 * 86400_000).toISOString(),
-        amountTZS: 1_500_000,
-        paid: false,
-      },
-      {
-        id: 'm2',
-        label: 'Uwasilishaji wa Mwisho',
-        dueDate: new Date(Date.now() + 30 * 86400_000).toISOString(),
-        amountTZS: 2_750_000,
-        paid: false,
-      },
-    ],
-    createdAt: new Date(Date.now() - 20 * 86400_000).toISOString(),
-    updatedAt: new Date(Date.now() - 5 * 86400_000).toISOString(),
-  },
-  {
-    id: 'c2',
-    title: 'Mpunga Bora Mbeya',
-    crop: 'Rice',
-    quantityKg: 2000,
-    pricePerKgTZS: 1_400,
-    buyer: 'Kilimo Trust Coop',
-    region: 'Mbeya',
-    status: 'under_review',
-    milestones: [
-      {
-        id: 'm1',
-        label: 'Malipo ya Awali',
-        dueDate: new Date(Date.now() + 14 * 86400_000).toISOString(),
-        amountTZS: 1_400_000,
-        paid: false,
-      },
-    ],
-    createdAt: new Date(Date.now() - 3 * 86400_000).toISOString(),
-    updatedAt: new Date(Date.now() - 1 * 86400_000).toISOString(),
-  },
-  {
-    id: 'c3',
-    title: 'Maharage Mavuno Mafupi',
-    crop: 'Beans',
-    quantityKg: 800,
-    pricePerKgTZS: 2_300,
-    buyer: 'East African Grains',
-    region: 'Kilimanjaro',
-    status: 'draft',
-    milestones: [],
-    createdAt: new Date(Date.now() - 1 * 86400_000).toISOString(),
-    updatedAt: new Date(Date.now() - 1 * 86400_000).toISOString(),
-  },
-];
+// Starts empty. This used to seed 3 fake contracts, including one already
+// `active` with both signedByFarmerAt/signedByBuyerAt dates set — every new
+// user opened /contracts already showing a signed, in-progress 4.25M TZS
+// maize deal with a real-sounding buyer (NMB Foods Ltd) they never actually
+// negotiated. app/contracts/index.tsx already has a real EmptyState wired
+// for contracts.length === 0.
+const SEED: Contract[] = [];
 
 export const useContractsStore = create<ContractsState>()(
   persist(
@@ -257,6 +196,20 @@ export const useContractsStore = create<ContractsState>()(
     {
       name: 'kilimo-contracts-store',
       storage: createJSONStorage(() => AsyncStorage),
+      version: 1,
+      // Same fix as store/useFarmDataStore.ts: persist rehydration merges
+      // cached device state over fresh code defaults, so a device that
+      // already opened this app would keep its fake c1/c2/c3 contracts
+      // forever without a version bump forcing this cleanup.
+      migrate: (persisted: any, _version) => {
+        if (!persisted) return persisted;
+        if (Array.isArray(persisted.contracts)) {
+          persisted.contracts = persisted.contracts.filter(
+            (c: any) => !['c1', 'c2', 'c3'].includes(c.id)
+          );
+        }
+        return persisted;
+      },
     }
   )
 );
