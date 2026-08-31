@@ -36,88 +36,9 @@ import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useTheme } from '../constants/Theme';
 import { useRouter } from 'expo-router';
-import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { useKilimoStore } from '../store/useKilimoStore';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-// High-quality mock data when OpenWeather is not configured
-const MOCK_CURRENT = {
-  location: 'Mbeya, Tanzania',
-  temp: 24,
-  feelsLike: 26,
-  humidity: 78,
-  windKph: 12,
-  condition: 'cloud' as const,
-  conditionLabel: 'Mawingu kidogo',
-  pop: 65,
-};
-
-const MOCK_FORECAST = [
-  {
-    day: 'Jumatatu',
-    date: '28 Mei',
-    high: 26,
-    low: 18,
-    condition: 'rain' as const,
-    pop: '80%',
-    desc: 'Mvua kubwa inatarajiwa. Epuka kuweka mbolea leo.',
-  },
-  {
-    day: 'Jumanne',
-    date: '29 Mei',
-    high: 25,
-    low: 17,
-    condition: 'cloud' as const,
-    pop: '30%',
-    desc: 'Hali nzuri kwa kupanda na kupalilia.',
-  },
-  {
-    day: 'Jumatano',
-    date: '30 Mei',
-    high: 28,
-    low: 19,
-    condition: 'sun' as const,
-    pop: '10%',
-    desc: 'Siku nzuri kwa uvunaji na kazi za shambani.',
-  },
-  {
-    day: 'Alhamisi',
-    date: '31 Mei',
-    high: 29,
-    low: 20,
-    condition: 'sun' as const,
-    pop: '5%',
-    desc: 'Siku nzuri kwa uvunaji na kazi za shambani.',
-  },
-  {
-    day: 'Ijumaa',
-    date: '01 Jun',
-    high: 27,
-    low: 18,
-    condition: 'rain' as const,
-    pop: '60%',
-    desc: 'Mvua kubwa inatarajiwa. Epuka kuweka mbolea leo.',
-  },
-  {
-    day: 'Jumamosi',
-    date: '02 Jun',
-    high: 24,
-    low: 16,
-    condition: 'storm' as const,
-    pop: '90%',
-    desc: 'Tahadhari ya upepo mkali. Funga ghala vizuri.',
-  },
-  {
-    day: 'Jumapili',
-    date: '03 Jun',
-    high: 26,
-    low: 17,
-    condition: 'cloud' as const,
-    pop: '20%',
-    desc: 'Hali nzuri kwa kupanda na kupalilia.',
-  },
-];
 
 export default function ForecastScreen() {
   const { colors, isDark } = useTheme();
@@ -135,19 +56,18 @@ export default function ForecastScreen() {
     refetch,
   } = useWeather();
 
-  // Pick real data or fall back to high-quality mock data
-  const current = realCurrent || MOCK_CURRENT;
-  const forecastDays = realForecast || MOCK_FORECAST;
+  const current = realCurrent;
+  const forecastDays = realForecast ?? [];
 
   const onRefresh = React.useCallback(async () => {
+    if (!configured) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
     setRefreshing(true);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
-      if (configured) {
-        await refetch();
-      } else {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
+      await refetch();
     } finally {
       setRefreshing(false);
     }
@@ -206,34 +126,13 @@ export default function ForecastScreen() {
     }
   };
 
-  // Generate hourly weather progression dynamically based on current temp
-  const hourlyData = React.useMemo(() => {
-    const currentHour = new Date().getHours();
-    const temp = current?.temp || 24;
-    return Array.from({ length: 5 }).map((_, i) => {
-      const hr = (currentHour + i * 2) % 24;
-      const ampm = hr >= 12 ? 'PM' : 'AM';
-      const displayHr = hr % 12 === 0 ? 12 : hr % 12;
-      const label = `${displayHr.toString().padStart(2, '0')} ${ampm}`;
-
-      const tempOffset = Math.sin(i) * 2;
-      const hourTemp = Math.round(temp + tempOffset);
-
-      let condition: 'sun' | 'cloud' | 'rain' | 'storm' = 'sun';
-      if (i === 1) condition = 'cloud';
-      else if (i === 3) condition = 'rain';
-      else if (i === 4) condition = 'cloud';
-
-      return { label, temp: hourTemp, condition };
-    });
-  }, [current?.temp]);
-
   // Calculate position on the temp slider bar
   const tempSliderProgress = React.useMemo(() => {
-    const temp = current?.temp || 24;
-    const low = forecastDays[0]?.low || 18;
-    const high = forecastDays[0]?.high || 28;
-    const range = high - low || 10;
+    if (current == null || forecastDays[0] == null) return 0;
+    const temp = current.temp;
+    const low = forecastDays[0].low;
+    const high = forecastDays[0].high;
+    const range = high - low || 1;
     const fraction = (temp - low) / range;
     return Math.max(0, Math.min(100, Math.round(fraction * 100)));
   }, [current?.temp, forecastDays]);
@@ -324,8 +223,8 @@ export default function ForecastScreen() {
                 <View style={styles.tempSection}>
                   <Text style={styles.todayText}>{todayLabel}</Text>
                   <View style={styles.tempMainContainer}>
-                    <Text style={styles.tempMain}>{current?.temp}</Text>
-                    <Text style={styles.tempDegree}>°C</Text>
+                    <Text style={styles.tempMain}>{current?.temp ?? '—'}</Text>
+                    {current && <Text style={styles.tempDegree}>°C</Text>}
                   </View>
                   <View style={styles.conditionRow}>
                     <View style={styles.conditionDot} />
@@ -334,35 +233,42 @@ export default function ForecastScreen() {
                         ? current.conditionLabel.charAt(0).toUpperCase() +
                           current.conditionLabel.slice(1)
                         : loading
-                          ? 'Inapakia…'
-                          : 'Mawingu'}
+                          ? language === 'sw'
+                            ? 'Inapakia…'
+                            : 'Loading…'
+                          : language === 'sw'
+                            ? 'Data haipatikani'
+                            : 'Data unavailable'}
                     </Text>
                   </View>
                 </View>
                 <View style={styles.heroIconContainer}>
-                  {renderWeatherIcon(current?.condition || 'cloud', 90, '#a3e635')}
+                  {renderWeatherIcon(current?.condition ?? 'cloud', 90, '#a3e635')}
                 </View>
               </View>
 
-              {/* Dynamic Range Temp Slider */}
-              <View style={styles.sliderContainer}>
-                <View style={styles.sliderLabels}>
-                  <Text style={styles.sliderLabelText}>{forecastDays[0]?.low ?? 18}°C</Text>
-                  <Text style={[styles.sliderLabelText, { opacity: 0.5 }]}>
-                    {language === 'sw' ? 'Kiwango cha Leo' : "Today's Range"}
-                  </Text>
-                  <Text style={styles.sliderLabelText}>{forecastDays[0]?.high ?? 28}°C</Text>
+              {/* OpenWeather's free forecast endpoint does not supply a true
+                  hourly series, so do not invent one from the current reading. */}
+              {current && forecastDays[0] ? (
+                <View style={styles.sliderContainer}>
+                  <View style={styles.sliderLabels}>
+                    <Text style={styles.sliderLabelText}>{forecastDays[0].low}°C</Text>
+                    <Text style={[styles.sliderLabelText, { opacity: 0.5 }]}>
+                      {language === 'sw' ? 'Siku inayofuata' : 'Next forecast day'}
+                    </Text>
+                    <Text style={styles.sliderLabelText}>{forecastDays[0].high}°C</Text>
+                  </View>
+                  <View style={styles.sliderTrack}>
+                    <LinearGradient
+                      colors={['#2e7d32', '#a3e635', '#f59e0b', '#ef4444']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.sliderGradient}
+                    />
+                    <View style={[styles.sliderPointer, { left: `${tempSliderProgress}%` }]} />
+                  </View>
                 </View>
-                <View style={styles.sliderTrack}>
-                  <LinearGradient
-                    colors={['#2e7d32', '#a3e635', '#f59e0b', '#ef4444']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.sliderGradient}
-                  />
-                  <View style={[styles.sliderPointer, { left: `${tempSliderProgress}%` }]} />
-                </View>
-              </View>
+              ) : null}
 
               <View style={styles.cardDivider} />
 
@@ -370,26 +276,11 @@ export default function ForecastScreen() {
               <Text style={styles.hourlyTitle}>
                 {language === 'sw' ? 'Utabiri wa Saa' : 'Hourly Forecast'}
               </Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.hourlyList}
-              >
-                {hourlyData.map((item, index) => (
-                  <BlurView
-                    key={index}
-                    intensity={25}
-                    tint="dark"
-                    style={[styles.hourlyCapsule, index === 2 && styles.activeHourlyCapsule]}
-                  >
-                    <Text style={styles.hourlyTime}>{item.label}</Text>
-                    <View style={styles.hourlyIconCircle}>
-                      {renderWeatherIcon(item.condition, 20, index === 2 ? '#a3e635' : '#fff')}
-                    </View>
-                    <Text style={styles.hourlyTemp}>{item.temp}°</Text>
-                  </BlurView>
-                ))}
-              </ScrollView>
+              <Text style={styles.unavailableText}>
+                {language === 'sw'
+                  ? 'Utabiri wa saa haupatikani kutoka chanzo cha sasa.'
+                  : 'Hourly data is unavailable from the current weather source.'}
+              </Text>
             </BlurView>
           </Animated.View>
 
@@ -407,27 +298,10 @@ export default function ForecastScreen() {
                     {language === 'sw' ? 'Kielezo cha UV' : 'UV Index'}
                   </Text>
                 </View>
-                <Text style={styles.bentoValue}>05</Text>
+                <Text style={styles.bentoValue}>—</Text>
                 <Text style={[styles.bentoSubText, { color: '#f59e0b' }]}>
-                  {language === 'sw' ? 'Kawaida' : 'Moderate'}
+                  {language === 'sw' ? 'Haipatikani' : 'Unavailable'}
                 </Text>
-                <View style={styles.bentoSparkline}>
-                  <Svg height="60" width="100%" viewBox="0 0 160 60" preserveAspectRatio="none">
-                    <Defs>
-                      <SvgLinearGradient id="uvGrad" x1="0" y1="0" x2="0" y2="1">
-                        <Stop offset="0%" stopColor="#f59e0b" stopOpacity="0.4" />
-                        <Stop offset="100%" stopColor="#f59e0b" stopOpacity="0.0" />
-                      </SvgLinearGradient>
-                    </Defs>
-                    <Path d="M0 45 Q 40 15, 80 35 T 160 20 L160 60 L0 60 Z" fill="url(#uvGrad)" />
-                    <Path
-                      d="M0 45 Q 40 15, 80 35 T 160 20"
-                      fill="none"
-                      stroke="#f59e0b"
-                      strokeWidth="2"
-                    />
-                  </Svg>
-                </View>
               </BlurView>
             </Animated.View>
 
@@ -443,52 +317,37 @@ export default function ForecastScreen() {
                     {language === 'sw' ? 'Unyevunyevu' : 'Humidity'}
                   </Text>
                 </View>
-                <Text style={styles.bentoValue}>{current?.humidity}%</Text>
-                <Text style={[styles.bentoSubText, { color: '#3b82f6' }]}>
-                  {language === 'sw' ? 'Imara' : 'Optimal'}
+                <Text style={styles.bentoValue}>
+                  {current?.humidity == null ? '—' : `${current.humidity}%`}
                 </Text>
-                <View style={styles.bentoSparkline}>
-                  <Svg height="60" width="100%" viewBox="0 0 160 60" preserveAspectRatio="none">
-                    <Defs>
-                      <SvgLinearGradient id="humGrad" x1="0" y1="0" x2="0" y2="1">
-                        <Stop offset="0%" stopColor="#3b82f6" stopOpacity="0.4" />
-                        <Stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
-                      </SvgLinearGradient>
-                    </Defs>
-                    <Path d="M0 30 Q 30 50, 80 20 T 160 35 L160 60 L0 60 Z" fill="url(#humGrad)" />
-                    <Path
-                      d="M0 30 Q 30 50, 80 20 T 160 35"
-                      fill="none"
-                      stroke="#3b82f6"
-                      strokeWidth="2"
-                    />
-                  </Svg>
-                </View>
+                <Text style={[styles.bentoSubText, { color: '#3b82f6' }]}>
+                  {current
+                    ? language === 'sw'
+                      ? 'Soma la sasa'
+                      : 'Current reading'
+                    : language === 'sw'
+                      ? 'Haipatikani'
+                      : 'Unavailable'}
+                </Text>
               </BlurView>
             </Animated.View>
           </View>
 
-          {/* AI Alert/Agronomist Warning Banner */}
+          {/* Guidance is derived from the live daily forecast, not an AI model. */}
           <Animated.View entering={FadeInDown.delay(300).duration(600).springify()}>
             <BlurView intensity={35} tint="dark" style={styles.alertCard}>
               <View style={styles.alertHeader}>
                 <Sparkles size={16} color="#a3e635" />
                 <Text style={styles.alertTitle}>
-                  {language === 'sw' ? 'USHAURI WA KILIMO AI' : 'KILIMO AI AGRONOMIST TIP'}
+                  {language === 'sw' ? 'DOKEZO LA HALI YA HEWA' : 'WEATHER-BASED FIELD NOTE'}
                 </Text>
               </View>
               <View style={styles.alertBody}>
-                <View style={styles.alertWarningBox}>
-                  <Zap size={16} color="#f59e0b" />
-                  <Text style={styles.alertWarningText}>
-                    {language === 'sw' ? 'Umwagiliaji Unahitajika' : 'Irrigation Recommended'}
-                  </Text>
-                </View>
                 <Text style={styles.alertText}>
-                  {forecastDays[0]?.desc ||
+                  {forecastDays[0]?.desc ??
                     (language === 'sw'
-                      ? 'Utabiri unaonyesha kupanda kwa joto na kupungua kwa unyevu. Ni vyema kumwagilia mashamba ya mboga na mazao machanga leo jioni kuzuia unyaufu.'
-                      : 'Forecast shows high temperature and optimal moisture level. Water seedlings and crops this evening to prevent water stress.')}
+                      ? 'Dokezo la shambani litapatikana baada ya utabiri wa moja kwa moja kupakiwa.'
+                      : 'A field note will appear once live forecast data is available.')}
                 </Text>
               </View>
             </BlurView>
@@ -507,15 +366,15 @@ export default function ForecastScreen() {
             </Animated.View>
           )}
 
-          {/* API Not Configured Notice - Small & Clean Banner */}
+          {/* Do not backfill unavailable live weather with fabricated forecasts. */}
           {!configured && (
             <Animated.View entering={FadeIn}>
               <BlurView intensity={20} tint="dark" style={styles.demoBanner}>
                 <Sparkles size={14} color="#a3e635" />
                 <Text style={styles.demoText}>
                   {language === 'sw'
-                    ? 'Hali ya Maonyesho — Imewezeshwa kwa data ya majaribio ya Mbeya.'
-                    : 'Demo mode — Populated with high-fidelity sample data.'}
+                    ? 'Data ya hali ya hewa ya moja kwa moja haipatikani sasa.'
+                    : 'Live weather data is currently unavailable.'}
                 </Text>
               </BlurView>
             </Animated.View>
@@ -535,8 +394,15 @@ export default function ForecastScreen() {
             </View>
           )}
 
-          <View style={styles.forecastList}>
-            {forecastDays.map((item, index) => (
+          {forecastDays.length === 0 ? (
+            <Text style={styles.unavailableText}>
+              {language === 'sw'
+                ? 'Utabiri wa siku 7 utaonekana hapa baada ya data ya moja kwa moja kupatikana.'
+                : 'The 7-day forecast will appear here once live weather data is available.'}
+            </Text>
+          ) : (
+            <View style={styles.forecastList}>
+              {forecastDays.map((item, index) => (
               <Animated.View
                 key={item.day}
                 entering={FadeInDown.delay(100 + index * 50).duration(500)}
@@ -571,8 +437,9 @@ export default function ForecastScreen() {
                   </View>
                 </BlurView>
               </Animated.View>
-            ))}
-          </View>
+              ))}
+            </View>
+          )}
 
           <View style={{ height: 60 }} />
         </ScrollView>
@@ -919,6 +786,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'Inter_600SemiBold',
     color: 'rgba(255, 255, 255, 0.65)',
+  },
+  unavailableText: {
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+    color: 'rgba(255, 255, 255, 0.65)',
+    lineHeight: 18,
   },
   sectionHeader: {
     flexDirection: 'row',
