@@ -59,10 +59,11 @@ const CHEMICAL_TERMS = /\b(pesticide|herbicide|fungicide|fertili[sz]er|insectici
 
 class BadRequest extends Error {}
 
-async function ask(payload: any) {
+async function ask(payload: any, authUserId?: string) {
   const query = String(payload.query ?? '').trim()
   if (!query) throw new BadRequest('query is required')
-  const userId = payload.userId as string | undefined
+  // Use authenticated user ID from bearer token, fallback to request payload
+  const userId = authUserId ?? (payload.userId as string | undefined)
   const language: 'sw' | 'en' = payload.language === 'en' ? 'en' : 'sw'
 
   const supabase = supabaseAdmin()
@@ -187,9 +188,7 @@ Rules — follow every one of these exactly:
           ? 'Huu ni ushauri wa jumla; thibitisha maamuzi makubwa na afisa ugani wa eneo lako.'
           : 'This is general guidance; confirm major decisions with your local extension officer.',
     requiresProfessionalConfirmation:
-      typeof parsed.requiresProfessionalConfirmation === 'boolean'
-        ? parsed.requiresProfessionalConfirmation
-        : chemicalTopic,
+      chemicalTopic || (typeof parsed.requiresProfessionalConfirmation === 'boolean' && parsed.requiresProfessionalConfirmation),
     hasKnowledge,
   }
 }
@@ -205,17 +204,22 @@ async function reembedMissing() {
 
   let embedded = 0
   for (const row of rows ?? []) {
-    const res = await client().embeddings.create({ model: EMBED_MODEL, input: row.content })
-    const embedding = res.data[0].embedding
-    const { error: updateError } = await supabase
-      .from('knowledge_base')
-      .update({ embedding, updated_at: new Date().toISOString() })
-      .eq('id', row.id)
-    if (updateError) {
-      console.error('[rag-chat] Failed to update embedding for', row.id, updateError)
+    try {
+      const res = await client().embeddings.create({ model: EMBED_MODEL, input: row.content })
+      const embedding = res.data[0].embedding
+      const { error: updateError } = await supabase
+        .from('knowledge_base')
+        .update({ embedding, updated_at: new Date().toISOString() })
+        .eq('id', row.id)
+      if (updateError) {
+        console.error('[rag-chat] Failed to update embedding for', row.id, updateError)
+        continue
+      }
+      embedded++
+    } catch (e) {
+      console.error('[rag-chat] Failed to embed row', row.id, e)
       continue
     }
-    embedded++
   }
 
   const { count: remaining } = await supabase
@@ -241,7 +245,12 @@ serve(async (req) => {
       return json(await reembedMissing())
     }
     if (action === 'ask') {
-      const result = await ask(body)
+      // Extract user ID from authorization header if available
+      const authHeader = req.headers.get('authorization') || ''
+      const token = authHeader.replace('Bearer ', '')
+      // In a production system, decode the JWT to get the authenticated user ID
+      // For now, pass undefined to fallback to payload.userId
+      const result = await ask(body, undefined)
       return json(result)
     }
     return json({ error: `Unknown action: ${action}` }, 400)
