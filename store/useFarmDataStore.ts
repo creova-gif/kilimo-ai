@@ -194,42 +194,6 @@ interface FarmDataState {
 }
 
 // ─── Seeds ───────────────────────────────────────────────────────────────────
-const SEED_LIVESTOCK: LivestockAnimal[] = [
-  {
-    id: 'a1',
-    tag: 'TZ-0421',
-    species: 'cattle',
-    name: 'Sita',
-    birthDate: '2022-03-12',
-    weightKg: 380,
-    lastVaccineDate: '2026-03-05',
-    nextVaccineDue: '2026-09-05',
-    healthStatus: 'healthy',
-  },
-  {
-    id: 'a2',
-    tag: 'TZ-0422',
-    species: 'cattle',
-    name: 'Bahati',
-    birthDate: '2023-08-01',
-    weightKg: 290,
-    lastVaccineDate: '2026-02-10',
-    nextVaccineDue: '2026-08-10',
-    healthStatus: 'attention',
-    notes: 'Slight limp on rear leg',
-  },
-  {
-    id: 'a3',
-    tag: 'GT-118',
-    species: 'goat',
-    birthDate: '2024-11-20',
-    weightKg: 32,
-    lastVaccineDate: '2026-04-15',
-    nextVaccineDue: '2026-10-15',
-    healthStatus: 'healthy',
-  },
-];
-
 const SEED_INVENTORY: InventoryItem[] = [
   {
     id: 'i1',
@@ -641,7 +605,7 @@ const uid = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toStrin
 export const useFarmDataStore = create<FarmDataState>()(
   persist(
     (set, get) => ({
-      livestock: SEED_LIVESTOCK,
+      livestock: [],
       inventory: SEED_INVENTORY,
       insurance: SEED_INSURANCE,
       suppliers: SEED_SUPPLIERS,
@@ -754,6 +718,15 @@ export const useFarmDataStore = create<FarmDataState>()(
     {
       name: 'kilimo-farm-data',
       storage: createJSONStorage(() => AsyncStorage),
+      version: 1,
+      migrate: (persistedState) => {
+        const state = persistedState as Partial<FarmDataState>;
+        const legacyAnimalIds = new Set(['a1', 'a2', 'a3']);
+        return {
+          ...state,
+          livestock: state.livestock?.filter((animal) => !legacyAnimalIds.has(animal.id)) ?? [],
+        };
+      },
     }
   )
 );
