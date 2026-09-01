@@ -1,18 +1,16 @@
 /**
  * Kilimo AI — Predictive Analytics Dashboard
  *
- * Three live statistical models run against current farm vitals and profile:
- *  1. Yield Forecast    — exponential smoothing + seasonal factors
+ * Two deterministic estimates run against the farm vitals stored on the device:
+ *  1. Yield Forecast    — weighted vitals adjustment + seasonal factor
  *  2. Pest Risk Score   — weighted threshold (moisture × temp × crop sensitivity)
- *  3. Price Trends      — linear regression on 6-month series per crop
  *
  * All models are client-side (no server round-trip), deterministic, and update
  * every time the user navigates to this screen.
  */
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Dimensions } from 'react-native';
 import { TrendingUp, TrendingDown, Minus, Bug, ArrowRight, ShieldCheck } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
 import Svg, {
   Path,
   Defs,
@@ -21,15 +19,12 @@ import Svg, {
   Line,
   Circle,
   Text as SvgText,
-  Rect,
 } from 'react-native-svg';
 import PageScaffold, { GlassCard, SectionHeader } from '../../components/PageScaffold';
 import { useTheme } from '../../constants/Theme';
 import { Gate } from '../../lib/access';
 import { useKilimoStore } from '../../store/useKilimoStore';
-import { runAnalytics, PriceTrend } from '../../lib/analytics/predictions';
-
-const fmtTZS = (n: number) => `TSh ${new Intl.NumberFormat('en-US').format(Math.round(n))}`;
+import { runAnalytics } from '../../lib/analytics/predictions';
 
 // `|| 360` guards against Dimensions.get('window').width reading 0 on first
 // web hydration — an unguarded 0 here flowed into negative <Svg>/<Rect>
@@ -40,12 +35,10 @@ const SCREEN_W = Dimensions.get('window').width || 360;
 function YieldProjectionChart({
   current,
   forecast,
-  trend,
   color,
 }: {
   current: number;
   forecast: number;
-  trend: 'up' | 'down' | 'flat';
   color: string;
 }) {
   // Clamp: window width can read 0 on first web hydration, which fed a
@@ -64,19 +57,10 @@ function YieldProjectionChart({
   const range = Math.max(0.01, hi - lo);
   const toY = (v: number) => PAD_TOP + chartH - ((v - lo) / range) * chartH;
 
-  // 6 historical + 4 forecast = 9 points total
-  const histPts = [0, 1, 2, 3, 4, 5].map((i) => {
-    const t = i / 5;
-    const noise = Math.sin(i * 2.1 + current * 3.7) * 0.035 * current;
+  const projectionPts = [0, 1, 2, 3].map((i) => {
+    const t = i / 3;
     return {
-      x: PAD_LEFT + (i / 8) * chartW,
-      y: toY(current * (0.72 + t * 0.28) + noise),
-    };
-  });
-  const forecastPts = [5, 6, 7, 8].map((i) => {
-    const t = (i - 5) / 3;
-    return {
-      x: PAD_LEFT + (i / 8) * chartW,
+      x: PAD_LEFT + t * chartW,
       y: toY(current + (forecast - current) * t),
     };
   });
@@ -90,36 +74,23 @@ function YieldProjectionChart({
     return d;
   };
 
-  const histLine = buildCurve(histPts);
-  const projLine = buildCurve(forecastPts);
-  const allPts = [...histPts, ...forecastPts.slice(1)];
-  const areaPath = `${histLine} ${projLine.replace('M', 'L')} L${allPts[allPts.length - 1].x.toFixed(1)} ${PAD_TOP + chartH} L${PAD_LEFT} ${PAD_TOP + chartH} Z`;
-  const divideX = forecastPts[0].x.toFixed(1);
-  const lastPt = forecastPts[forecastPts.length - 1];
+  const projectionLine = buildCurve(projectionPts);
+  const lastPt = projectionPts[projectionPts.length - 1];
+  const areaPath = `${projectionLine} L${lastPt.x.toFixed(1)} ${PAD_TOP + chartH} L${PAD_LEFT} ${PAD_TOP + chartH} Z`;
 
   // Y-axis gridlines at 3 levels
   const gridPcts = [0.25, 0.55, 0.85];
   const axisBaseY = PAD_TOP + chartH;
 
-  // Month labels under chart — 6 history months + "Sasa" divider + horizon
-  const MONTHS = ['M-5', 'M-4', 'M-3', 'M-2', 'M-1', 'Sasa'];
   const xLabels = [
-    ...histPts.map((p, i) => ({ x: p.x, label: MONTHS[i] })),
-    { x: lastPt.x, label: 'Utabiri' },
+    { x: projectionPts[0].x, label: 'Sasa' },
+    { x: lastPt.x, label: 'Makadirio' },
   ];
 
   return (
     <View style={{ marginTop: 8 }}>
-      {/* Legend */}
+      {/* This chart shows a model projection, not historical measurements. */}
       <View style={{ flexDirection: 'row', gap: 16, marginBottom: 6, paddingHorizontal: PAD_LEFT }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-          <View
-            style={{ width: 20, height: 2, backgroundColor: color, opacity: 0.5, borderRadius: 1 }}
-          />
-          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 9, color: '#6B7280' }}>
-            Historia
-          </Text>
-        </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
           <View
             style={{
@@ -196,20 +167,9 @@ function YieldProjectionChart({
         {/* Area fill */}
         <Path d={areaPath} fill="url(#ypa2)" />
 
-        {/* History line (solid, slightly muted) */}
+        {/* Model projection */}
         <Path
-          d={histLine}
-          fill="none"
-          stroke={color}
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          opacity="0.55"
-        />
-
-        {/* Forecast line (dashed, full opacity) */}
-        <Path
-          d={projLine}
+          d={projectionLine}
           fill="none"
           stroke={color}
           strokeWidth="2.2"
@@ -218,22 +178,10 @@ function YieldProjectionChart({
           strokeDasharray="5,4"
         />
 
-        {/* "Now" divider */}
-        <Line
-          x1={divideX}
-          y1={PAD_TOP.toString()}
-          x2={divideX}
-          y2={axisBaseY.toString()}
-          stroke={color}
-          strokeWidth="1"
-          strokeDasharray="3,3"
-          opacity="0.5"
-        />
-
         {/* Endpoint dots */}
         <Circle
-          cx={forecastPts[0].x.toFixed(1)}
-          cy={forecastPts[0].y.toFixed(1)}
+          cx={projectionPts[0].x.toFixed(1)}
+          cy={projectionPts[0].y.toFixed(1)}
           r="4"
           fill={color}
           opacity="0.85"
@@ -258,8 +206,7 @@ function YieldProjectionChart({
           opacity="0.5"
         />
 
-        {/* X-axis labels — show only first, "Sasa", last */}
-        {[xLabels[0], xLabels[5], xLabels[xLabels.length - 1]].filter(Boolean).map((lbl, i) => (
+        {xLabels.map((lbl, i) => (
           <SvgText
             key={i}
             x={lbl.x.toFixed(1)}
@@ -284,63 +231,12 @@ function TrendIcon({ dir, size = 16 }: { dir: 'up' | 'down' | 'flat'; size?: num
 }
 
 // Simple bar chart row for price comparison
-function PriceBar({
-  label,
-  value,
-  max,
-  color,
-}: {
-  label: string;
-  value: number;
-  max: number;
-  color: string;
-}) {
-  const pct = max > 0 ? Math.min(1, value / max) : 0;
-  const { colors } = useTheme();
-  return (
-    <View style={pb.row}>
-      <Text style={[pb.lbl, { color: colors.textMute }]}>{label}</Text>
-      <View style={[pb.track, { backgroundColor: colors.card }]}>
-        <View style={[pb.fill, { width: `${pct * 100}%` as any, backgroundColor: color }]} />
-      </View>
-      <Text style={[pb.val, { color }]}>{fmtTZS(value)}/kg</Text>
-    </View>
-  );
-}
-const pb = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 },
-  lbl: { fontFamily: 'Inter_600SemiBold', fontSize: 10, width: 60 },
-  track: { flex: 1, height: 8, borderRadius: 4, overflow: 'hidden' },
-  fill: { height: 8, borderRadius: 4 },
-  val: { fontFamily: 'Inter_700Bold', fontSize: 10, width: 90, textAlign: 'right' },
-});
-
-function SignalBadge({ signal }: { signal: PriceTrend['signal'] }) {
-  const map: Record<PriceTrend['signal'], { color: string; bg: string }> = {
-    'Uza sasa': { color: '#22c55e', bg: '#22c55e22' },
-    'Subiri kidogo': { color: '#f59e0b', bg: '#f59e0b22' },
-    'Subiri zaidi': { color: '#3b82f6', bg: '#3b82f622' },
-    Hifadhi: { color: '#a78bfa', bg: '#a78bfa22' },
-  };
-  const { color, bg } = map[signal];
-  return (
-    <View style={[sb.badge, { backgroundColor: bg }]}>
-      <Text style={[sb.text, { color }]}>{signal}</Text>
-    </View>
-  );
-}
-const sb = StyleSheet.create({
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
-  text: { fontFamily: 'Inter_800ExtraBold', fontSize: 10 },
-});
-
 export default function AnalyticsDashboard() {
   const { colors } = useTheme();
-  const router = useRouter();
   const vitals = useKilimoStore((s) => s.farmVitals);
   const profile = useKilimoStore((s) => s.farmProfile);
 
-  const { yieldForecast, pestRisk, priceTrends } = useMemo(
+  const { yieldForecast, pestRisk } = useMemo(
     () => runAnalytics(vitals, profile),
     [vitals, profile]
   );
@@ -350,9 +246,6 @@ export default function AnalyticsDashboard() {
     medium: '#f59e0b',
     low: '#ef4444',
   };
-  const maxPrice =
-    priceTrends.length > 0 ? Math.max(...priceTrends.map((t) => t.forecast90dTZSkg), 1) : 1;
-
   return (
     <Gate
       feature="analytics_predictive"
@@ -376,6 +269,14 @@ export default function AnalyticsDashboard() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 80 }}
         >
+          <GlassCard style={[s.notice, { borderColor: colors.border }]}>
+            <Text style={[s.noticeText, { color: colors.textMute }]}>
+              Haya ni makadirio ya mfano yanayotumia viashiria vya shamba vilivyohifadhiwa kwenye app.
+              Muunganisho wa sensa na data ya bei za soko haujawezeshwa; thibitisha hali ya shamba na
+              bei ya eneo lako kabla ya kufanya maamuzi.
+            </Text>
+          </GlassCard>
+
           {/* ── 1. YIELD FORECAST ──────────────────────────── */}
           <SectionHeader title="UTABIRI WA MAVUNO" />
           <GlassCard style={s.yieldCard}>
@@ -414,7 +315,6 @@ export default function AnalyticsDashboard() {
             <YieldProjectionChart
               current={yieldForecast.currentTonnesHa}
               forecast={yieldForecast.forecastTonnesHa}
-              trend={yieldForecast.trend}
               color={confColor[yieldForecast.confidence]}
             />
 
@@ -490,69 +390,19 @@ export default function AnalyticsDashboard() {
           </GlassCard>
 
           {/* ── 3. PRICE TRENDS ────────────────────────────── */}
-          <SectionHeader
-            title="MWELEKEO WA BEI"
-            action="Shamba Dijiti"
-            onAction={() => router.push('/farm-twin')}
-          />
-          {priceTrends.map((trend) => (
-            <GlassCard key={trend.crop} style={s.priceCard}>
-              <View style={s.priceCropRow}>
-                <Text style={[s.priceCrop, { color: colors.text }]}>{trend.crop}</Text>
-                <View style={s.priceSignalRow}>
-                  <TrendIcon dir={trend.trendDirection} size={16} />
-                  <SignalBadge signal={trend.signal} />
-                </View>
-              </View>
-
-              <View style={s.priceBarSection}>
-                <PriceBar
-                  label="Sasa"
-                  value={trend.currentPriceTZSkg}
-                  max={maxPrice}
-                  color="#94a3b8"
-                />
-                <PriceBar
-                  label="Mwezi 1"
-                  value={trend.forecast30dTZSkg}
-                  max={maxPrice}
-                  color="#3b82f6"
-                />
-                <PriceBar
-                  label="Miezi 3"
-                  value={trend.forecast90dTZSkg}
-                  max={maxPrice}
-                  color={
-                    trend.trendDirection === 'up'
-                      ? '#22c55e'
-                      : trend.trendDirection === 'down'
-                        ? '#ef4444'
-                        : '#f59e0b'
-                  }
-                />
-              </View>
-
-              <View style={[s.priceChangePct, { borderTopColor: colors.border }]}>
-                <Text style={[s.priceNote, { color: colors.textMute }]}>{trend.seasonalNote}</Text>
-                <Text
-                  style={[
-                    s.priceChangePctVal,
-                    {
-                      color: trend.changePct30d >= 0 ? '#22c55e' : '#ef4444',
-                    },
-                  ]}
-                >
-                  {trend.changePct30d >= 0 ? '+' : ''}
-                  {trend.changePct30d}% / mwezi
-                </Text>
-              </View>
-            </GlassCard>
-          ))}
+          <SectionHeader title="MWELEKEO WA BEI" />
+          <GlassCard style={s.unavailableCard}>
+            <Text style={[s.unavailableTitle, { color: colors.text }]}>Data ya bei haipatikani</Text>
+            <Text style={[s.unavailableBody, { color: colors.textMute }]}>
+              Kilimo AI bado haijaunganishwa na chanzo cha bei za soko. Hakuna pendekezo la
+              kuuza, kusubiri, au kuhifadhi linalotolewa hapa.
+            </Text>
+          </GlassCard>
 
           {/* Disclaimer */}
           <Text style={[s.disclaimer, { color: colors.textMute }]}>
-            * Utabiri huu unatumia mfano wa takwimu tu. Ulitumia data ya shamba lako na bei za soko
-            za kawaida. Si ushauri wa kisheria wa fedha.
+            * Makadirio haya ni ya mwongozo pekee, si kipimo cha sensa wala ushauri wa kilimo au
+            kifedha.
           </Text>
         </ScrollView>
       </PageScaffold>
@@ -563,6 +413,8 @@ export default function AnalyticsDashboard() {
 const s = StyleSheet.create({
   fallbackTitle: { fontFamily: 'Inter_800ExtraBold', fontSize: 16, marginTop: 12 },
   fallbackBody: { fontFamily: 'Inter_500Medium', fontSize: 12, marginTop: 6, textAlign: 'center' },
+  notice: { padding: 12, borderWidth: StyleSheet.hairlineWidth },
+  noticeText: { fontFamily: 'Inter_500Medium', fontSize: 11, lineHeight: 17 },
 
   // Yield
   yieldCard: { padding: 16 },
@@ -596,21 +448,9 @@ const s = StyleSheet.create({
   recRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', paddingTop: 8, marginTop: 4 },
   recText: { flex: 1, fontFamily: 'Inter_500Medium', fontSize: 12, lineHeight: 18 },
 
-  // Price
-  priceCard: { padding: 14, gap: 10 },
-  priceCropRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  priceCrop: { fontFamily: 'Inter_800ExtraBold', fontSize: 14 },
-  priceSignalRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  priceBarSection: { gap: 2 },
-  priceChangePct: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  priceNote: { flex: 1, fontFamily: 'Inter_500Medium', fontSize: 10, lineHeight: 15 },
-  priceChangePctVal: { fontFamily: 'Inter_800ExtraBold', fontSize: 12, marginLeft: 8 },
+  unavailableCard: { padding: 14, gap: 6 },
+  unavailableTitle: { fontFamily: 'Inter_800ExtraBold', fontSize: 14 },
+  unavailableBody: { fontFamily: 'Inter_500Medium', fontSize: 12, lineHeight: 18 },
 
   disclaimer: {
     fontFamily: 'Inter_500Medium',
