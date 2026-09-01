@@ -35,6 +35,7 @@ import {
   Clock,
   MapPin,
   Wheat,
+  Info,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -624,7 +625,7 @@ export default function CropPlanningScreen() {
           <View style={{ alignItems: 'center' }}>
             <View style={st.aiBadge}>
               <Sparkles size={10} color="#2E6F40" />
-              <Text style={st.aiBadgeText}>AI MSHAURI</Text>
+              <Text style={st.aiBadgeText}>KIELELEZO</Text>
             </View>
             <Text style={[st.headerTitle, { color: colors.text }]}>Upangaji Mazao</Text>
           </View>
@@ -695,6 +696,22 @@ export default function CropPlanningScreen() {
             })}
           </View>
 
+          <View
+            style={[
+              st.referenceNotice,
+              {
+                backgroundColor: isDark ? 'rgba(245,158,11,0.10)' : 'rgba(245,158,11,0.08)',
+                borderColor: isDark ? 'rgba(245,158,11,0.25)' : 'rgba(180,83,9,0.20)',
+              },
+            ]}
+          >
+            <Info size={16} color="#d97706" />
+            <Text style={[st.referenceNoticeText, { color: colors.textMute }]}>
+              Hii ni kielelezo cha msimu. Mavuno, bei na vidokezo si mpango maalum wa shamba
+              lako — thibitisha bei na ushauri wa eneo lako kabla ya kupanga kazi.
+            </Text>
+          </View>
+
           {/* ── Season banner ── */}
           <Animated.View key={season} entering={FadeInDown}>
             <View
@@ -718,7 +735,7 @@ export default function CropPlanningScreen() {
                   {activeSeason.label} — {activeSeason.sublabel}
                 </Text>
                 <Text style={[st.bannerSub, { color: colors.textMute }]}>
-                  {activeSeason.months} · {crops.length} mazao yanayofaa
+                  {activeSeason.months} · {crops.length} mazao ya kielelezo
                 </Text>
               </View>
               {plannedCount > 0 && (
@@ -745,7 +762,7 @@ export default function CropPlanningScreen() {
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}
               >
                 <BarChart3 size={16} color="#2E6F40" />
-                <Text style={[st.chartTitle, { color: colors.text }]}>Ulinganisho wa Mavuno</Text>
+                <Text style={[st.chartTitle, { color: colors.text }]}>Ulinganisho wa Mavuno ya Kielelezo</Text>
                 <Text style={[st.chartSub, { color: colors.textMute }]}>tani/eka</Text>
               </View>
               <YieldChart crops={crops} />
@@ -755,7 +772,7 @@ export default function CropPlanningScreen() {
           {/* ── Crop cards ── */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
             <Leaf size={17} color="#2E6F40" />
-            <Text style={[st.sectionTitle, { color: colors.text }]}>Mazao Yanayopendekezwa</Text>
+            <Text style={[st.sectionTitle, { color: colors.text }]}>Mazao ya Kielelezo</Text>
           </View>
 
           <View style={{ gap: 14 }}>
@@ -840,7 +857,7 @@ export default function CropPlanningScreen() {
                           ]}
                         />
                         <View style={st.stat}>
-                          <Text style={[st.statLbl, { color: colors.textMute }]}>Bei ya Soko</Text>
+                          <Text style={[st.statLbl, { color: colors.textMute }]}>Bei ya Mfano</Text>
                           <Text style={[st.statVal, { color: '#2E6F40' }]}>{crop.price}</Text>
                         </View>
                         <View
@@ -886,7 +903,7 @@ export default function CropPlanningScreen() {
 
                           {/* Tips */}
                           <Text style={[st.tipsTitle, { color: colors.textMute }]}>
-                            VIDOKEZO VYA AI
+                            VIDOKEZO VYA KIELELEZO
                           </Text>
                           <View style={{ gap: 6 }}>
                             {crop.tips.map((tip, ti) => (
@@ -965,7 +982,7 @@ export default function CropPlanningScreen() {
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 10 }}
               >
                 <Target size={17} color="#2E6F40" />
-                <Text style={[st.tipCardTitle, { color: colors.text }]}>Ushauri wa Msimu huu</Text>
+                <Text style={[st.tipCardTitle, { color: colors.text }]}>Dokezo la Kielelezo</Text>
               </View>
               <Text style={[st.tipCardBody, { color: colors.textMute }]}>
                 Msimu wa{' '}
@@ -1052,6 +1069,21 @@ const st = StyleSheet.create({
   },
   seasonLabel: { fontFamily: 'Inter_700Bold', fontSize: 12 },
   seasonMonths: { fontFamily: 'Inter_500Medium', fontSize: 12 },
+  referenceNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 9,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  referenceNoticeText: {
+    flex: 1,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    lineHeight: 18,
+  },
 
   banner: {
     borderRadius: 18,
