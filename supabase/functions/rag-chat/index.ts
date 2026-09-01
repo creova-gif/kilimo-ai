@@ -242,6 +242,12 @@ serve(async (req) => {
     const action = body.action ?? 'ask'
 
     if (action === 'reembed_missing') {
+      // Require admin secret header to allow maintenance re-embedding
+      const adminSecret = Deno.env.get('REEMBED_SECRET') ?? ''
+      const provided = req.headers.get('x-reembed-secret') || ''
+      if (!adminSecret || provided !== adminSecret) {
+        return json({ error: 'forbidden' }, 403)
+      }
       return json(await reembedMissing())
     }
     if (action === 'ask') {
