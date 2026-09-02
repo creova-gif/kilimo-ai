@@ -239,6 +239,9 @@ serve(async (req) => {
 
   try {
     const body = await req.json()
+    if (!body || typeof body !== 'object') {
+      return json({ error: 'request body must be a JSON object' }, 400)
+    }
     const action = body.action ?? 'ask'
 
     if (action === 'reembed_missing') {
