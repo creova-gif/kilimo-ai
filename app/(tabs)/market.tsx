@@ -1070,6 +1070,29 @@ export default function MarketScreen() {
                   )}
                 </View>
 
+                {/* Price-benchmark cards below (MARKET_DATA) are a static
+                    reference index, not a live market-price feed — no such
+                    backend exists in this app yet. Disclosed honestly rather
+                    than presented as current market data, since a farmer
+                    could otherwise base a real sell/hold decision on it. */}
+                <View style={styles.liveListingsHeaderRow}>
+                  <Text style={[styles.sectionHeading, { color: colors.text }]}>
+                    {language === 'sw' ? 'Rejea ya Bei · Sampuli' : 'Price Reference · Sample'}
+                  </Text>
+                </View>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontFamily: 'Inter_500Medium',
+                    color: '#b45309',
+                    marginBottom: 10,
+                  }}
+                >
+                  {language === 'sw'
+                    ? 'Bei hizi ni mfano wa onyesho — si data ya soko ya moja kwa moja. Angalia "Wanaouza Sasa" hapo juu kwa matangazo halisi.'
+                    : 'These prices are illustrative sample data, not a live market feed. See "Live Sell Listings" above for real offers.'}
+                </Text>
+
                 <View style={styles.marketGrid}>
                 {filteredPrices.map((item) => {
                   const isExpanded = expandedId === item.id;
