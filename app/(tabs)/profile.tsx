@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import {
   StyleSheet,
   View,
@@ -35,8 +35,19 @@ import { useTheme } from '../../constants/Theme';
 import Animated, { FadeIn, FadeOut, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useKilimoStore } from '../../store/useKilimoStore';
 import { useAgroAuth } from '../../hooks/useAgroAuth';
+import { processSyncQueue } from '../../lib/offline';
 import { ArrowUpRight } from 'lucide-react-native';
 import { Alert, AlertButton } from 'react-native';
+
+const formatSyncTime = (iso: string, language: 'sw' | 'en'): string => {
+  const diffMin = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
+  if (diffMin < 1) return language === 'sw' ? 'Sasa hivi' : 'Just now';
+  if (diffMin < 60) return language === 'sw' ? `Dakika ${diffMin} zilizopita` : `${diffMin}m ago`;
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 24) return language === 'sw' ? `Saa ${diffHr} zilizopita` : `${diffHr}h ago`;
+  const diffDay = Math.round(diffHr / 24);
+  return language === 'sw' ? `Siku ${diffDay} zilizopita` : `${diffDay}d ago`;
+};
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -101,10 +112,14 @@ export default function ProfileScreen() {
   const resetOnboarding = useKilimoStore((s) => s.resetOnboarding);
   const language = useKilimoStore((s) => s.language);
   const setLanguage = useKilimoStore((s) => s.setLanguage);
-  const { deleteAccount, loading: authLoading } = useAgroAuth();
+  const updateAgroId = useKilimoStore((s) => s.updateAgroId);
+  const syncQueue = useKilimoStore((s) => s.syncQueue);
+  const lastSyncedAt = useKilimoStore((s) => s.lastSyncedAt);
+  const { deleteAccount, loading: authLoading, biometricAvailable, authenticateWithBiometric } =
+    useAgroAuth();
   const aiCertified = useKilimoStore((s) => s.aiCertified);
 
-  const [biometric, setBiometric] = useState(true);
+  const biometric = storedAgroId?.biometricEnabled ?? false;
 
   const AGRO_ID_DATA = useMemo(() => {
     if (storedAgroId) return storedAgroId;
@@ -125,9 +140,29 @@ export default function ProfileScreen() {
           icon: <Fingerprint size={20} color="#3b82f6" />,
           hasSwitch: true,
           switchVal: biometric,
-          onSwitch: (v: boolean) => {
-            setBiometric(v);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          onSwitch: async (v: boolean) => {
+            if (!v) {
+              updateAgroId({ biometricEnabled: false });
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              return;
+            }
+            if (!biometricAvailable) {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+              showSafeAlert(
+                language === 'sw' ? 'Haipatikani' : 'Not Available',
+                language === 'sw'
+                  ? 'Kifaa hiki hakina uthibitisho wa kibayometriki ulioandikishwa (Uso au Kidole).'
+                  : 'This device has no biometric authentication enrolled (Face ID or fingerprint).'
+              );
+              return;
+            }
+            const ok = await authenticateWithBiometric();
+            if (!ok) {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+              return;
+            }
+            updateAgroId({ biometricEnabled: true });
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           },
           value: '',
         },
@@ -176,7 +211,7 @@ export default function ProfileScreen() {
           title: language === 'sw' ? 'Mifumo ya IoT & Drones' : 'IoT & Drone Systems',
           icon: <Settings size={20} color="#0ea5e9" />,
           hasSwitch: false,
-          value: language === 'sw' ? 'Inatafuta...' : 'Searching...',
+          value: '',
           onPress: () => router.push('/iot-systems' as any),
         },
         {
@@ -227,14 +262,47 @@ export default function ProfileScreen() {
           title: language === 'sw' ? 'Kusawazisha Data' : 'Local Cache Sync',
           icon: <Database size={20} color="#8b5cf6" />,
           hasSwitch: false,
-          value: language === 'sw' ? 'Mwisho: saa 2 zilizopita' : 'Last sync: 2h ago',
-          onPress: () => {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          value: lastSyncedAt
+            ? `${language === 'sw' ? 'Mwisho' : 'Last sync'}: ${formatSyncTime(lastSyncedAt, language)}`
+            : language === 'sw'
+              ? 'Bado hazijasawazishwa'
+              : 'Never synced',
+          onPress: async () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            if (isOffline) {
+              showSafeAlert(
+                language === 'sw' ? 'Nje ya Mtandao' : 'Offline',
+                language === 'sw'
+                  ? 'Huwezi kusawazisha ukiwa nje ya mtandao.'
+                  : 'You need a connection to sync.'
+              );
+              return;
+            }
+            if (syncQueue.length === 0) {
+              showSafeAlert(
+                language === 'sw' ? 'Tayari Sawa' : 'Already Synced',
+                language === 'sw'
+                  ? 'Hakuna data inayosubiri kusawazishwa.'
+                  : 'There is nothing waiting to sync.'
+              );
+              return;
+            }
+            await processSyncQueue();
+            const remaining = useKilimoStore.getState().syncQueue.length;
+            Haptics.notificationAsync(
+              remaining === 0
+                ? Haptics.NotificationFeedbackType.Success
+                : Haptics.NotificationFeedbackType.Warning
+            );
             showSafeAlert(
               language === 'sw' ? 'Kusawazisha' : 'Sync',
-              language === 'sw'
-                ? 'Data yako imesawazishwa kikamilifu.'
-                : 'Your data has been fully synchronized.'
+              remaining === 0
+                ? language === 'sw'
+                  ? 'Data yako imesawazishwa kikamilifu.'
+                  : 'Your data has been fully synchronized.'
+                : language === 'sw'
+                  ? `Vitu ${remaining} bado vinasubiri, vitajaribiwa tena baadaye.`
+                  : `${remaining} item(s) are still pending and will retry later.`
             );
           },
         },
