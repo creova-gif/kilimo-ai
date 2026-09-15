@@ -33,8 +33,18 @@ jobs:
       - name: Run Linter
         run: npm run lint
 
+      - name: Typecheck
+        run: npm run typecheck
+
       - name: Run Tests
         run: npm run test
+
+      - name: Build sanity check (Expo web export)
+        # Not a substitute for the real EAS native builds (eas-build.yml) —
+        # this is a fast, credential-free check that the app actually
+        # bundles, since a passing lint+test run previously proved nothing
+        # about whether the app builds at all.
+        run: npx expo export --platform web
 
   # STAGING: dress-rehearsal signal on merge to staging.
   # No deploy step yet — this repo ships via EAS builds (see eas-build.yml,
