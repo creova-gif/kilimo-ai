@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, StyleSheet, Appearance } from 'react-native';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { View, StyleSheet } from 'react-native';
 
 export const PROVIDER_GOOGLE = 'google' as const;
 export type Region = {
@@ -8,6 +8,41 @@ export type Region = {
   latitudeDelta: number;
   longitudeDelta: number;
 };
+
+export interface PolygonProps {
+  coordinates: { latitude: number; longitude: number }[];
+  fillColor?: string;
+  strokeColor?: string;
+  strokeWidth?: number;
+  tappable?: boolean;
+  onPress?: () => void;
+}
+
+// Declarative marker for a native map overlay, mirroring react-native-maps:
+// on native this never renders its own DOM/view — the map itself draws the
+// shape from these props. MapView below reads props straight off Polygon
+// children (React.Children.toArray + type check) to build the Leaflet
+// overlay; Polygon itself must keep returning null.
+export function Polygon(_props: PolygonProps) {
+  return null;
+}
+export function Marker({ children }: { children?: React.ReactNode }) {
+  return <>{children}</>;
+}
+
+// '#RRGGBBAA' (used throughout this app for fillColor, e.g. `${hex}80`) —
+// split into a plain '#RRGGBB' Leaflet can render everywhere plus a
+// separate 0–1 fillOpacity, rather than relying on 8-digit hex support.
+function splitAlphaHex(color: string | undefined, fallbackOpacity: number) {
+  if (color && /^#[0-9a-fA-F]{8}$/.test(color)) {
+    const base = color.slice(0, 7);
+    const alpha = parseInt(color.slice(7, 9), 16) / 255;
+    return { color: base, opacity: alpha };
+  }
+  return { color: color ?? '#2E6F40', opacity: fallbackOpacity };
+}
+
+let nextMapId = 0;
 
 export function MapView({
   style,
@@ -23,6 +58,67 @@ export function MapView({
   const lat = region?.latitude ?? -6.828;
   const lng = region?.longitude ?? 37.6695;
   const zoom = 14;
+
+  const mapId = useMemo(() => `kilimo-map-${nextMapId++}`, []);
+
+  const polygons = useMemo(
+    () =>
+      React.Children.toArray(children)
+        .filter(
+          (child): child is React.ReactElement<PolygonProps> =>
+            React.isValidElement(child) && child.type === Polygon
+        )
+        .map((child, i) => ({ id: i, ...child.props })),
+    [children]
+  );
+
+  // Polygon onPress can't cross into the sandboxed iframe directly, so the
+  // injected Leaflet script postMessages a {mapId, polyId} pair on click
+  // and this listener dispatches back to the matching React callback.
+  const onPressRef = useRef<Record<number, (() => void) | undefined>>({});
+  onPressRef.current = Object.fromEntries(polygons.map((p) => [p.id, p.onPress]));
+
+  useEffect(() => {
+    function handleMessage(e: MessageEvent) {
+      const data = e?.data;
+      if (data?.type === 'kilimo-polygon-press' && data?.mapId === mapId) {
+        onPressRef.current[data.polyId]?.();
+      }
+    }
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [mapId]);
+
+  const polygonScript = polygons
+    .map((p) => {
+      const coords = JSON.stringify((p.coordinates ?? []).map((c) => [c.latitude, c.longitude]));
+      const fill = splitAlphaHex(p.fillColor, 0.35);
+      const stroke = splitAlphaHex(p.strokeColor, 1).color;
+      const weight = p.strokeWidth ?? 1;
+      const clickable = p.tappable && p.onPress;
+      return `
+        (function () {
+          var poly = L.polygon(${coords}, {
+            color: ${JSON.stringify(stroke)},
+            weight: ${weight},
+            fillColor: ${JSON.stringify(fill.color)},
+            fillOpacity: ${fill.opacity}
+          }).addTo(map);
+          ${
+            clickable
+              ? `poly.on('click', function () {
+                   window.parent.postMessage({ type: 'kilimo-polygon-press', mapId: ${JSON.stringify(mapId)}, polyId: ${p.id} }, '*');
+                 });
+                 poly.getElement && poly.on('add', function () {
+                   var el = poly.getElement();
+                   if (el) el.style.cursor = 'pointer';
+                 });`
+              : ''
+          }
+        })();
+      `;
+    })
+    .join('\n');
 
   const srcDoc = `
     <!DOCTYPE html>
@@ -60,6 +156,8 @@ export function MapView({
           fillOpacity: 0.25,
           radius: 180
         }).addTo(map);
+
+        ${polygonScript}
       </script>
     </body>
     </html>
@@ -75,13 +173,6 @@ export function MapView({
       {children}
     </View>
   );
-}
-
-export function Polygon(_props: any) {
-  return null;
-}
-export function Marker({ children }: { children?: React.ReactNode }) {
-  return <>{children}</>;
 }
 
 export default MapView;
