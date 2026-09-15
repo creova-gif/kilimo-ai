@@ -89,7 +89,13 @@ export default function ScanScreen() {
 
   const [phase, setPhase] = useState<ScanPhase>('IDLE');
   const [analysisProgress, setAnalysisProgress] = useState(0);
-  const [isOffline, setIsOffline] = useState(false); // Mock offline state
+  // Real network status (OfflineManager/NetInfo-backed) — this used to be a
+  // local mock the header button silently flipped with no connection to the
+  // device's actual connectivity: a genuinely offline farmer saw no warning
+  // at all, while anyone could tap the button and see a fake "offline"
+  // state while fully connected. Status is now real; see below for why it's
+  // no longer a toggle a user can act on.
+  const isOffline = useKilimoStore((s) => s.isOffline);
   const [analysisText, setAnalysisText] = useState('Initiating quantum analysis...');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [diagnosis, setDiagnosis] = useState<VisionDiagnosis | null>(null);
@@ -274,10 +280,16 @@ export default function ScanScreen() {
         e?.kind === 'validation'
           ? e.message
           : e?.kind === 'unauthorized'
-            ? 'Tafadhali ingia tena ili kutumia uchunguzi wa picha.'
+            ? language === 'sw'
+              ? 'Tafadhali ingia tena ili kutumia uchunguzi wa picha.'
+              : 'Please sign in again to use photo diagnosis.'
             : e?.kind === 'network'
-              ? 'Hakuna mtandao. Picha itahifadhiwa na kuchanganuliwa baadaye.'
-              : 'Samahani, uchunguzi wa picha umeshindikana. Jaribu tena.';
+              ? language === 'sw'
+                ? 'Hakuna mtandao. Hii app haihifadhi picha kwa uchunguzi wa baadaye — tafadhali jaribu tena ukiwa na mtandao.'
+                : 'No connection. This app does not save photos for later analysis — please try again when connected.'
+              : language === 'sw'
+                ? 'Samahani, uchunguzi wa picha umeshindikana. Jaribu tena.'
+                : 'Sorry, photo diagnosis failed. Please try again.';
       setErrorMsg(friendly);
       setPhase('ERROR');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -345,11 +357,6 @@ export default function ScanScreen() {
     setPhotoUri(null);
     setDiagnosis(null);
     setErrorMsg(null);
-  };
-
-  const toggleNetwork = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setIsOffline(!isOffline);
   };
 
   // Advanced Neural Orb for background aesthetics
@@ -426,11 +433,13 @@ export default function ScanScreen() {
             </BlurView>
           </View>
 
-          <TouchableOpacity
-            onPress={toggleNetwork}
-            activeOpacity={0.7}
-            accessibilityLabel="Toggle offline mode"
-            accessibilityRole="button"
+          {/* Real, read-only network status — not a toggle. A user cannot
+              make their device actually go on/offline by tapping a button,
+              and this app doesn't queue scans for later analysis (see the
+              honest copy below), so there is nothing for a tap here to do. */}
+          <View
+            accessibilityRole="text"
+            accessibilityLabel={isOffline ? 'Offline' : 'Online'}
           >
             <BlurView
               intensity={40}
@@ -443,7 +452,7 @@ export default function ScanScreen() {
                 <Zap size={22} color={colors.primary} />
               )}
             </BlurView>
-          </TouchableOpacity>
+          </View>
         </Animated.View>
 
         {/* Offline Warning Toast */}
@@ -453,7 +462,9 @@ export default function ScanScreen() {
             <BlurView intensity={60} tint="dark" style={styles.offlineInner}>
               <CloudOff size={16} color="#fbbf24" />
               <Text style={styles.offlineText}>
-                Offline Mode: Diagnosis will be queued and synced.
+                {language === 'sw'
+                  ? 'Hakuna mtandao — uchunguzi wa AI haupatikani sasa hivi.'
+                  : "No connection — AI diagnosis isn't available right now."}
               </Text>
             </BlurView>
           </Animated.View>
@@ -700,15 +711,6 @@ export default function ScanScreen() {
                             {language === 'sw'
                               ? 'Hali ya Onyesho: matokeo haya si uchambuzi wa picha yako halisi — ni mfano wa jinsi programu itakavyofanya kazi ukiunganishwa na AI. Usitumie ushauri huu wa dawa bila kushauriana na mtaalamu wa kilimo.'
                               : 'Demo mode: this result is not a real analysis of your photo — it illustrates how the feature will behave once connected to the AI backend. Do not act on this treatment advice without consulting an agronomist.'}
-                          </Text>
-                        </Animated.View>
-                      )}
-
-                      {isOffline && aiConfigured() && (
-                        <Animated.View entering={FadeInDown} style={styles.offlineNoticeBox}>
-                          <CloudOff size={16} color="#fbbf24" />
-                          <Text style={styles.offlineNoticeText}>
-                            Saved locally. Will sync to your Agro ID when online.
                           </Text>
                         </Animated.View>
                       )}
