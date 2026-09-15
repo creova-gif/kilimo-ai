@@ -21,7 +21,7 @@ import {
   ArrowUpRight,
   ShieldCheck,
 } from 'lucide-react-native';
-import PageScaffold, { GlassCard, SectionHeader } from '../../components/PageScaffold';
+import PageScaffold, { GlassCard, SectionHeader, EmptyState } from '../../components/PageScaffold';
 import { useTheme } from '../../constants/Theme';
 import { Gate } from '../../lib/access';
 import { useWalletAdminStore } from '../../store/useWalletAdminStore';
@@ -177,36 +177,48 @@ export default function WalletAdminOverview() {
 
             {/* Members summary */}
             <SectionHeader title="Wanachama" />
-            <GlassCard style={{ paddingVertical: 4 }}>
-              {members.map((m, idx) => (
-                <View
-                  key={m.id}
-                  style={[
-                    s.memRow,
-                    idx < members.length - 1 && {
-                      borderBottomColor: colors.border,
-                      borderBottomWidth: StyleSheet.hairlineWidth,
-                    },
-                  ]}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={[s.memName, { color: colors.text }]}>{m.name}</Text>
-                    <Text style={[s.memSub, { color: colors.textMute }]}>{m.mpesaPhone}</Text>
+            {members.length === 0 ? (
+              <GlassCard style={{ paddingVertical: 4 }}>
+                <EmptyState
+                  icon={<Users size={32} color={colors.textMute} />}
+                  title="Hakuna Wanachama"
+                  body="Bado hujaongeza mwanachama yeyote wa ushirika."
+                />
+              </GlassCard>
+            ) : (
+              <GlassCard style={{ paddingVertical: 4 }}>
+                {members.map((m, idx) => (
+                  <View
+                    key={m.id}
+                    style={[
+                      s.memRow,
+                      idx < members.length - 1 && {
+                        borderBottomColor: colors.border,
+                        borderBottomWidth: StyleSheet.hairlineWidth,
+                      },
+                    ]}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[s.memName, { color: colors.text }]}>{m.name}</Text>
+                      <Text style={[s.memSub, { color: colors.textMute }]}>{m.mpesaPhone}</Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={[s.memBalance, { color: colors.text }]}>
+                        {fmt(m.balanceTZS)}
+                      </Text>
+                      <Text
+                        style={[
+                          s.memStatus,
+                          { color: m.status === 'active' ? colors.primary : '#ef4444' },
+                        ]}
+                      >
+                        {m.status === 'active' ? 'Hai' : 'Imesimamishwa'}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={[s.memBalance, { color: colors.text }]}>{fmt(m.balanceTZS)}</Text>
-                    <Text
-                      style={[
-                        s.memStatus,
-                        { color: m.status === 'active' ? colors.primary : '#ef4444' },
-                      ]}
-                    >
-                      {m.status === 'active' ? 'Hai' : 'Imesimamishwa'}
-                    </Text>
-                  </View>
-                </View>
-              ))}
-            </GlassCard>
+                ))}
+              </GlassCard>
+            )}
           </ScrollView>
         </PageScaffold>
       </RequireVerification>
