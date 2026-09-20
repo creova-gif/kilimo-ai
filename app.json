@@ -77,7 +77,8 @@
       ],
       "expo-audio",
       "expo-asset",
-      "@sentry/react-native"
+      "@sentry/react-native",
+      "./plugins/withPodsDeploymentTarget"
     ],
     "scheme": "kilimoai",
     "extra": {
