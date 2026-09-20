@@ -12,6 +12,9 @@ export default [
   {
     ignores: [
       'node_modules/**',
+      '.claude/**',
+      'ios/**',
+      'android/**',
       '.expo/**',
       'dist/**',
       'build/**',

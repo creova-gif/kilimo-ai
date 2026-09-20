@@ -23,6 +23,9 @@
     "node_modules",
     "supabase/functions",
     "artifacts",
-    "scripts"
+    "scripts",
+    ".claude",
+    "ios",
+    "android"
   ]
 }
