@@ -9,6 +9,7 @@
  * - State bridge to global Zustand store
  */
 
+import { AUTH_NOT_CONFIGURED_MESSAGE, resolveAuthMode } from '../lib/authMode';
 import { useEffect, useState, useCallback } from 'react';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { Platform } from 'react-native';
@@ -58,6 +59,14 @@ const SecureStore = {
 // ─── Supabase client (only when real credentials are present) ────────────────
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+// real | mock (dev + explicit opt-in only) | unconfigured (fail closed). See lib/authMode.ts.
+const AUTH_MODE = resolveAuthMode({
+  url: SUPABASE_URL,
+  key: SUPABASE_KEY,
+  isDev: __DEV__,
+  mockFlag: process.env.EXPO_PUBLIC_ENABLE_MOCK_AUTH,
+});
 
 let supabase: any = null;
 if (SUPABASE_URL && SUPABASE_KEY) {
@@ -135,6 +144,7 @@ export function useAgroAuth() {
 
   // ── Phone OTP sign-in ────────────────────────────────────────────────────
   const signInWithPhone = useCallback(async (phone: string) => {
+    if (AUTH_MODE === 'unconfigured') throw new Error(AUTH_NOT_CONFIGURED_MESSAGE);
     setLoading(true);
     try {
       if (!supabase) {
@@ -161,6 +171,7 @@ export function useAgroAuth() {
     }
   }, []);
   const signInWithEmail = useCallback(async (email: string) => {
+    if (AUTH_MODE === 'unconfigured') throw new Error(AUTH_NOT_CONFIGURED_MESSAGE);
     if (__DEV__) console.log('[AgroAuth] signInWithEmail starting for:', email);
     setLoading(true);
     try {
@@ -195,6 +206,7 @@ export function useAgroAuth() {
 
   const verifyOtp = useCallback(
     async (contact: string, token: string) => {
+      if (AUTH_MODE === 'unconfigured') throw new Error(AUTH_NOT_CONFIGURED_MESSAGE);
       setLoading(true);
       const normalized = contact.trim().replace(/\s/g, '');
       const isEmail = normalized.includes('@');
