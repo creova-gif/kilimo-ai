@@ -1,0 +1,15 @@
+# Smoke: clean install -> launch -> welcome screen renders -> language toggle -> start.
+# Run: maestro --device <UDID> test .maestro/00_smoke_launch.yaml
+appId: com.jaymafie.kilimoai
+---
+- launchApp:
+    clearState: true
+- assertVisible: "KILIMO CHAKO,"
+- assertVisible: "KWA AKILI."
+- assertVisible: "Anza Sasa"
+- takeScreenshot: 00_welcome_sw
+- tapOn: "English"
+- takeScreenshot: 00_welcome_en
+- tapOn: "Kiswahili"
+- tapOn: "Anza Sasa"
+- takeScreenshot: 00_after_start
