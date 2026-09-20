@@ -1,0 +1,15 @@
+# Failure state: a build with NO Supabase config must fail closed (gap G-016).
+# Expectation for the default release build (no EXPO_PUBLIC_SUPABASE_*):
+# entering a phone number and continuing shows the bilingual "not available"
+# alert and does NOT advance to the OTP step or create a session.
+appId: com.jaymafie.kilimoai
+---
+- launchApp:
+    clearState: true
+- tapOn: "Anza Sasa"
+- tapOn: "Phone Number Input"
+- inputText: "712345678"
+- tapOn: "Endelea"
+- assertVisible: ".*haipatikani.*"
+- takeScreenshot: 01_auth_not_configured
+- assertNotVisible: "Weka Namba ya Siri"
