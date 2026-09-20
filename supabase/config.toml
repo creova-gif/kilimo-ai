@@ -1,3 +1,38 @@
+# ── Local development stack (`supabase start`) ────────────────────────────
+# Added so the repo can run its own backend without the (paused) cloud project.
+# Cloud linking is separate: `supabase link --project-ref <ref>`.
+project_id = "kilimo-ai"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+
+[db]
+port = 54322
+major_version = 17
+
+[auth]
+enabled = true
+site_url = "kilimoai://"
+additional_redirect_urls = ["kilimoai://**"]
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false
+
+# LOCAL DEV ONLY: fixed OTP for the test phone number so the phone-OTP journey
+# is repeatable without a real SMS provider. Never used against cloud.
+[auth.sms]
+enable_signup = true
+enable_confirmations = true
+[auth.sms.test_otp]
+255700000001 = "123456"
+
+[edge_runtime]
+enabled = true
+
 # Supabase project-local config. Project linking handled separately via
 # `supabase link --project-ref <ref>`. This file declares per-function settings.
 #
