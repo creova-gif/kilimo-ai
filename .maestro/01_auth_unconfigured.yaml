@@ -9,6 +9,9 @@ appId: com.jaymafie.kilimoai
 - tapOn: "Anza Sasa"
 - tapOn: "Phone Number Input"
 - inputText: "712345678"
+# The primary button sits behind the software keyboard (G-018). `hideKeyboard` is
+# unsupported by this screen; tapping non-interactive text dismisses it.
+- tapOn: "Namba yako ya simu"
 - tapOn: "Endelea"
 - assertVisible: ".*haipatikani.*"
 - takeScreenshot: 01_auth_not_configured

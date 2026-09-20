@@ -11,10 +11,12 @@ Driver: Maestro 2.10.0 (`.maestro/`). The `control` tool's touch input does not 
 | T-003 | Native iOS build | Xcode 27.0, CocoaPods 1.17.0 | `expo prebuild --platform ios --clean`; `xcodebuild … -configuration Release -sdk iphonesimulator` | BUILD SUCCEEDED | FAIL twice (pod deployment targets < 15.0; then `ENOSPC`), then **BUILD SUCCEEDED** after `plugins/withPodsDeploymentTarget.js` and freeing disk | PASS (after fixes) | commit `2601cc7` | G-005 (fixed), G-001 |
 | T-004 | Install + launch | iPhone 15 Pro Max sim | `simctl install`; `simctl launch com.jaymafie.kilimoai` | App launches, process stays alive | Launched; welcome screen rendered | PASS | `docs/kilimo-v2/evidence/T003_00_welcome_sw.jpg` | — |
 | T-005 | Smoke flow: clean state → welcome → language toggle → start | same, `.maestro/00_smoke_launch.yaml` | `launchApp clearState`; assert heading/CTA; tap English; tap Kiswahili; tap "Anza Sasa" | Copy switches EN/SW; start opens phone-number step 1/6 | All 10 steps COMPLETED. EN copy: "YOUR FARM, SMARTER." / "Get Started". After start: "Namba yako ya simu", `+255 7…` field, numeric keyboard, step 1/6 | PASS | `T003_00_welcome_en.jpg`, `T003_00_after_start.jpg` | — |
+| T-006 | Failure state: no backend configured → auth fails closed (G-016) | Release build without `EXPO_PUBLIC_SUPABASE_*`, `.maestro/01_auth_unconfigured.yaml` | clean state → Anza Sasa → enter `712345678` → dismiss keyboard → Endelea | Bilingual "not available" alert; stay on step 1; no session created | Alert "Hitilafu / Sign-in is not available: this build is not configured with a backend. Huduma ya kuingia haipatikani…"; OTP step NOT shown | PASS | `docs/kilimo-v2/evidence/T006_auth_not_configured.jpg` | G-016 (fixed) |
+| T-007 | Keyboard vs primary CTA on phone step | same | Focus phone field; look for "Endelea" | CTA reachable while typing | **FAIL** — "Endelea" (y 790–866) is behind the keyboard; a tap on it hits the `0` key (stray digit observed). Tapping non-interactive text or swiping down dismisses the keyboard. | FAIL (P2) | failed run `2026-09-20_163537` | G-018 (open) |
 
 ## Known-untested (do not read as passing)
 
-Authentication against a real backend, onboarding steps 2–6, session restoration, every post-onboarding screen, offline/network, AI, IoT, marketplace, maps, weather, Swahili completeness, accessibility, visual match to Figma.
+Authentication against a real backend (only the unconfigured failure state is tested), onboarding steps 2–6, session restoration, every post-onboarding screen, offline/network, AI, IoT, marketplace, maps, weather, Swahili completeness, accessibility, visual match to Figma.
 
 ## Findings from testing so far
 
