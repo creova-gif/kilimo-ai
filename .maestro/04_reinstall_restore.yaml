@@ -1,0 +1,13 @@
+# Reinstall: app data is wiped but the Keychain session survives (as on a real iOS reinstall).
+# The farmer must be restored FROM THE SERVER — real name, farm — not sent through onboarding
+# again and not shown an empty dashboard. Run after 02 (same simulator keychain).
+appId: com.jaymafie.kilimoai
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "HABARI, AMARA"
+    timeout: 15000
+- assertNotVisible: "Anza sasa"
+- assertVisible: "Arusha.*"
+- takeScreenshot: 04_restored_from_server

@@ -1,4 +1,4 @@
-import { fetchMyProfile, mapFarmRow } from '../lib/hydrateProfile';
+import { agroFromProfile, fetchMyProfile, mapFarmRow } from '../lib/hydrateProfile';
 
 function client(opts: { agro?: any; agroErr?: string; farm?: any; farmErr?: string }) {
   return {
@@ -48,5 +48,22 @@ describe('fetchMyProfile', () => {
   });
   it('reports not_configured with no client', async () => {
     expect(await fetchMyProfile(null)).toMatchObject({ ok: false, message: 'not_configured' });
+  });
+});
+
+describe('agroFromProfile', () => {
+  it('builds the store shape from real server fields only', async () => {
+    const mine = await fetchMyProfile(
+      client({ agro: { id: 'AGRO-2026-REG-X', name: 'Amara', role: 'farmer', location: 'Arusha', joinDate: '2026-09-21T00:00:00Z', verificationStatus: 'unverified' } })
+    );
+    expect(agroFromProfile(mine)).toMatchObject({
+      id: 'AGRO-2026-REG-X', name: 'Amara', role: 'farmer', location: 'Arusha', joinDate: '2026',
+      tier: 'Free', mpesaLinked: false, biometricEnabled: false, verificationStatus: 'unverified',
+    });
+  });
+  it('returns null unless the server has an account (never a half-empty identity)', async () => {
+    expect(agroFromProfile(await fetchMyProfile(client({})))).toBeNull();
+    expect(agroFromProfile(await fetchMyProfile(client({ agroErr: 'boom' })))).toBeNull();
+    expect(agroFromProfile(await fetchMyProfile(null))).toBeNull();
   });
 });

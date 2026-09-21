@@ -51,7 +51,8 @@ export function mapFarmRow(row: any): ServerFarmProfile | null {
 }
 
 export async function fetchMyProfile(client: any | null | undefined): Promise<HydrateResult> {
-  if (!client) return { ok: false, hasAccount: false, agro: null, farm: null, message: 'not_configured' };
+  if (!client)
+    return { ok: false, hasAccount: false, agro: null, farm: null, message: 'not_configured' };
   try {
     const [agroRes, farmRes] = await Promise.all([
       client.rpc('get_my_agro_id'),
@@ -68,13 +69,39 @@ export async function fetchMyProfile(client: any | null | undefined): Promise<Hy
           location: agroRaw.location ?? null,
           joinDate: agroRaw.joinDate ?? null,
           phoneNumber: agroRaw.phoneNumber ?? null,
-          verificationStatus: ['unverified', 'pending', 'verified'].includes(agroRaw.verificationStatus)
+          verificationStatus: ['unverified', 'pending', 'verified'].includes(
+            agroRaw.verificationStatus
+          )
             ? agroRaw.verificationStatus
             : 'unverified',
         }
       : null;
     return { ok: true, hasAccount: agro !== null, agro, farm: mapFarmRow(farmRes.data) };
   } catch (e: any) {
-    return { ok: false, hasAccount: false, agro: null, farm: null, message: e?.message ?? String(e) };
+    return {
+      ok: false,
+      hasAccount: false,
+      agro: null,
+      farm: null,
+      message: e?.message ?? String(e),
+    };
   }
+}
+
+/** Shape the store's AgroID from a server profile (real fields only; local-only fields default). */
+export function agroFromProfile(mine: HydrateResult) {
+  if (!mine.ok || !mine.hasAccount || !mine.agro) return null;
+  const a = mine.agro;
+  return {
+    id: a.id,
+    name: a.name ?? '',
+    role: a.role ?? 'farmer',
+    location: a.location ?? mine.farm?.region ?? '',
+    tier: 'Free' as const,
+    joinDate: a.joinDate ? String(new Date(a.joinDate).getFullYear()) : '',
+    mpesaLinked: false,
+    phoneNumber: a.phoneNumber ?? undefined,
+    biometricEnabled: false,
+    verificationStatus: a.verificationStatus,
+  };
 }

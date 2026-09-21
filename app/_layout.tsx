@@ -32,6 +32,7 @@ import { initSentry, Sentry } from '../lib/sentry';
 initSentry();
 
 // ── Kilimo AI Global Services ─────────────────────────────────────────────
+import { useSessionRestore } from '../hooks/useSessionRestore';
 import { useSyncEngine } from '../hooks/useSyncEngine';
 import { useNotifications } from '../hooks/useNotifications';
 import { useIdleTimeout } from '../hooks/useIdleTimeout';
@@ -160,6 +161,7 @@ const styles = StyleSheet.create({
  * Keeps RootLayout clean; all side effects live here.
  */
 function AppServices() {
+  useSessionRestore(); // 🔐 Restore a signed-in farmer from the server (once, at boot)
   useSyncEngine(); // 🔄 Offline queue drain
   useNotifications(); // 🔔 Push notification registration
   useIdleTimeout(); // 🔒 AUTH-06 session inactivity gate

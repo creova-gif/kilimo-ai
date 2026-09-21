@@ -32,7 +32,7 @@ import { CanonicalRole } from '../lib/access';
 import { mintAgroId } from '../lib/agro/mintId';
 import { authErrorKey } from '../lib/authErrors';
 import { saveFarmerProfile } from '../lib/farmerProfile';
-import { fetchMyProfile } from '../lib/hydrateProfile';
+import { agroFromProfile, fetchMyProfile } from '../lib/hydrateProfile';
 import { useT } from '../lib/i18n';
 import { normalizePhone } from '../lib/phone';
 import { getSupabase } from '../lib/supabase';
@@ -153,23 +153,12 @@ export default function OnboardingScreen() {
       await auth.verifyOtp(contact, otp);
       // The server decides whether this person has already onboarded.
       const mine = await fetchMyProfile(getSupabase());
-      if (mine.ok && mine.hasAccount && mine.agro) {
-        const restored: AgroID = {
-          id: mine.agro.id,
-          name: mine.agro.name ?? '',
-          role: mine.agro.role ?? 'farmer',
-          location: mine.agro.location ?? mine.farm?.region ?? '',
-          tier: 'Free',
-          joinDate: mine.agro.joinDate ? String(new Date(mine.agro.joinDate).getFullYear()) : '',
-          mpesaLinked: false,
-          phoneNumber: mine.agro.phoneNumber ?? undefined,
-          biometricEnabled: false,
-          verificationStatus: mine.agro.verificationStatus,
-        };
+      const restored = agroFromProfile(mine);
+      if (restored) {
         if (mine.farm) setFarmProfile(mine.farm);
         if (mine.farm?.language === 'sw' || mine.farm?.language === 'en')
           setLanguage(mine.farm.language);
-        setAgroId(restored); // marks authenticated + onboarding complete
+        setAgroId(restored as AgroID); // marks authenticated + onboarding complete
         router.replace('/(tabs)' as any);
         return;
       }

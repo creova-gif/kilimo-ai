@@ -32,6 +32,9 @@ flow() { # name file
 }
 
 echo "== device $DEVICE =="
+# clearState wipes app data but NOT the iOS Keychain (where the auth session lives, exactly as on a
+# real reinstall). Reset the simulator keychain so "fresh install" really is fresh.
+xcrun simctl keychain "$DEVICE" reset >/dev/null 2>&1 && ok "simulator keychain reset (fresh-install precondition)"
 flow "00 smoke launch" .maestro/00_smoke_launch.yaml
 
 BEFORE="$(psqlq "select count(*) from auth.users")"
@@ -44,6 +47,7 @@ if flow "02 onboarding journey" .maestro/02_onboarding_farmer_journey.yaml; then
   [ "$(psqlq "select count(*) from farmer_profiles where user_id='$UID_' and region='Arusha' and name='Amara Test' and farm_size_acres=3")" = "1" ] && ok "db: farmer_profiles persisted (name, region, acres)" || bad "db: farmer_profiles missing/incorrect"
   [ "$(psqlq "select count(*) from verification_requests where user_id='$UID_'")" = "0" ] && ok "db: no verification request filed at signup (identity is optional)" || bad "db: unexpected verification request"
   flow "03 session restore (relaunch, no clearState)" .maestro/03_session_restore.yaml
+  flow "04 reinstall restore (data wiped, Keychain session kept)" .maestro/04_reinstall_restore.yaml
 fi
 
 echo "=========== $PASS passed, $FAIL failed ==========="

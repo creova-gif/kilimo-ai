@@ -90,37 +90,7 @@ export function useAgroAuth() {
     });
   }, []);
 
-  // ── Restore session on boot ──────────────────────────────────────────────
-  useEffect(() => {
-    async function restoreSession() {
-      try {
-        const token = await SecureStore.getItemAsync(SESSION_KEY);
-        if (!token || isAuthenticated) return;
-
-        if (supabase) {
-          const {
-            data: { user },
-          } = await supabase.auth.getUser(token);
-          if (user) {
-            // Fetch Agro ID profile from DB
-            const { data: profile } = await supabase
-              .from('agro_profiles')
-              .select('*')
-              .eq('user_id', user.id)
-              .single();
-
-            if (profile) {
-              setAgroId(profile as AgroID);
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('[AgroID] Session restore failed:', err);
-      }
-    }
-
-    restoreSession();
-  }, []);
+  // Session restore lives in hooks/useSessionRestore.ts (root layout, from the server).
 
   // ── Biometric unlock ─────────────────────────────────────────────────────
   const authenticateWithBiometric = useCallback(async (): Promise<boolean> => {
