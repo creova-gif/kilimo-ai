@@ -324,7 +324,6 @@ function RootLayout() {
                 options={{ headerShown: false, presentation: 'card' }}
               />
               <Stack.Screen name="agro-id" options={{ headerShown: false, presentation: 'card' }} />
-              <Stack.Screen name="contracts" options={{ headerShown: false }} />
               <Stack.Screen
                 name="livestock"
                 options={{ headerShown: false, presentation: 'card' }}
@@ -335,10 +334,6 @@ function RootLayout() {
               />
               <Stack.Screen
                 name="insurance"
-                options={{ headerShown: false, presentation: 'card' }}
-              />
-              <Stack.Screen
-                name="input-supply"
                 options={{ headerShown: false, presentation: 'card' }}
               />
               <Stack.Screen

@@ -1,7 +1,6 @@
 import NetInfo from '@react-native-community/netinfo';
 import { useKilimoStore } from '../store/useKilimoStore';
 import { supabase } from './supabase';
-import { listingToDbRow } from '../hooks/useMarketIntelligence';
 
 export function initializeOfflineManager() {
   if (__DEV__) console.log('[OfflineManager] Initializing network listener...');
@@ -40,15 +39,27 @@ export async function processSyncQueue() {
       if (__DEV__) console.log(`[OfflineManager] Syncing item: ${item.type} [${item.id}]`);
 
       if (item.type === 'market_order') {
-        // Real sync: market_order queue items back a farmer's crop listing
-        // (createListing() in hooks/useMarketIntelligence.ts queues here when
-        // offline).
+        // Real sync: market_order queue items back a farmer's crop listing queued while offline by
+        // an earlier build. New listings are created online-only (lib/listings.ts); this drains any
+        // that were already queued. Escrow / smart-contract flags are never sent (the server rejects them).
         if (!supabase) throw new Error('Supabase not configured');
         const {
           data: { user },
         } = await supabase.auth.getUser();
         if (!user) throw new Error('Not authenticated');
-        const row = listingToDbRow(item.payload as any, user.id);
+        const p = item.payload as any;
+        const row = {
+          seller_id: user.id,
+          crop_name: p.cropName,
+          crop_name_sw: p.cropNameSw ?? null,
+          quantity_kg: p.quantityKg,
+          price_per_kg: p.pricePerKg,
+          currency: p.currency ?? 'TZS',
+          location: p.location ?? null,
+          quality_grade: p.qualityGrade ?? null,
+          status: 'active',
+          notes: p.notes ?? null,
+        };
         const { error } = await supabase.from('market_listings').insert(row);
         if (error) throw error;
       } else if (item.type === 'task_complete') {

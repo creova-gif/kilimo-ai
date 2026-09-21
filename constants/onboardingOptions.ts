@@ -55,3 +55,9 @@ export const CROPS: string[] = [
 ];
 
 export const MAX_CROPS = 4;
+
+/** Split a crop label like "Mahindi (Maize)" into its Swahili and English names. */
+export function cropNames(label: string): { sw: string; en: string } {
+  const m = label.match(/^(.*?)\s*\((.*)\)\s*$/);
+  return m ? { sw: m[1].trim(), en: m[2].trim() } : { sw: label, en: label };
+}

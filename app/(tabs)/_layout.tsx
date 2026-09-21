@@ -48,8 +48,6 @@ export default function TabLayout() {
       <Tabs.Screen name="profile" options={{ title: t('nav.me'), tabBarIcon: icon(User) }} />
 
       {/* Reachable by route, not part of the bar */}
-      <Tabs.Screen name="action" options={{ href: null }} />
-      <Tabs.Screen name="features" options={{ href: null }} />
       <Tabs.Screen name="video-hub" options={{ href: null }} />
       <Tabs.Screen name="ai-training-hub" options={{ href: null }} />
       <Tabs.Screen name="edit-profile" options={{ href: null }} />
