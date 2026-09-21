@@ -148,6 +148,7 @@ export const en = {
   'onb.farm.irrigation': 'Do you have irrigation?',
   'onb.farm.cta': 'Finish',
   'onb.register.legalLink': 'Read the Terms and Privacy Policy',
+  'onb.farm.more': 'More details (optional)',
 } as const;
 
 export type TranslationKey = keyof typeof en;

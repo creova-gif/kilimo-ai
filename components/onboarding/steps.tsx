@@ -109,6 +109,7 @@ export function RegisterStep(p: RegisterStepProps) {
           autoComplete="tel"
           textContentType="telephoneNumber"
           accessibilityLabel={t('onb.register.phone.a11y')}
+          testID="register-phone"
           size="lg"
           placeholder="+255 7…"
         />
@@ -122,6 +123,7 @@ export function RegisterStep(p: RegisterStepProps) {
           autoComplete="email"
           textContentType="emailAddress"
           accessibilityLabel={t('onb.register.email.a11y')}
+          testID="register-email"
           size="lg"
         />
       )}
@@ -193,6 +195,7 @@ export function OtpStep({ otp, setOtp, secondsLeft, onResend }: OtpStepProps) {
         autoComplete="sms-otp"
         textContentType="oneTimeCode"
         accessibilityLabel={t('onb.otp.a11y')}
+        testID="otp-code"
         size="lg"
         placeholder="123456"
       />
@@ -262,6 +265,7 @@ export interface FarmStepProps {
 
 export function FarmStep(p: FarmStepProps) {
   const { t } = useT();
+  const [showMore, setShowMore] = React.useState(false);
   const { colors, spacing } = useTheme();
   const label = (k: Parameters<typeof t>[0]) => (
     <AppText variant="label" style={{ marginTop: spacing.lg, marginBottom: spacing.sm }}>
@@ -279,6 +283,7 @@ export function FarmStep(p: FarmStepProps) {
         autoCapitalize="words"
         textContentType="name"
         accessibilityLabel={t('onb.farm.name')}
+        testID="farm-name"
         size="lg"
       />
 
@@ -316,44 +321,56 @@ export function FarmStep(p: FarmStepProps) {
         onChangeText={(v) => p.setAcres(v.replace(/[^0-9.]/g, ''))}
         keyboardType="decimal-pad"
         accessibilityLabel={t('onb.farm.size')}
+        testID="farm-acres"
         size="lg"
         wrapperStyle={{ marginTop: spacing.lg }}
       />
 
-      {label('onb.farm.activity')}
-      <View style={styles.chips}>
-        {(['mazao', 'mifugo', 'mchanganyiko'] as const).map((a) => (
-          <Chip
-            key={a}
-            label={t(`onb.farm.activity.${a}` as const)}
-            selected={p.activity === a}
-            onPress={() => p.setActivity(a)}
-          />
-        ))}
-      </View>
+      <Button
+        label={t('onb.farm.more')}
+        variant="link"
+        onPress={() => setShowMore((v) => !v)}
+        accessibilityState={{ expanded: showMore }}
+        style={{ alignSelf: 'flex-start', marginTop: spacing.lg }}
+      />
+      {showMore && (
+        <View>
+          {label('onb.farm.activity')}
+          <View style={styles.chips}>
+            {(['mazao', 'mifugo', 'mchanganyiko'] as const).map((a) => (
+              <Chip
+                key={a}
+                label={t(`onb.farm.activity.${a}` as const)}
+                selected={p.activity === a}
+                onPress={() => p.setActivity(a)}
+              />
+            ))}
+          </View>
 
-      <View style={[styles.switchRow, { marginTop: spacing.lg, borderColor: colors.border }]}>
-        <AppText variant="body" style={{ flex: 1 }}>
-          {t('onb.farm.livestock')}
-        </AppText>
-        <Switch
-          value={p.hasLivestock}
-          onValueChange={p.setHasLivestock}
-          accessibilityLabel={t('onb.farm.livestock')}
-          trackColor={{ true: colors.primary }}
-        />
-      </View>
-      <View style={[styles.switchRow, { borderColor: colors.border }]}>
-        <AppText variant="body" style={{ flex: 1 }}>
-          {t('onb.farm.irrigation')}
-        </AppText>
-        <Switch
-          value={p.hasIrrigation}
-          onValueChange={p.setHasIrrigation}
-          accessibilityLabel={t('onb.farm.irrigation')}
-          trackColor={{ true: colors.primary }}
-        />
-      </View>
+          <View style={[styles.switchRow, { marginTop: spacing.lg, borderColor: colors.border }]}>
+            <AppText variant="body" style={{ flex: 1 }}>
+              {t('onb.farm.livestock')}
+            </AppText>
+            <Switch
+              value={p.hasLivestock}
+              onValueChange={p.setHasLivestock}
+              accessibilityLabel={t('onb.farm.livestock')}
+              trackColor={{ true: colors.primary }}
+            />
+          </View>
+          <View style={[styles.switchRow, { borderColor: colors.border }]}>
+            <AppText variant="body" style={{ flex: 1 }}>
+              {t('onb.farm.irrigation')}
+            </AppText>
+            <Switch
+              value={p.hasIrrigation}
+              onValueChange={p.setHasIrrigation}
+              accessibilityLabel={t('onb.farm.irrigation')}
+              trackColor={{ true: colors.primary }}
+            />
+          </View>
+        </View>
+      )}
     </View>
   );
 }

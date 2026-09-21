@@ -13,14 +13,16 @@ appId: com.jaymafie.kilimoai
 - assertVisible: "Namba yako ya simu"
 # Tick consent first: with the keyboard open the checkbox scrolls out of view (drag to reveal).
 - tapOn: "Nakubali Masharti na Sera ya Faragha"
-- tapOn: "Namba ya simu"
+- tapOn:
+    id: "register-phone"
 - inputText: ${output.phone}
 # The primary button is ABOVE the keyboard now (G-018) — no dismiss trick needed.
 - tapOn: "Tuma msimbo"
 
 # OTP (real backend accepts the local test code)
 - assertVisible: "Weka namba ya siri"
-- tapOn: "Msimbo wa tarakimu 6"
+- tapOn:
+    id: "otp-code"
 - inputText: "123456"
 - tapOn: "Thibitisha"
 
@@ -31,7 +33,8 @@ appId: com.jaymafie.kilimoai
 
 # Farm — nothing is pre-filled; the CTA stays disabled until real values are entered
 - assertVisible: "Shamba lako"
-- tapOn: "Jina lako kamili"
+- tapOn:
+    id: "farm-name"
 - inputText: "Amara Test"
 - tapOn: "Shamba lako"
 - scrollUntilVisible:
@@ -45,10 +48,12 @@ appId: com.jaymafie.kilimoai
     centerElement: true
 - tapOn: "Chagua zao Mahindi \\(Maize\\)"
 - scrollUntilVisible:
-    element: "Ukubwa wa shamba \\(ekari\\)"
+    element:
+      id: "farm-acres"
     direction: DOWN
     centerElement: true
-- tapOn: "Ukubwa wa shamba \\(ekari\\)"
+- tapOn:
+    id: "farm-acres"
 - inputText: "3"
 - tapOn: "Maliza"
 

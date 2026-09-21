@@ -139,4 +139,5 @@ export const sw: Record<TranslationKey, string> = {
   'onb.farm.irrigation': 'Una umwagiliaji?',
   'onb.farm.cta': 'Maliza',
   'onb.register.legalLink': 'Soma Masharti na Sera ya Faragha',
+  'onb.farm.more': 'Maelezo zaidi (hiari)',
 };
