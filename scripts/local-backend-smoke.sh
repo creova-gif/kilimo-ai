@@ -140,6 +140,19 @@ req POST /rest/v1/market_listings "$A_TOK" "{\"crop_name\":\"NoSeller\",\"quanti
 status "market_listings insert with null seller rejected" '401|403'
 req GET "/rest/v1/market_listings?select=crop_name&status=eq.active" "$A_TOK"
 both "market_listings read now sees seed+1" 200 'length' "$((MK_SEED+1))"
+# Truthful marketplace (migration 20260921000000): no seeded listings, no self-declared escrow.
+req GET "/rest/v1/market_listings?select=id&seller_id=is.null" "$A_TOK"
+both "no seeded listings without a seller remain" 200 'length' 0
+req POST /rest/v1/market_listings "$A_TOK" "{\"seller_id\":\"$A_ID\",\"crop_name\":\"FakeEscrow\",\"quantity_kg\":1,\"price_per_kg\":1,\"escrow_funded\":true}"
+status "seller cannot self-declare funded escrow" '401|403'
+req POST /rest/v1/market_listings "$A_TOK" "{\"seller_id\":\"$A_ID\",\"crop_name\":\"FakeContract\",\"quantity_kg\":1,\"price_per_kg\":1,\"smart_contract\":true}"
+status "seller cannot self-declare a smart contract" '401|403'
+req PATCH "/rest/v1/market_listings?id=eq.$LISTING_ID" "$A_TOK" '{"escrow_funded":true}'
+status "seller cannot flip escrow_funded on their own listing" '401|403'
+req POST /rest/v1/market_listings "$A_TOK" "{\"seller_id\":\"$A_ID\",\"crop_name\":\"BadPhone\",\"quantity_kg\":1,\"price_per_kg\":1,\"contact_phone\":\"0712345678\"}"
+status "contact_phone must be E.164" '400'
+req POST /rest/v1/market_listings "$A_TOK" "{\"seller_id\":\"$A_ID\",\"crop_name\":\"WithPhone\",\"quantity_kg\":5,\"price_per_kg\":700,\"contact_phone\":\"+255712345678\"}" "Prefer: return=representation"
+status "listing with an opt-in E.164 contact_phone is accepted" 201
 
 req POST /rest/v1/tasks "$A_TOK" '{"title":"Irrigate Block B","title_sw":"Mwagilia Sehemu B","category":"irrigation","priority":"high","status":"pending","due_date":"2026-09-25T06:00:00Z","xp_reward":25,"farm_block":"Block B","synced_offline":false,"assigned_role":"employee"}' "Prefer: return=representation"
 status "tasks insert (client payload, no user_id)" 201; TASK_ID="$(printf '%s' "$BODY" | jq -r '.[0].id')"
