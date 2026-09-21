@@ -8,6 +8,8 @@
  * All models are client-side (no server round-trip), deterministic, and update
  * every time the user navigates to this screen.
  */
+import { EmptyState } from '../../components/ui';
+import { useT } from '../../lib/i18n';
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Dimensions } from 'react-native';
 import { TrendingUp, TrendingDown, Minus, Bug, ArrowRight, ShieldCheck } from 'lucide-react-native';
@@ -236,10 +238,20 @@ export default function AnalyticsDashboard() {
   const vitals = useKilimoStore((s) => s.farmVitals);
   const profile = useKilimoStore((s) => s.farmProfile);
 
-  const { yieldForecast, pestRisk } = useMemo(
-    () => runAnalytics(vitals, profile),
+  // Predictions need real readings. With none, show an honest empty state (never seeded numbers).
+  const analytics = useMemo(
+    () => (vitals ? runAnalytics(vitals, profile) : null),
     [vitals, profile]
   );
+  const { t } = useT();
+  if (!analytics) {
+    return (
+      <PageScaffold title="Uchanganuzi wa AI" subtitle="Predictive Analytics" badge="ANALYTICS">
+        <EmptyState title={t('analytics.noData.title')} description={t('analytics.noData.body')} />
+      </PageScaffold>
+    );
+  }
+  const { yieldForecast, pestRisk } = analytics;
 
   const confColor: Record<typeof yieldForecast.confidence, string> = {
     high: '#22c55e',
@@ -271,9 +283,9 @@ export default function AnalyticsDashboard() {
         >
           <GlassCard style={[s.notice, { borderColor: colors.border }]}>
             <Text style={[s.noticeText, { color: colors.textMute }]}>
-              Haya ni makadirio ya mfano yanayotumia viashiria vya shamba vilivyohifadhiwa kwenye app.
-              Muunganisho wa sensa na data ya bei za soko haujawezeshwa; thibitisha hali ya shamba na
-              bei ya eneo lako kabla ya kufanya maamuzi.
+              Haya ni makadirio ya mfano yanayotumia viashiria vya shamba vilivyohifadhiwa kwenye
+              app. Muunganisho wa sensa na data ya bei za soko haujawezeshwa; thibitisha hali ya
+              shamba na bei ya eneo lako kabla ya kufanya maamuzi.
             </Text>
           </GlassCard>
 
@@ -392,10 +404,12 @@ export default function AnalyticsDashboard() {
           {/* ── 3. PRICE TRENDS ────────────────────────────── */}
           <SectionHeader title="MWELEKEO WA BEI" />
           <GlassCard style={s.unavailableCard}>
-            <Text style={[s.unavailableTitle, { color: colors.text }]}>Data ya bei haipatikani</Text>
+            <Text style={[s.unavailableTitle, { color: colors.text }]}>
+              Data ya bei haipatikani
+            </Text>
             <Text style={[s.unavailableBody, { color: colors.textMute }]}>
-              Kilimo AI bado haijaunganishwa na chanzo cha bei za soko. Hakuna pendekezo la
-              kuuza, kusubiri, au kuhifadhi linalotolewa hapa.
+              Kilimo AI bado haijaunganishwa na chanzo cha bei za soko. Hakuna pendekezo la kuuza,
+              kusubiri, au kuhifadhi linalotolewa hapa.
             </Text>
           </GlassCard>
 

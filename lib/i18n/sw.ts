@@ -83,4 +83,6 @@ export const sw: Record<TranslationKey, string> = {
   'dash.ai.title': 'Uliza Kilimo AI',
   'dash.ai.body': 'Uliza kuhusu mazao, wadudu au bei.',
   'dash.ai.action': 'Uliza swali',
+  'analytics.noData.title': 'Hakuna data ya sensa bado',
+  'analytics.noData.body': 'Makadirio yanahitaji vipimo halisi vya shamba lako. Unganisha sensa au andika vipimo vya udongo ili kuyawezesha.',
 };

@@ -6,7 +6,7 @@ appId: com.jaymafie.kilimoai
 - launchApp:
     clearState: false
 - extendedWaitUntil:
-    visible: "Amara"          # greeting shows the saved farmer name
+    visible: "HABARI, AMARA"  # greeting (uppercase) shows the saved farmer name
     timeout: 10000
 - assertNotVisible: "Anza Sasa"          # not back at the welcome screen
 - assertNotVisible: "Namba yako ya simu" # not back in the wizard

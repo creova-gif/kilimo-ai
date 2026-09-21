@@ -93,6 +93,8 @@ export const en = {
   'dash.ai.title': 'Ask Kilimo AI',
   'dash.ai.body': 'Ask about your crops, pests or prices.',
   'dash.ai.action': 'Ask a question',
+  'analytics.noData.title': 'No sensor data yet',
+  'analytics.noData.body': 'Predictions need real readings from your farm. Connect sensors or log soil tests to enable them.',
 } as const;
 
 export type TranslationKey = keyof typeof en;

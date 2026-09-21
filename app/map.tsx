@@ -239,9 +239,7 @@ export default function MapScreen() {
                   <Text style={styles.detailText}>5 mm Rain</Text>
                 </View>
               </View>
-              <Text style={styles.weatherDemoLabel}>
-                {language === 'sw' ? 'MFANO' : 'EXAMPLE'}
-              </Text>
+              <Text style={styles.weatherDemoLabel}>{language === 'sw' ? 'MFANO' : 'EXAMPLE'}</Text>
             </BlurView>
           </Animated.View>
 
@@ -415,21 +413,21 @@ export default function MapScreen() {
                 <View style={styles.statItem}>
                   <Text style={[styles.statLabel, { color: colors.textMute }]}>MOISTURE</Text>
                   <Text style={[styles.statValue, { color: colors.text }]}>
-                    {farmVitals.moisture.toFixed(1)}%
+                    {farmVitals ? `${farmVitals.moisture.toFixed(1)}%` : '—'}
                   </Text>
                 </View>
                 <View style={[styles.divider, { backgroundColor: colors.border }]} />
                 <View style={styles.statItem}>
                   <Text style={[styles.statLabel, { color: colors.textMute }]}>SOIL HEALTH</Text>
                   <Text style={[styles.statValue, { color: colors.text }]}>
-                    {farmVitals.soilHealth.toFixed(0)}
+                    {farmVitals ? farmVitals.soilHealth.toFixed(0) : '—'}
                   </Text>
                 </View>
                 <View style={[styles.divider, { backgroundColor: colors.border }]} />
                 <View style={styles.statItem}>
                   <Text style={[styles.statLabel, { color: colors.textMute }]}>YIELD EST.</Text>
                   <Text style={[styles.statValue, { color: colors.primary }]}>
-                    {farmVitals.yieldEstimate.toFixed(1)}T
+                    {farmVitals ? `${farmVitals.yieldEstimate.toFixed(1)}T` : '—'}
                   </Text>
                 </View>
               </View>

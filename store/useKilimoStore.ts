@@ -118,7 +118,8 @@ interface KilimoState {
   lastSyncedAt: string | null;
 
   // Farm Intelligence
-  farmVitals: FarmVitals;
+  /** null until real sensor / soil-test data exists — never a made-up default. */
+  farmVitals: FarmVitals | null;
 
   // Notifications
   notifications: Notification[];
@@ -222,14 +223,7 @@ export const useKilimoStore = create<KilimoState>()(
       syncQueue: [],
       lastSyncedAt: null,
 
-      farmVitals: {
-        soilHealth: 84,
-        moisture: 42,
-        temperature: 24,
-        yieldEstimate: 1.2,
-        soilPh: 6.8,
-        lastUpdated: new Date().toISOString(),
-      },
+      farmVitals: null,
 
       // No seeded notifications: a new install has none. Real ones come from the backend
       // (user_notifications) or from on-device events.
@@ -322,7 +316,7 @@ export const useKilimoStore = create<KilimoState>()(
       updateFarmVitals: (vitals) =>
         set((state) => ({
           farmVitals: {
-            ...state.farmVitals,
+            ...(state.farmVitals ?? ({} as FarmVitals)),
             ...vitals,
             lastUpdated: new Date().toISOString(),
           },
@@ -413,17 +407,19 @@ export const useKilimoStore = create<KilimoState>()(
     {
       name: 'kilimo-ai-store',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 3,
+      version: 4,
       // Backfill: pre-v2 stores didn't have `onboardingComplete`. Returning
       // authenticated users (have agroId or were marked authenticated) should
       // skip onboarding instead of being forced back through it.
-      migrate: (persisted: any, _version) => {
+      migrate: (persisted: any, version) => {
         if (!persisted) return persisted;
         if (persisted.onboardingComplete == null) {
           persisted.onboardingComplete = Boolean(
             persisted.agroId || persisted.isAuthenticated || persisted.farmProfile
           );
         }
+        // v4: earlier builds persisted invented vitals (soil health 84, moisture 42, pH 6.8, …).
+        if (version < 4) persisted.farmVitals = null;
         // v3: purge fabricated seed data that earlier builds wrote to every install.
         const SEED_NOTIFICATION_IDS = ['n1', 'n2', 'n3'];
         const SEED_IDS = ['12345678901234567890', '123456789'];

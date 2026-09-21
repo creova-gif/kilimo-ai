@@ -34,7 +34,6 @@ initSentry();
 // ── Kilimo AI Global Services ─────────────────────────────────────────────
 import { useSyncEngine } from '../hooks/useSyncEngine';
 import { useNotifications } from '../hooks/useNotifications';
-import { useFarmVitals } from '../hooks/useFarmVitals';
 import { useIdleTimeout } from '../hooks/useIdleTimeout';
 import { initializeOfflineManager } from '../lib/offline';
 
@@ -163,7 +162,6 @@ const styles = StyleSheet.create({
 function AppServices() {
   useSyncEngine(); // 🔄 Offline queue drain
   useNotifications(); // 🔔 Push notification registration
-  useFarmVitals(); // 🌱 Sensor telemetry polling
   useIdleTimeout(); // 🔒 AUTH-06 session inactivity gate
   useResumeRefresh(); // 🔁 Invalidate stale queries on foreground resume (#14)
   return null;
