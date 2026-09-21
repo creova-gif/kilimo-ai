@@ -31,6 +31,8 @@ flow() { # name file
   if maestro --device "$DEVICE" test "$2" >/tmp/e2e_flow.log 2>&1; then ok "flow: $1"; else bad "flow: $1"; grep -E 'FAILED|Assertion' /tmp/e2e_flow.log | head -3; return 1; fi
 }
 
+# Maestro keeps every run's screenshots/recordings (~100 MB each) — prune old runs so the disk never fills.
+ls -dt "$HOME"/.maestro/tests/*/ 2>/dev/null | tail -n +4 | xargs rm -rf   # prune old Maestro runs (keep 3)
 echo "== device $DEVICE =="
 # clearState wipes app data but NOT the iOS Keychain (where the auth session lives, exactly as on a
 # real reinstall). Reset the simulator keychain so "fresh install" really is fresh.

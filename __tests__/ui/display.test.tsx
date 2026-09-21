@@ -29,13 +29,15 @@ function styleOf(el: any, key: string) {
 beforeEach(() => useKilimoStore.setState({ themePreference: 'light' } as any));
 
 describe('touchSlop helper', () => {
-  it('pads a 32pt control up to 44pt', () => {
+  it('pads a 32pt control up to the 48dp minimum', () => {
     const s = touchSlop(32)!;
     expect(32 + s.top! + s.bottom!).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET);
   });
-  it('returns nothing when already >= 44pt', () => {
-    expect(touchSlop(44)).toBeUndefined();
+  it('returns nothing when already >= 48dp', () => {
+    expect(MIN_TOUCH_TARGET).toBe(48); // Figma touch-target/default + UX framework (>= 48x48dp)
+    expect(touchSlop(48)).toBeUndefined();
     expect(touchSlop(52)).toBeUndefined();
+    expect(touchSlop(44)).toBeDefined(); // the old 44 floor is no longer enough
   });
 });
 
@@ -129,12 +131,12 @@ describe('Chip', () => {
     expect(flat(screen.getByText('Mahindi')).color).toBe(lightColors.textOnPrimary);
   });
 
-  it('pads the touch target to >= 44pt via hitSlop', () => {
+  it('pads the touch target to >= 48dp via hitSlop', () => {
     render(<Chip label="Mahindi" onPress={() => {}} />);
     const btn = screen.getByRole('button', { name: 'Mahindi' });
     const slop = btn.props.hitSlop;
-    // visual height ~32 (8 + 16 + 8) + slop top/bottom must reach 44
-    expect(32 + slop.top + slop.bottom).toBeGreaterThanOrEqual(44);
+    // visual height ~32 (8 + 16 + 8) + slop top/bottom must reach 48
+    expect(32 + slop.top + slop.bottom).toBeGreaterThanOrEqual(48);
   });
 
   it('presses through and respects disabled', () => {

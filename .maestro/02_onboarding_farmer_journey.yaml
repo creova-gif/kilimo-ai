@@ -33,17 +33,21 @@ appId: com.jaymafie.kilimoai
 - assertVisible: "Shamba lako"
 - tapOn: "Jina lako kamili"
 - inputText: "Amara Test"
+- tapOn: "Shamba lako"
 - scrollUntilVisible:
     element: "Chagua mkoa Arusha"
     direction: DOWN
+    centerElement: true
 - tapOn: "Chagua mkoa Arusha"
 - scrollUntilVisible:
     element: "Chagua zao Mahindi \\(Maize\\)"
     direction: DOWN
+    centerElement: true
 - tapOn: "Chagua zao Mahindi \\(Maize\\)"
 - scrollUntilVisible:
     element: "Ukubwa wa shamba \\(ekari\\)"
     direction: DOWN
+    centerElement: true
 - tapOn: "Ukubwa wa shamba \\(ekari\\)"
 - inputText: "3"
 - tapOn: "Maliza"

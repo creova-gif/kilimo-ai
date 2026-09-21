@@ -148,7 +148,7 @@ export const BORDER_WIDTH = { hairline: 1, emphasis: 1.5, strong: 2 } as const;
 
 /** Control heights measured in Figma: 44 (input row / small button), 48 (state buttons), 52 (primary). */
 export const SIZES = {
-  touchTarget: 44, // WCAG 2.5.5 / iOS HIG minimum
+  touchTarget: 48, // Figma variable touch-target/default = 48; UX framework: >= 48x48dp (was 44, the WCAG/HIG floor)
   controlSm: 44,
   controlMd: 48,
   controlLg: 52,
