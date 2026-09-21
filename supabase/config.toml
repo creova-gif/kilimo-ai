@@ -29,6 +29,14 @@ enable_signup = true
 enable_confirmations = true
 [auth.sms.test_otp]
 255700000001 = "123456"
+255700000002 = "123456"
+255700000003 = "123456"
+255700000004 = "123456"
+255700000005 = "123456"
+255700000006 = "123456"
+255700000007 = "123456"
+255700000008 = "123456"
+255700000009 = "123456"
 
 # GoTrue disables phone login entirely unless *some* SMS provider block is
 # enabled. Test-OTP numbers short-circuit before any provider call, so these
