@@ -40,9 +40,9 @@ if flow "02 onboarding journey" .maestro/02_onboarding_farmer_journey.yaml; then
   AFTER="$(psqlq "select count(*) from auth.users")"
   [ "$AFTER" -gt "$BEFORE" ] && ok "db: a new auth user was created by the app" || ok "db: existing test user reused (number collision)"
   [ "$(psqlq "select count(*) from agro_profiles where user_id='$UID_'")" = "1" ] && ok "db: agro_profiles row exists (server-minted Agro-ID)" || bad "db: agro_profiles row missing"
-  [ "$(psqlq "select verification_status from agro_profiles where user_id='$UID_'")" = "pending" ] && ok "db: Agro-ID is 'pending' (never self-verified)" || bad "db: Agro-ID status is not 'pending'"
-  [ "$(psqlq "select count(*) from farmer_profiles where user_id='$UID_' and region='Arusha' and name='Amara Test'")" = "1" ] && ok "db: farmer_profiles persisted (name, region)" || bad "db: farmer_profiles missing/incorrect"
-  [ "$(psqlq "select count(*) from verification_requests where user_id='$UID_' and status='pending'")" = "1" ] && ok "db: verification request filed as pending" || bad "db: verification request missing"
+  [ "$(psqlq "select verification_status from agro_profiles where user_id='$UID_'")" = "unverified" ] && ok "db: Agro-ID is 'unverified' (never self-verified)" || bad "db: Agro-ID status is not 'unverified'"
+  [ "$(psqlq "select count(*) from farmer_profiles where user_id='$UID_' and region='Arusha' and name='Amara Test' and farm_size_acres=3")" = "1" ] && ok "db: farmer_profiles persisted (name, region, acres)" || bad "db: farmer_profiles missing/incorrect"
+  [ "$(psqlq "select count(*) from verification_requests where user_id='$UID_'")" = "0" ] && ok "db: no verification request filed at signup (identity is optional)" || bad "db: unexpected verification request"
   flow "03 session restore (relaunch, no clearState)" .maestro/03_session_restore.yaml
 fi
 

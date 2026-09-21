@@ -1,15 +1,16 @@
-# Smoke: clean install -> launch -> welcome screen renders -> language toggle -> start.
-# Run: maestro --device <UDID> test .maestro/00_smoke_launch.yaml
+# Smoke: clean install -> launch -> welcome renders -> language toggle -> start -> registration.
 appId: com.jaymafie.kilimoai
 ---
 - launchApp:
     clearState: true
-- assertVisible: "KILIMO CHAKO,"
-- assertVisible: "KWA AKILI."
-- assertVisible: "Anza Sasa"
+- assertVisible: "Kilimo chako, kwa akili."
+- assertVisible: "Anza sasa"
 - takeScreenshot: 00_welcome_sw
 - tapOn: "English"
+- assertVisible: "Your farm, smarter."
 - takeScreenshot: 00_welcome_en
 - tapOn: "Kiswahili"
-- tapOn: "Anza Sasa"
-- takeScreenshot: 00_after_start
+- assertVisible: "Kilimo chako, kwa akili."
+- tapOn: "Anza sasa"
+- assertVisible: "Namba yako ya simu"
+- takeScreenshot: 00_registration

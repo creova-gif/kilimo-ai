@@ -1,68 +1,55 @@
-# E2E: fresh install -> real phone-OTP auth (LOCAL backend) -> role -> farm profile
-#      -> ID verification -> done. Requires the local stack:
-#        scripts/local-backend.sh up   and a build whose .env points at it.
-# Each run picks a random local test number (255700000010..99, code 123456). A number that
-# already finished onboarding is an "existing user" and skips the wizard, so run
-# scripts/e2e.sh (which resets the DB between runs) for a guaranteed-fresh journey.
-# NOTE: Maestro 2.10 lets a header `env:` default beat `-e`, so the number is generated here.
+# E2E: fresh install -> real phone-OTP auth (LOCAL backend) -> role -> farm -> dashboard.
+# Requires the local stack (scripts/local-backend.sh up) and a build whose .env points at it.
+# A random local test number (255700000010..99, code 123456) is generated per run because Maestro
+# 2.10 lets a header `env:` default beat `-e`. Run via scripts/e2e.sh, which also asserts the DB.
 appId: com.jaymafie.kilimoai
-env:
-  NIDA: "19900101123456789012"   # synthetic 20-digit test value
 ---
 - evalScript: ${output.phone = '7000000' + String(10 + Math.floor(Math.random() * 90))}
 - launchApp:
     clearState: true
 
-# Step 0 — welcome
-- assertVisible: "KILIMO CHAKO,"
-- tapOn: "Anza Sasa"
-
-# Step 1 — phone
+# Welcome -> registration
+- tapOn: "Anza sasa"
 - assertVisible: "Namba yako ya simu"
-- tapOn: "Phone Number Input"
+- tapOn: "Namba ya simu"
 - inputText: ${output.phone}
-- tapOn: "Namba yako ya simu"   # dismiss keyboard (CTA is hidden behind it — G-018)
-- tapOn: "Endelea"
+- tapOn: "Nakubali Masharti na Sera ya Faragha"
+# The primary button is ABOVE the keyboard now (G-018) — no dismiss trick needed.
+- tapOn: "Tuma msimbo"
 
-# Step 2 — OTP (real backend accepts the local test code)
-- assertVisible: "Namba ya siri"
-- tapOn: "OTP Verification Input"
+# OTP (real backend accepts the local test code)
+- assertVisible: "Weka namba ya siri"
+- tapOn: "Msimbo wa tarakimu 6"
 - inputText: "123456"
-- tapOn: "Namba ya siri"
-- tapOn: "Endelea"
+- tapOn: "Thibitisha"
 
-# Step 3 — role
+# Role
 - assertVisible: "Wewe ni nani?"
-- tapOn: "Select role Mkulima \\(Farmer\\)"
+- tapOn: "Chagua jukumu Mkulima \\(Farmer\\)"
 - tapOn: "Endelea"
 
-# Step 4 — farm profile
+# Farm — nothing is pre-filled; the CTA stays disabled until real values are entered
 - assertVisible: "Shamba lako"
-- tapOn: "Full Name Input"
+- tapOn: "Jina lako kamili"
 - inputText: "Amara Test"
-- tapOn: "Shamba lako"
-- tapOn: "Select region Arusha"
-- tapOn: "Select crop Mahindi \\(Maize\\)"
-- tapOn: "Endelea"
+- scrollUntilVisible:
+    element: "Chagua mkoa Arusha"
+    direction: DOWN
+- tapOn: "Chagua mkoa Arusha"
+- scrollUntilVisible:
+    element: "Chagua zao Mahindi \\(Maize\\)"
+    direction: DOWN
+- tapOn: "Chagua zao Mahindi \\(Maize\\)"
+- scrollUntilVisible:
+    element: "Ukubwa wa shamba \\(ekari\\)"
+    direction: DOWN
+- tapOn: "Ukubwa wa shamba \\(ekari\\)"
+- inputText: "3"
+- tapOn: "Maliza"
 
-# Step 5 — ID verification
-- assertVisible: "Uthibitisho wa Kitambulisho"
-- tapOn: "NIDA Input"
-- inputText: ${NIDA}
-- tapOn: "Uthibitisho wa Kitambulisho"
-- tapOn: "Endelea"
-
-# Step 6 — done: server-minted Agro-ID is shown
+# Lands in the app (greeting shows the saved name), not the wizard
 - extendedWaitUntil:
-    visible: "Karibu.*"
-    timeout: 10000
-- assertVisible: "Amara Test"
-- assertVisible: "Mkulima \\(Farmer\\)"
-- takeScreenshot: 02_done
-- tapOn: "Ingia kwenye Dashibodi"
-
-# Lands inside the app (tab bar visible), not back in the wizard
-- extendedWaitUntil:
-    notVisible: "Ingia kwenye Dashibodi"
-    timeout: 8000
+    visible: "HABARI, AMARA"
+    timeout: 15000
+- assertNotVisible: "Anza sasa"
 - takeScreenshot: 02_dashboard

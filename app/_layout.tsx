@@ -363,10 +363,6 @@ function RootLayout() {
                 options={{ headerShown: false, presentation: 'modal' }}
               />
               <Stack.Screen
-                name="otp-auth"
-                options={{ headerShown: false, presentation: 'modal' }}
-              />
-              <Stack.Screen
                 name="privacy"
                 options={{ title: 'Privacy Policy', presentation: 'modal' }}
               />
