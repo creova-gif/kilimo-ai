@@ -12,6 +12,7 @@
  * 6. Crop limit is 4 — consistent with the onboarding wizard.
  * 7. useTheme() is used throughout — respects light/dark mode.
  */
+import { saveFarmerProfile } from '../lib/farmerProfile';
 import React, { useState, useMemo } from 'react';
 import {
   StyleSheet,
@@ -222,28 +223,19 @@ export default function EditProfileScreen() {
     hasIrrigation: boolean;
     language: AppLanguage;
   }) {
-    const sb = getSupabase();
-    if (!sb) return;
-    const { data: sessionData } = await sb.auth.getSession();
-    const userId = sessionData?.session?.user?.id;
-    if (!userId) return;
-
-    const { error } = await sb.from('farmer_profiles').upsert({
-      user_id: userId,
+    const result = await saveFarmerProfile(getSupabase(), {
       name: payload.name,
       role: payload.role,
       region: payload.region,
-      primary_crops: payload.primaryCrops,
-      farm_size_acres: payload.farmSizeAcres,
-      main_activity: payload.mainActivity,
-      has_livestock: payload.hasLivestock,
-      has_irrigation: payload.hasIrrigation,
+      primaryCrops: payload.primaryCrops,
+      farmSizeAcres: payload.farmSizeAcres,
+      mainActivity: payload.mainActivity,
+      hasLivestock: payload.hasLivestock,
+      hasIrrigation: payload.hasIrrigation,
       language: payload.language,
-      updated_at: new Date().toISOString(),
     });
-
-    if (error) {
-      console.warn('[EditProfile] backend sync failed:', error.message);
+    if (!result.ok && result.reason !== 'not_configured') {
+      console.warn('[EditProfile] backend sync failed:', result.message ?? result.reason);
       addNotification({
         title: lang === 'sw' ? 'Usawazishaji Umeshindikana' : 'Sync Failed',
         body:

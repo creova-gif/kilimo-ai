@@ -57,6 +57,7 @@ import { useKilimoStore, FarmProfile, AppLanguage } from '../store/useKilimoStor
 import { CanonicalRole, allRoles, roleLabel, ROLE_DESCRIPTIONS } from '../lib/access';
 import { useAgroAuth } from '../hooks/useAgroAuth';
 import { normalizePhone } from '../lib/phone';
+import { saveFarmerProfile } from '../lib/farmerProfile';
 import { mintAgroId, DocTag } from '../lib/agro/mintId';
 import { getSupabase } from '../lib/supabase';
 import { useTheme } from '../constants/Theme';
@@ -249,6 +250,7 @@ export default function OnboardingWizard() {
   const setAgroId = useKilimoStore((s) => s.setAgroId);
   const setFarmProfile = useKilimoStore((s) => s.setFarmProfile);
   const setOnboardingComplete = useKilimoStore((s) => s.setOnboardingComplete);
+  const addNotification = useKilimoStore((s) => s.addNotification);
   const registeredIds = useKilimoStore((s) => s.registeredIds);
   const addRegisteredId = useKilimoStore((s) => s.addRegisteredId);
   const { signInWithPhone, signInWithEmail, verifyOtp, loading } = useAgroAuth();
@@ -443,12 +445,48 @@ export default function OnboardingWizard() {
       biometricEnabled: false,
       // Only a server-minted id is authoritative; a provisional/offline id stays
       // 'pending'. If KYC docs were supplied, review is pending regardless.
-      verificationStatus: serverMinted && !enteredId ? 'verified' : 'pending',
+      // The client can never mark itself verified — only a reviewer on the server can.
+      verificationStatus: enteredId ? 'pending' : 'unverified',
       nationalId: idType === 'nida' ? enteredId : undefined,
       tinNumber: idType === 'tin' ? enteredId : undefined,
       businessLicense: idType === 'license' ? enteredId : undefined,
     } as any;
     setAgroId(newProfile);
+
+    // Persist the farm profile server-side (own-row RLS) so it survives a reinstall
+    // and feeds AI context. Local state stays the source of truth for offline-first
+    // UX, so a failure never blocks onboarding — but we tell the user, not hide it.
+    const saved = await saveFarmerProfile(getSupabase(), {
+      name,
+      role,
+      region,
+      primaryCrops: crops,
+      farmSizeAcres: parseFloat(acres) || 0,
+      mainActivity: activity,
+      hasLivestock,
+      hasIrrigation,
+      language: lang,
+    });
+    if (!saved.ok && saved.reason !== 'not_configured') {
+      addNotification({
+        title: lang === 'sw' ? 'Wasifu haujasawazishwa' : 'Profile not synced',
+        body:
+          lang === 'sw'
+            ? 'Wasifu wa shamba umehifadhiwa kwenye kifaa chako lakini haujasawazishwa mtandaoni.'
+            : 'Your farm profile is saved on this device but could not sync online yet.',
+        type: 'warning',
+      });
+    }
+    if (!serverMinted) {
+      addNotification({
+        title: lang === 'sw' ? 'Agro ID ya muda' : 'Provisional Agro ID',
+        body:
+          lang === 'sw'
+            ? 'Agro ID yako ni ya muda hadi itakapothibitishwa mtandaoni.'
+            : 'Your Agro ID is provisional until it is confirmed online.',
+        type: 'warning',
+      });
+    }
 
     // File the KYC verification with the backend (best-effort, offline-safe).
     if (enteredId) {
