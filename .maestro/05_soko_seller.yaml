@@ -1,0 +1,32 @@
+# Soko phase 1 (real market_listings): a signed-in farmer sees an honest empty marketplace,
+# lists produce, sees it under "Matangazo yangu", and marks it sold. Run after 02/04
+# (signed-in farmer); scripts/e2e.sh empties market_listings first and then asserts the DB row.
+appId: com.jaymafie.kilimoai
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "HABARI, AMARA"
+    timeout: 15000
+- tapOn: "Soko"
+- assertVisible: "Hakuna matangazo bado"     # no seed listings, no invented prices
+- assertNotVisible: "TZS.*"
+- takeScreenshot: 05_soko_empty
+- tapOn: "Weka tangazo"
+- assertVisible: "Tangazo jipya"
+- tapOn: "Mahindi"
+- tapOn:
+    id: "listing-qty"
+- inputText: "500"
+- tapOn:
+    id: "listing-price"
+- inputText: "480"
+- tapOn:
+    id: "listing-phone"
+- inputText: "0712 345 678"
+- takeScreenshot: 05_soko_form
+- tapOn: "Chapisha"
+- assertVisible: "Matangazo yangu"
+- assertVisible: "TZS 480/kg"
+- takeScreenshot: 05_soko_mine
+- tapOn: "Weka limeuzwa"
+- assertVisible: "Yameuzwa"

@@ -50,6 +50,15 @@ if flow "02 onboarding journey" .maestro/02_onboarding_farmer_journey.yaml; then
   [ "$(psqlq "select count(*) from verification_requests where user_id='$UID_'")" = "0" ] && ok "db: no verification request filed at signup (identity is optional)" || bad "db: unexpected verification request"
   flow "03 session restore (relaunch, no clearState)" .maestro/03_session_restore.yaml
   flow "04 reinstall restore (data wiped, Keychain session kept)" .maestro/04_reinstall_restore.yaml
+
+  # Soko: start from an EMPTY marketplace so "empty state" is a real assertion, then create a listing.
+  psqlq "delete from market_listings" >/dev/null
+  if flow "05 soko seller: honest empty market -> list produce -> mark sold" .maestro/05_soko_seller.yaml; then
+    [ "$(psqlq "select count(*) from market_listings where seller_id='$UID_' and crop_name='Maize' and quantity_kg=500 and price_per_kg=480")" = "1" ] && ok "db: listing persisted for the seller (crop, quantity, price)" || bad "db: listing missing/incorrect"
+    [ "$(psqlq "select contact_phone from market_listings where seller_id='$UID_'")" = "+255712345678" ] && ok "db: contact phone stored as E.164" || bad "db: contact phone not normalized"
+    [ "$(psqlq "select escrow_funded or smart_contract from market_listings where seller_id='$UID_'")" = "f" ] && ok "db: no escrow / smart-contract claim on the listing" || bad "db: listing claims escrow"
+    [ "$(psqlq "select status from market_listings where seller_id='$UID_'")" = "sold" ] && ok "db: listing marked sold" || bad "db: listing not marked sold"
+  fi
 fi
 
 echo "=========== $PASS passed, $FAIL failed ==========="
