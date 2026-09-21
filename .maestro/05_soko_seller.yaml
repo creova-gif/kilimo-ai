@@ -7,7 +7,7 @@ appId: com.jaymafie.kilimoai
 - extendedWaitUntil:
     visible: "HABARI, AMARA"
     timeout: 15000
-- tapOn: "Soko"
+- tapOn: "Soko, tab.*"          # the bottom tab (not the dashboard quick-action tile)
 - assertVisible: "Hakuna matangazo bado"     # no seed listings, no invented prices
 - assertNotVisible: "TZS.*"
 - takeScreenshot: 05_soko_empty

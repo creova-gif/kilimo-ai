@@ -4,8 +4,8 @@
  * Docked white bar, four labelled tabs around a raised centre AI button:
  *   Nyumbani (Home) · Shamba (Farm) · [AI] · Soko (Market) · Mimi (Me)
  * Replaces the legacy floating pill bar, whose centre "+" opened a Features hub.
- * Routes that are not tabs (features, video-hub, ai-training-hub, edit-profile, action)
- * stay registered but hidden so deep links keep working.
+ * Exactly these five routes live in (tabs); everything else is a root-level stack screen, so
+ * screen readers announce "n of 5" (previously 3 hidden duplicate routes made it "n of 8").
  */
 import React from 'react';
 import { Tabs, router } from 'expo-router';
@@ -46,11 +46,6 @@ export default function TabLayout() {
       />
       <Tabs.Screen name="market" options={{ title: t('nav.market'), tabBarIcon: icon(Store) }} />
       <Tabs.Screen name="profile" options={{ title: t('nav.me'), tabBarIcon: icon(User) }} />
-
-      {/* Reachable by route, not part of the bar */}
-      <Tabs.Screen name="video-hub" options={{ href: null }} />
-      <Tabs.Screen name="ai-training-hub" options={{ href: null }} />
-      <Tabs.Screen name="edit-profile" options={{ href: null }} />
     </Tabs>
   );
 }
