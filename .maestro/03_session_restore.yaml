@@ -11,6 +11,7 @@ appId: com.jaymafie.kilimoai
 - assertNotVisible: "Anza Sasa"          # not back at the welcome screen
 - assertNotVisible: "Namba yako ya simu" # not back in the wizard
 - takeScreenshot: 03_restored
-# The ID-verification reminder is shown over the dashboard; dismiss to see the dashboard.
-- tapOn: "Baadaye"
-- takeScreenshot: 03_dashboard_after_dismiss
+# The legacy full-screen verification modal is gone; the dashboard shows a card instead.
+- assertVisible: "Kazi za leo"
+- assertVisible: "Shamba lako"
+- takeScreenshot: 03_dashboard
