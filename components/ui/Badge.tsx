@@ -1,70 +1,101 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewProps } from 'react-native';
-import { useTheme } from '../../constants/Theme';
+import { useTheme, FONT } from '../../constants/Theme';
 
-interface BadgeProps extends ViewProps {
+export type BadgeVariant =
+  | 'success'
+  | 'warning'
+  | 'error'
+  | 'info'
+  | 'neutral'
+  | 'default'
+  | 'solid'
+  | 'live';
+
+export interface BadgeProps extends ViewProps {
+  /** Pass translated copy; the primitive never supplies text. */
   label: string;
-  variant?: 'success' | 'warning' | 'error' | 'info' | 'default';
+  /**
+   * success/warning/error/info/neutral = Figma StatusBadge fills (32:108).
+   * solid = olive fill / white text. live = bright green fill (AI "LIVE" pill, 24:2328).
+   * `default` is a legacy alias of `neutral`.
+   */
+  variant?: BadgeVariant;
+  /** md = 11pt Medium, r12 (StatusBadge). sm = 10pt Bold caps, r4 ("VERIFIED"). */
+  size?: 'md' | 'sm';
+  /** Corner style. Default: rounded (r12) for md, square (r4) for sm. */
+  shape?: 'rounded' | 'pill' | 'square';
+  uppercase?: boolean;
   icon?: React.ReactNode;
 }
 
-export function Badge({ label, variant = 'default', icon, style, ...rest }: BadgeProps) {
-  const { colors } = useTheme();
-  let bgColor = colors.info + '15';
-  let textColor = colors.info;
+/** Figma StatusBadge (32:108) + VERIFIED tag (14:2835) + risk/live pills. */
+export function Badge({
+  label,
+  variant = 'neutral',
+  size = 'md',
+  shape,
+  uppercase,
+  icon,
+  style,
+  accessibilityLabel,
+  ...rest
+}: BadgeProps) {
+  const { colors, radius, typography } = useTheme();
 
-  switch (variant) {
-    case 'success':
-      bgColor = colors.success + '15';
-      textColor = colors.success;
-      break;
-    case 'warning':
-      bgColor = colors.warning + '15';
-      textColor = colors.warning;
-      break;
-    case 'error':
-      bgColor = colors.error + '15';
-      textColor = colors.error;
-      break;
-    case 'info':
-      bgColor = colors.info + '15';
-      textColor = colors.info;
-      break;
-    case 'default':
-      bgColor = colors.textMute + '15';
-      textColor = colors.textMute;
-      break;
-  }
+  const scheme = (() => {
+    switch (variant) {
+      case 'success':
+        return { bg: colors.successSoft, fg: colors.successText };
+      case 'warning':
+        return { bg: colors.warningSoft, fg: colors.warningText };
+      case 'error':
+        return { bg: colors.errorSoft, fg: colors.errorText };
+      case 'info':
+        return { bg: colors.infoSoft, fg: colors.infoText };
+      case 'solid':
+        return { bg: colors.primary, fg: colors.textOnPrimary };
+      case 'live':
+        return { bg: colors.success, fg: colors.onSuccess };
+      case 'neutral':
+      case 'default':
+      default:
+        return { bg: colors.surfaceMuted, fg: colors.textMute };
+    }
+  })();
+
+  const resolvedShape = shape ?? (size === 'sm' ? 'square' : 'rounded');
+  const borderRadius =
+    resolvedShape === 'pill' ? radius.full : resolvedShape === 'square' ? radius.xxs : radius.sm;
+  const caps = uppercase ?? size === 'sm';
+  // StatusBadge text is 11pt Medium (32:108); the small tag is 10pt Bold caps.
+  const font =
+    size === 'sm' ? typography.overline : { ...typography.micro, fontFamily: FONT.medium };
 
   return (
     <View
+      accessible
       accessibilityRole="text"
-      accessibilityLabel={`Status: ${label}`}
-      style={[styles.badge, { backgroundColor: bgColor }, style]}
+      accessibilityLabel={accessibilityLabel ?? label}
+      style={[
+        styles.badge,
+        size === 'sm' ? styles.sm : styles.md,
+        { backgroundColor: scheme.bg, borderRadius },
+        style,
+      ]}
       {...rest}
     >
-      {icon && <View style={styles.iconWrap}>{icon}</View>}
-      <Text style={[styles.label, { color: textColor }]}>{label}</Text>
+      {icon ? <View style={styles.iconWrap}>{icon}</View> : null}
+      <Text style={[font, { color: scheme.fg }, caps && { textTransform: 'uppercase' }]}>
+        {label}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  iconWrap: {
-    marginRight: 4,
-  },
-  label: {
-    fontSize: 10,
-    fontFamily: 'Inter_800ExtraBold',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
+  badge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start' },
+  md: { paddingHorizontal: 10, paddingVertical: 4 },
+  sm: { paddingHorizontal: 6, paddingVertical: 2 },
+  iconWrap: { marginRight: 4 },
 });

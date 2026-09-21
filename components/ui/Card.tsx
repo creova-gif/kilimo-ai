@@ -1,68 +1,98 @@
 import React from 'react';
-import { View, StyleSheet, ViewProps } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { View, Pressable, StyleSheet, ViewProps, StyleProp, ViewStyle } from 'react-native';
 import { useTheme } from '../../constants/Theme';
 
-interface CardProps extends ViewProps {
-  variant?: 'glass' | 'solid';
+export type CardVariant = 'solid' | 'outlined' | 'tinted' | 'primary' | 'glass';
+
+export interface CardProps extends ViewProps {
+  /**
+   * solid    — white, 1pt #E4EADF border, soft shadow (Figma default card)
+   * outlined — same without shadow
+   * tinted   — primary-soft fill (AI tip / troubleshooting cards)
+   * primary  — olive fill (AI advice card 24:2328)
+   * glass    — DEPRECATED alias of `solid` (Figma has no blur surfaces)
+   */
+  variant?: CardVariant;
+  /** Inner padding; Figma cards use 16 (lists) or 20 (large cards). */
+  padding?: number;
+  /** Makes the whole card a button. */
+  onPress?: () => void;
+  /** Ignored — kept so legacy `<Card intensity tint>` call sites still type-check. */
   intensity?: number;
   tint?: 'light' | 'dark' | 'default';
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
+/** Figma card: r16, 1pt border, 16pt padding. */
 export function Card({
-  variant = 'glass',
-  intensity = 20,
-  tint,
+  variant = 'solid',
+  padding = 16,
+  onPress,
   style,
   children,
+  accessibilityRole,
+  accessibilityLabel,
+  intensity: _intensity,
+  tint: _tint,
   ...rest
 }: CardProps) {
-  const { colors, isDark, shadows } = useTheme();
+  const { colors, radius, shadows, borderWidth } = useTheme();
 
-  if (variant === 'solid') {
+  const surface = (() => {
+    switch (variant) {
+      case 'outlined':
+        return { bg: colors.card, border: colors.border, shadow: shadows.none };
+      case 'tinted':
+        return { bg: colors.primarySoft, border: colors.border, shadow: shadows.none };
+      case 'primary':
+        return { bg: colors.primary, border: 'transparent', shadow: shadows.md };
+      case 'glass':
+      case 'solid':
+      default:
+        return { bg: colors.card, border: colors.border, shadow: shadows.sm };
+    }
+  })();
+
+  const cardStyle: StyleProp<ViewStyle> = [
+    styles.card,
+    {
+      padding,
+      borderRadius: radius.md,
+      borderWidth: borderWidth.hairline,
+      backgroundColor: surface.bg,
+      borderColor: surface.border,
+      ...surface.shadow,
+    },
+    style,
+  ];
+
+  if (onPress) {
     return (
-      <View
-        style={[
-          styles.card,
-          {
-            backgroundColor: colors.card,
-            borderColor: colors.border,
-            ...shadows.sm,
-          },
-          style,
-        ]}
-        {...rest}
+      <Pressable
+        onPress={onPress}
+        accessibilityRole={accessibilityRole ?? 'button'}
+        accessibilityLabel={accessibilityLabel}
+        style={({ pressed }) => [cardStyle, pressed && styles.pressed]}
+        {...(rest as object)}
       >
         {children}
-      </View>
+      </Pressable>
     );
   }
 
   return (
-    <BlurView
-      intensity={isDark ? 20 : 60}
-      tint={tint || (isDark ? 'dark' : 'light')}
-      style={[
-        styles.card,
-        {
-          borderColor: colors.border,
-          backgroundColor: isDark ? 'rgba(19, 23, 20, 0.45)' : 'rgba(255, 255, 255, 0.65)',
-        },
-        style,
-      ]}
+    <View
+      accessibilityRole={accessibilityRole}
+      accessibilityLabel={accessibilityLabel}
+      style={cardStyle}
       {...rest}
     >
       {children}
-    </BlurView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    borderRadius: 20,
-    borderWidth: 1,
-    overflow: 'hidden',
-    padding: 16,
-  },
+  card: { overflow: 'hidden' },
+  pressed: { opacity: 0.9 },
 });

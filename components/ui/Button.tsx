@@ -1,146 +1,181 @@
 import React from 'react';
 import {
-  TouchableOpacity,
+  Pressable,
   Text,
   StyleSheet,
   ActivityIndicator,
-  TouchableOpacityProps,
+  PressableProps,
+  StyleProp,
+  ViewStyle,
   View,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../constants/Theme';
 
-interface ButtonProps extends TouchableOpacityProps {
+export type ButtonVariant =
+  | 'primary'
+  | 'secondary'
+  | 'ghost'
+  | 'destructive'
+  | 'destructiveOutline'
+  | 'outline'
+  | 'link';
+
+export interface ButtonProps extends Omit<PressableProps, 'style' | 'children'> {
+  /** Visible label — pass translated copy; the primitive never supplies text. */
   label: string;
-  variant?: 'primary' | 'secondary' | 'destructive' | 'outline' | 'ghost';
+  variant?: ButtonVariant;
+  /** sm = 44pt, md = 48pt, lg = 52pt (Figma control heights). */
   size?: 'sm' | 'md' | 'lg';
+  /** pill = Figma auth/primary CTA (r100); rounded = state-screen CTA (r16). */
+  shape?: 'pill' | 'rounded';
   loading?: boolean;
   icon?: React.ReactNode;
+  /** Stretch to the parent width (Figma CTAs are full-width). Default true. */
+  fullWidth?: boolean;
+  /** Fire a light haptic on press (default true). */
+  haptics?: boolean;
+  style?: StyleProp<ViewStyle>;
 }
 
+const HEIGHT = { sm: 44, md: 48, lg: 52 } as const;
+
+/**
+ * Figma Button (32:97) — Primary / Secondary / Ghost / Destructive, plus the
+ * outline/link/destructive-outline patterns that appear across state + IoT screens.
+ */
 export function Button({
   label,
   variant = 'primary',
-  size = 'md',
+  size = 'lg',
+  shape = 'pill',
   loading,
   icon,
   disabled,
+  fullWidth,
+  haptics = true,
   style,
   onPress,
+  accessibilityLabel,
+  accessibilityHint,
   ...rest
 }: ButtonProps) {
-  const { colors } = useTheme();
+  const { colors, radius, typography, borderWidth } = useTheme();
+  const isDisabled = Boolean(disabled || loading);
 
-  const handlePress = (e: any) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (onPress) onPress(e);
+  const scheme = (() => {
+    switch (variant) {
+      case 'secondary':
+        return {
+          bg: colors.card,
+          fg: colors.primary,
+          border: colors.primary,
+          bw: borderWidth.emphasis,
+        };
+      case 'outline':
+        return {
+          bg: 'transparent',
+          fg: colors.text,
+          border: colors.border,
+          bw: borderWidth.hairline,
+        };
+      case 'ghost':
+        return { bg: colors.primarySoft, fg: colors.primary, border: 'transparent', bw: 0 };
+      case 'destructive':
+        return { bg: colors.error, fg: colors.onError, border: 'transparent', bw: 0 };
+      case 'destructiveOutline':
+        return {
+          bg: 'transparent',
+          fg: colors.errorText,
+          border: colors.error,
+          bw: borderWidth.strong,
+        };
+      case 'link':
+        return { bg: 'transparent', fg: colors.primary, border: 'transparent', bw: 0 };
+      case 'primary':
+      default:
+        return { bg: colors.primary, fg: colors.textOnPrimary, border: 'transparent', bw: 0 };
+    }
+  })();
+
+  const handlePress: PressableProps['onPress'] = (e) => {
+    if (haptics) {
+      try {
+        Promise.resolve(Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)).catch(() => {});
+      } catch {
+        /* haptics unavailable (web / simulator) */
+      }
+    }
+    onPress?.(e);
   };
 
-  const isPrimary = variant === 'primary';
-  const isDestructive = variant === 'destructive';
-  const isSecondary = variant === 'secondary';
-  const isOutline = variant === 'outline';
-  const isGhost = variant === 'ghost';
-
-  const textColor = isPrimary
-    ? '#000'
-    : isDestructive
-      ? '#fff'
-      : isSecondary || isOutline || isGhost
-        ? colors.text
-        : colors.text;
-
-  const btnContent = (
-    <View style={[styles.inner, size === 'sm' && styles.innerSm, size === 'lg' && styles.innerLg]}>
-      {loading ? (
-        <ActivityIndicator color={textColor} />
-      ) : (
-        <>
-          {icon && <View style={styles.iconWrap}>{icon}</View>}
-          <Text
-            style={[
-              styles.text,
-              { color: textColor },
-              size === 'sm' && styles.textSm,
-              size === 'lg' && styles.textLg,
-              isPrimary && styles.textPrimary,
-            ]}
-          >
-            {label}
-          </Text>
-        </>
-      )}
-    </View>
-  );
+  const labelStyle = size === 'sm' ? typography.buttonSm : typography.button;
+  const stretch = fullWidth ?? true;
+  const pressedBg =
+    variant === 'primary'
+      ? colors.primaryPressed
+      : variant === 'ghost'
+        ? colors.primaryLight
+        : undefined;
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.8}
-      onPress={handlePress}
-      disabled={disabled || loading}
+    <Pressable
       accessibilityRole="button"
-      accessibilityLabel={rest.accessibilityLabel || label}
-      accessibilityState={{ disabled: Boolean(disabled || loading), busy: Boolean(loading) }}
-      style={[
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={{ disabled: isDisabled, busy: Boolean(loading) }}
+      disabled={isDisabled}
+      onPress={handlePress}
+      style={({ pressed }) => [
         styles.root,
-        isSecondary && { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
-        isOutline && { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.border },
-        isGhost && { backgroundColor: 'transparent' },
-        (disabled || loading) && styles.disabled,
+        {
+          minHeight: HEIGHT[size],
+          borderRadius: shape === 'pill' ? radius.full : radius.md,
+          backgroundColor: pressed && pressedBg ? pressedBg : scheme.bg,
+          borderColor: scheme.border,
+          borderWidth: scheme.bw,
+          opacity: isDisabled ? 0.5 : pressed && !pressedBg ? 0.85 : 1,
+        },
+        stretch && styles.stretch,
+        variant === 'link' && styles.link,
         style,
       ]}
       {...rest}
     >
-      {isPrimary ? (
-        <LinearGradient
-          colors={[colors.primary, colors.primaryDim]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.gradient}
-        >
-          {btnContent}
-        </LinearGradient>
-      ) : isDestructive ? (
-        <LinearGradient
-          colors={['#ef4444', '#dc2626']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.gradient}
-        >
-          {btnContent}
-        </LinearGradient>
-      ) : (
-        btnContent
-      )}
-    </TouchableOpacity>
+      <View style={styles.inner}>
+        {loading ? (
+          <ActivityIndicator color={scheme.fg} />
+        ) : (
+          <>
+            {icon ? <View style={styles.iconWrap}>{icon}</View> : null}
+            <Text
+              numberOfLines={1}
+              style={[labelStyle, { color: scheme.fg }, variant === 'link' && styles.linkText]}
+            >
+              {label}
+            </Text>
+          </>
+        )}
+      </View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
-    borderRadius: 12,
     overflow: 'hidden',
+    justifyContent: 'center',
+    alignSelf: 'flex-start',
   },
-  gradient: {
-    width: '100%',
-  },
+  stretch: { alignSelf: 'stretch' },
+  link: { paddingHorizontal: 8 },
+  linkText: { textDecorationLine: 'underline' },
   inner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    minHeight: 48,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
   },
-  innerSm: { paddingHorizontal: 12, minHeight: 44 },
-  innerLg: { paddingHorizontal: 24, minHeight: 56 },
-  text: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 15,
-  },
-  textSm: { fontSize: 13 },
-  textLg: { fontSize: 17 },
-  textPrimary: { fontFamily: 'Inter_700Bold' },
-  disabled: { opacity: 0.5 },
   iconWrap: { marginRight: 8 },
 });

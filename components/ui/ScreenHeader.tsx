@@ -1,105 +1,154 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ViewProps } from 'react-native';
-import { BlurView } from 'expo-blur';
-import { ChevronLeft } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
+import { View, Text, Pressable, StyleSheet, ViewProps } from 'react-native';
+import { ArrowLeft } from 'lucide-react-native';
 import { useTheme } from '../../constants/Theme';
 
-interface ScreenHeaderProps extends ViewProps {
-  title: string;
-  subtitle?: string;
-  showBack?: boolean;
-  onBack?: () => void;
-  trailing?: React.ReactNode;
-}
+type BackProps =
+  | { showBack?: false; onBack?: undefined; backLabel?: undefined }
+  | {
+      /** Render the back button. Requires an accessible label and a handler (no router coupling). */
+      showBack: true;
+      onBack: () => void;
+      /** Translated accessibility label for the back button, e.g. t('common.back'). */
+      backLabel: string;
+    };
 
-export function ScreenHeader({
-  title,
-  subtitle,
-  showBack = true,
-  onBack,
-  trailing,
-  style,
-  ...rest
-}: ScreenHeaderProps) {
-  const { colors, isDark } = useTheme();
-  const router = useRouter();
-
-  const handleBack = () => {
-    if (onBack) onBack();
-    else if (router.canGoBack()) router.back();
+export type ScreenHeaderProps = ViewProps &
+  BackProps & {
+    /** Pass translated copy. */
+    title: string;
+    subtitle?: string;
+    /** Small uppercase line above the title (Figma "Habari, Amara" on 24:2328). `large` variant only. */
+    overline?: string;
+    /**
+     * nav   — centered title between a back button and a trailing slot (Figma NavBar, state screens).
+     * large — left-aligned 24pt title with optional overline (Figma dashboard/today-header).
+     */
+    variant?: 'nav' | 'large';
+    trailing?: React.ReactNode;
   };
 
-  return (
-    <View style={[styles.header, style]} {...rest}>
-      {showBack && (
-        <TouchableOpacity
-          onPress={handleBack}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          style={styles.backButtonWrap}
-        >
-          <BlurView
-            intensity={isDark ? 30 : 60}
-            tint={isDark ? 'dark' : 'light'}
-            style={[styles.backButton, { borderColor: colors.border }]}
-          >
-            <ChevronLeft size={24} color={colors.text} />
-          </BlurView>
-        </TouchableOpacity>
-      )}
+const SLOT = 44; // touch target; visual circle is 36
 
-      <View style={styles.titleContainer}>
-        <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+/** Figma NavBar / today-header. Back button is a 36pt bordered circle inside a 44pt hit area. */
+export function ScreenHeader(props: ScreenHeaderProps) {
+  const {
+    title,
+    subtitle,
+    overline,
+    variant = 'nav',
+    trailing,
+    style,
+    showBack,
+    onBack,
+    backLabel,
+    ...rest
+  } = props;
+  const { colors, radius, typography, borderWidth } = useTheme();
+
+  const back = showBack ? (
+    <Pressable
+      onPress={onBack}
+      accessibilityRole="button"
+      accessibilityLabel={backLabel}
+      style={({ pressed }) => [styles.slot, { opacity: pressed ? 0.7 : 1 }]}
+    >
+      <View
+        style={[
+          styles.backCircle,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+            borderWidth: borderWidth.hairline,
+            borderRadius: radius.md,
+          },
+        ]}
+      >
+        <ArrowLeft size={18} color={colors.text} strokeWidth={2} />
+      </View>
+    </Pressable>
+  ) : null;
+
+  if (variant === 'large') {
+    return (
+      <View style={[styles.large, style]} {...rest}>
+        <View style={styles.flex}>
+          {overline ? (
+            <Text
+              numberOfLines={1}
+              style={[
+                typography.captionStrong,
+                {
+                  color: colors.textMute,
+                  textTransform: 'uppercase',
+                  fontSize: 14,
+                  lineHeight: 17,
+                },
+              ]}
+            >
+              {overline}
+            </Text>
+          ) : null}
+          <Text
+            accessibilityRole="header"
+            numberOfLines={2}
+            style={[typography.h1, { color: colors.text }]}
+          >
+            {title}
+          </Text>
+          {subtitle ? (
+            <Text
+              numberOfLines={2}
+              style={[typography.caption, { color: colors.textMute, marginTop: 2 }]}
+            >
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
+        {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.nav, style]} {...rest}>
+      <View style={styles.side}>{back}</View>
+      <View style={styles.center}>
+        <Text
+          accessibilityRole="header"
+          numberOfLines={1}
+          style={[typography.h3, { color: colors.text, textAlign: 'center' }]}
+        >
           {title}
         </Text>
-        {subtitle && (
-          <Text style={[styles.subtitle, { color: colors.textMute }]} numberOfLines={1}>
+        {subtitle ? (
+          <Text
+            numberOfLines={1}
+            style={[typography.microStrong, { color: colors.textMute, textTransform: 'uppercase' }]}
+          >
             {subtitle}
           </Text>
-        )}
+        ) : null}
       </View>
-
-      {trailing && <View style={styles.trailingWrap}>{trailing}</View>}
+      <View style={[styles.side, styles.sideEnd]}>{trailing}</View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
+  nav: { flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingHorizontal: 12 },
+  large: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingVertical: 14,
-    minHeight: 64,
+    paddingVertical: 12,
+    gap: 12,
   },
-  backButtonWrap: {
-    marginRight: 16,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  titleContainer: {
-    flex: 1,
-  },
-  title: {
-    fontSize: 22,
-    fontFamily: 'Inter_900Black',
-    letterSpacing: -0.8,
-  },
-  subtitle: {
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-    marginTop: 2,
-  },
-  trailingWrap: {
-    marginLeft: 16,
-  },
+  flex: { flex: 1, gap: 4 },
+  center: { flex: 1, alignItems: 'center' },
+  side: { minWidth: SLOT, minHeight: SLOT, justifyContent: 'center' },
+  sideEnd: { alignItems: 'flex-end' },
+  slot: { width: SLOT, height: SLOT, alignItems: 'center', justifyContent: 'center' },
+  backCircle: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  trailing: { alignItems: 'center', justifyContent: 'center' },
 });
