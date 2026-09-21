@@ -56,6 +56,7 @@ import Animated, {
 import { useKilimoStore, FarmProfile, AppLanguage } from '../store/useKilimoStore';
 import { CanonicalRole, allRoles, roleLabel, ROLE_DESCRIPTIONS } from '../lib/access';
 import { useAgroAuth } from '../hooks/useAgroAuth';
+import { normalizePhone } from '../lib/phone';
 import { mintAgroId, DocTag } from '../lib/agro/mintId';
 import { getSupabase } from '../lib/supabase';
 import { useTheme } from '../constants/Theme';
@@ -284,7 +285,7 @@ export default function OnboardingWizard() {
     if (step === 0) return true;
     if (step === 1) {
       if (authMethod === 'email') return email.includes('@') && email.trim().length > 4;
-      return phone.length >= 9;
+      return normalizePhone(phone) !== null;
     }
     if (step === 2) return otp.length === 6; // OTP Step
     if (step === 3) return !!role; // Role Step
@@ -337,8 +338,18 @@ export default function OnboardingWizard() {
         }
         return;
       } else {
+        const e164 = normalizePhone(phone);
+        if (!e164) {
+          Alert.alert(
+            lang === 'sw' ? 'Namba si sahihi' : 'Invalid number',
+            lang === 'sw'
+              ? 'Weka namba ya simu sahihi, mfano 0712 345 678.'
+              : 'Enter a valid phone number, e.g. 0712 345 678.'
+          );
+          return;
+        }
         try {
-          await signInWithPhone(phone);
+          await signInWithPhone(e164);
           setStep(2);
         } catch (err: any) {
           Alert.alert(
@@ -351,7 +362,7 @@ export default function OnboardingWizard() {
     }
     if (step === 2) {
       try {
-        const contact = authMethod === 'email' ? email : phone;
+        const contact = authMethod === 'email' ? email : (normalizePhone(phone) ?? phone);
         const result = await verifyOtp(contact, otp);
         if (result.existingUser) {
           setOnboardingComplete(true);
@@ -582,7 +593,7 @@ export default function OnboardingWizard() {
                     if (authMethod === 'email') {
                       signInWithEmail(email);
                     } else {
-                      signInWithPhone(phone);
+                      signInWithPhone(normalizePhone(phone) ?? phone);
                     }
                   }}
                 />
