@@ -3,6 +3,7 @@
  * Supabase phone OTP flow. If Supabase is not configured, shows a
  * "not configured" state rather than crashing or silently succeeding.
  */
+import { getSupabase } from '../lib/supabase';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   StyleSheet,
@@ -28,15 +29,7 @@ const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 const SUPABASE_ANON = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 const SUPABASE_CONFIGURED = Boolean(SUPABASE_URL && SUPABASE_ANON);
 
-let supabase: any = null;
-if (SUPABASE_CONFIGURED) {
-  try {
-    const { createClient } = require('@supabase/supabase-js');
-    supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
-  } catch {
-    // no-op — Supabase package not installed
-  }
-}
+const supabase: any = SUPABASE_CONFIGURED ? getSupabase() : null;
 
 type AuthStep = 'phone' | 'otp' | 'success' | 'not_configured';
 

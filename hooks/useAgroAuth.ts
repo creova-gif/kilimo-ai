@@ -10,6 +10,7 @@
  */
 
 import { AUTH_NOT_CONFIGURED_MESSAGE, resolveAuthMode } from '../lib/authMode';
+import { getSupabase } from '../lib/supabase';
 import { useEffect, useState, useCallback } from 'react';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { Platform } from 'react-native';
@@ -68,15 +69,8 @@ const AUTH_MODE = resolveAuthMode({
   mockFlag: process.env.EXPO_PUBLIC_ENABLE_MOCK_AUTH,
 });
 
-let supabase: any = null;
-if (SUPABASE_URL && SUPABASE_KEY) {
-  try {
-    const { createClient } = require('@supabase/supabase-js');
-    supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-  } catch {
-    // supabase stays null — mock mode
-  }
-}
+// The one shared client (lib/supabase.ts) so the session is visible app-wide.
+const supabase: any = getSupabase();
 
 // ─── Auth Hook ───────────────────────────────────────────────────────────────
 

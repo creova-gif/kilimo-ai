@@ -6,6 +6,7 @@
  * Adds new listings to the global sync queue when offline.
  */
 
+import { getSupabase } from '../lib/supabase';
 import { useEffect, useState, useCallback } from 'react';
 import { useKilimoStore } from '../store/useKilimoStore';
 
@@ -97,16 +98,8 @@ const SEED_LISTINGS: MarketListing[] = [
   },
 ];
 
-let supabase: any = null;
-try {
-  const { createClient } = require('@supabase/supabase-js');
-  supabase = createClient(
-    process.env.EXPO_PUBLIC_SUPABASE_URL ?? '',
-    process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? ''
-  );
-} catch {
-  // Supabase not yet configured — use mock data
-}
+// Shared client (lib/supabase.ts); null when the backend is not configured.
+const supabase: any = getSupabase();
 
 export function useMarketIntelligence() {
   const isOffline = useKilimoStore((s) => s.isOffline);

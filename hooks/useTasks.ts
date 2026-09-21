@@ -10,6 +10,7 @@
  * - Assigned roles (vet, mechanic, employee)
  */
 
+import { getSupabase } from '../lib/supabase';
 import { useEffect, useState, useCallback } from 'react';
 import { useKilimoStore } from '../store/useKilimoStore';
 
@@ -103,16 +104,8 @@ const SEED_TASKS: Task[] = [
   },
 ];
 
-let supabase: any = null;
-try {
-  const { createClient } = require('@supabase/supabase-js');
-  supabase = createClient(
-    process.env.EXPO_PUBLIC_SUPABASE_URL ?? '',
-    process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? ''
-  );
-} catch {
-  /* supabase-js unavailable; falls back to seed/offline data */
-}
+// Shared client (lib/supabase.ts); null when the backend is not configured.
+const supabase: any = getSupabase();
 
 export function useTasks() {
   const isOffline = useKilimoStore((s) => s.isOffline);
