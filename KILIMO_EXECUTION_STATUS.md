@@ -1,62 +1,62 @@
 # KILIMO_EXECUTION_STATUS
 
-_Last updated: 2026-09-20 (session 1, discovery + native build bring-up)_
+_Last updated: 2026-09-20 (evening). Everything below is verified unless marked otherwise._
 
-**Current phase:** 3 — Runnable mobile shell (native iOS build bring-up)
-**Current branch:** `feat/kilimo-figma-v2-integration` (from `origin/main` @ `9328807`)
-**Current commit:** uncommitted (no commits yet on this branch)
+**Current phase:** 4 — Auth + onboarding on a real (local) backend; UI reconciliation (Figma vs Git) in progress
+**Branch:** `feat/kilimo-figma-v2-integration` (from `origin/main` @ `9328807`; not pushed)
+**Latest commit:** see `git log` (≈20 commits: build, backend, auth, i18n, design system, E2E, docs)
 
 ## Build / device
 
 | Item | Status |
 |---|---|
-| Dependencies (`npm ci`) | PASS — 1143 packages |
+| `npm ci` | PASS |
 | `tsc --noEmit` | PASS (0 errors) |
-| Jest | PASS — 4 suites / 16 tests |
-| `expo prebuild --platform ios --clean` | PASS (after adding `plugins/withPodsDeploymentTarget.js`) |
-| Native iOS build (Release, simulator) | IN PROGRESS — first attempt failed on pod deployment targets (fixed), second failed `ENOSPC` (disk full) |
-| Simulator install | NOT YET |
-| Simulator launch | NOT YET |
+| Jest | PASS — 14 suites / 188 tests |
+| eslint | 0 errors (pre-existing warnings only) |
+| `expo prebuild --platform ios --clean` | PASS (with `plugins/withPodsDeploymentTarget.js`) |
+| Native iOS Release build (Xcode 27, simulator) | PASS |
+| Install / launch on iPhone 15 Pro Max (iOS 17.0) | PASS |
+| Local backend (Supabase in Docker) | UP; smoke + RLS suite **116 passed, 0 failed** |
+| Cloud Supabase | **INACTIVE — billing; not attempted** |
 
-Target device: iPhone 15 Pro Max simulator, `3B219BCB-075D-4260-82B9-D03E8426D9A6`, iOS 17.0.
+## What has been verified on the device (Maestro)
+
+- Clean-state launch, EN/SW toggle, start → phone step (T-005).
+- Release build with no backend **fails closed** (T-006).
+- **Real phone-OTP sign-in against the local backend**, role selection, farm profile, ID verification, reaching the final onboarding step (T-008 — see test report; DB verification of persisted rows in progress after fix G-021).
 
 ## Coverage
 
 | Area | Status |
 |---|---|
-| Figma coverage | Inventory done: 213 screens = 159 live + 45 state + 9 superseded (+3 components, 11 labels). 124/159 live screens have a legacy route; **35 have none**. Nothing implemented against the new design yet. |
-| Frontend | Existing Expo app (~55 routes) builds from old design system. Not yet migrated to Figma UI. |
-| Backend | Supabase migrations + 8 edge functions exist in repo. **Cloud projects INACTIVE (billing).** Local stack not yet started. |
-| Database | 11 migrations. `tasks` table used by app but has no migration (prior audit P0). |
-| Authentication | Existing OTP flow; not yet exercised. |
-| AI | `openai-proxy` / `rag-chat` exist; need `OPENAI_API_KEY` (not available). |
-| IoT | No ingestion backend exists. |
-| Marketplace | `market_listings` table exists; Soko offers/orders have no backend. |
-| Offline | `lib/offline.ts`, offline queue screen exist; untested. |
-| Localization | Swahili strings inline in components; no i18n resource layer. |
+| Figma inventory | Done: 213 screens = 159 live + 45 state + 9 superseded. 124/159 live have a legacy route; 35 do not. |
+| UI reconciliation (Figma vs Git, per screen) | **In progress** — 2 of 7 domain agents running (auth/onboarding/profile/settings; dashboard/farm/weather/map). Others queued (AI/scan, market/soko/contracts, farm ops/IoT, finance, community/states/nav). `UI_RECONCILIATION_MATRIX.md` not yet assembled. |
+| Design system | Tokens + 16 primitives + 176 tests landed (`docs/kilimo-v2/02_DESIGN`). **Not yet applied to screens / not yet visually verified on device.** |
+| Backend | Local stack complete for auth, profiles, agro-id, tasks, ledger, notifications, listings, sync logs. Missing: contracts, offers/orders, payments, IoT, plots/geometry, community. |
+| Authentication | Real OTP works end to end locally; fails closed when unconfigured; single shared client with Keychain session. Session restore / expiry: **not yet tested**. |
+| AI | Functions exist; no OpenAI key → honest 503 `ai_not_configured`. UI states not yet verified. |
+| IoT | No backend. UI over nothing — honest empty/“not connected” state required. |
+| Marketplace | `market_listings` real; offers/orders none. UI still renders seed listings. |
+| Offline | Sync-log table now exists; queue drain not yet tested on device. |
+| Localization | `lib/i18n` + parity test; screens still use inline ternaries. |
+| E2E | 3 Maestro flows (`.maestro/`). |
 
-## Tests
+## Defects (see `KILIMO_GAP_REGISTER.md`)
 
-| Suite | Status |
-|---|---|
-| Unit | 16 pass (baseline, unchanged) |
-| Integration | none yet |
-| E2E (simulator) | none yet — see blockers |
+Open P1: G-004 (35 Figma screens without route), G-007 (IoT), G-008 (marketplace), G-009 (i18n migration), G-010 (AI key), G-021 (in device verification).
+Open P2: G-011 (push), G-012, G-018 (CTA behind keyboard), G-019 (raw English auth errors).
+P0: **none open in the app.** G-003 (cloud backend inactive) is external/billing; local stack substitutes.
 
-## Defects
+## Blockers needing the user
 
-P0: 3 open (see `KILIMO_GAP_REGISTER.md`: G-001 disk full, G-002 simulator touch input unavailable, G-003 backend cloud project inactive)
-P1: see gap register
-P2: see gap register
+1. **Cloud Supabase restore** (billing) and which project is production.
+2. **Disk**: ~11 GB free now, but `~/.cache` is 97 GB; recommend reviewing.
+3. Provider secrets (OpenAI, Africa's Talking, OpenWeather) — needed to exercise AI/SMS/weather for real.
 
-## Current blocker
+## Next actions
 
-1. **Disk is ~100% full** (1.8 GiB free of 926 GiB after cleanup). `~/.cache` is 97 GB and `~/.npm` is 7.8 GB, neither created by this work. Build, Docker and Metro all fail intermittently at this level.
-2. **Simulator touch input does not reach the device** via the `control` tool (taps report success, no effect; also `captureFailed` after a simulator reboot). Needed for manual journey testing; Maestro is the planned E2E driver.
-3. **Cloud Supabase projects are paused; restore is a billing action.** Not attempted.
-
-## Next action
-
-1. Finish native Release build; install and launch on the simulator; capture first real screenshot.
-2. Start local Supabase (Docker; images already cached) with repo migrations as the development backend.
-3. Install Maestro, write the first E2E flow.
+1. Rebuild with latest code; re-run onboarding journey and assert DB rows (agro_profiles, farmer_profiles, verification_requests).
+2. Add relaunch/session-restore flow; wrong-OTP and network-loss failure flows.
+3. Finish reconciliation agents → assemble `UI_RECONCILIATION_MATRIX.md`, `FINAL_NAVIGATION_MAP.md`, `FINAL_SCREEN_ARCHITECTURE.md`.
+4. Apply design tokens to the app; visual comparison against Figma on device.

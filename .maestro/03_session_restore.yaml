@@ -1,0 +1,16 @@
+# Relaunch WITHOUT clearing state after a completed onboarding (run 02 first):
+# the persisted session + profile must restore and land in the app, not the wizard.
+appId: com.jaymafie.kilimoai
+---
+- stopApp
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Amara"          # greeting shows the saved farmer name
+    timeout: 10000
+- assertNotVisible: "Anza Sasa"          # not back at the welcome screen
+- assertNotVisible: "Namba yako ya simu" # not back in the wizard
+- takeScreenshot: 03_restored
+# The ID-verification reminder is shown over the dashboard; dismiss to see the dashboard.
+- tapOn: "Baadaye"
+- takeScreenshot: 03_dashboard_after_dismiss

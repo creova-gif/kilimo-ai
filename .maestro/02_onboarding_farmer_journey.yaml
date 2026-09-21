@@ -1,0 +1,68 @@
+# E2E: fresh install -> real phone-OTP auth (LOCAL backend) -> role -> farm profile
+#      -> ID verification -> done. Requires the local stack:
+#        scripts/local-backend.sh up   and a build whose .env points at it.
+# Each run picks a random local test number (255700000010..99, code 123456). A number that
+# already finished onboarding is an "existing user" and skips the wizard, so run
+# scripts/e2e.sh (which resets the DB between runs) for a guaranteed-fresh journey.
+# NOTE: Maestro 2.10 lets a header `env:` default beat `-e`, so the number is generated here.
+appId: com.jaymafie.kilimoai
+env:
+  NIDA: "19900101123456789012"   # synthetic 20-digit test value
+---
+- evalScript: ${output.phone = '7000000' + String(10 + Math.floor(Math.random() * 90))}
+- launchApp:
+    clearState: true
+
+# Step 0 — welcome
+- assertVisible: "KILIMO CHAKO,"
+- tapOn: "Anza Sasa"
+
+# Step 1 — phone
+- assertVisible: "Namba yako ya simu"
+- tapOn: "Phone Number Input"
+- inputText: ${output.phone}
+- tapOn: "Namba yako ya simu"   # dismiss keyboard (CTA is hidden behind it — G-018)
+- tapOn: "Endelea"
+
+# Step 2 — OTP (real backend accepts the local test code)
+- assertVisible: "Namba ya siri"
+- tapOn: "OTP Verification Input"
+- inputText: "123456"
+- tapOn: "Namba ya siri"
+- tapOn: "Endelea"
+
+# Step 3 — role
+- assertVisible: "Wewe ni nani?"
+- tapOn: "Select role Mkulima \\(Farmer\\)"
+- tapOn: "Endelea"
+
+# Step 4 — farm profile
+- assertVisible: "Shamba lako"
+- tapOn: "Full Name Input"
+- inputText: "Amara Test"
+- tapOn: "Shamba lako"
+- tapOn: "Select region Arusha"
+- tapOn: "Select crop Mahindi \\(Maize\\)"
+- tapOn: "Endelea"
+
+# Step 5 — ID verification
+- assertVisible: "Uthibitisho wa Kitambulisho"
+- tapOn: "NIDA Input"
+- inputText: ${NIDA}
+- tapOn: "Uthibitisho wa Kitambulisho"
+- tapOn: "Endelea"
+
+# Step 6 — done: server-minted Agro-ID is shown
+- extendedWaitUntil:
+    visible: "Karibu.*"
+    timeout: 10000
+- assertVisible: "Amara Test"
+- assertVisible: "Mkulima \\(Farmer\\)"
+- takeScreenshot: 02_done
+- tapOn: "Ingia kwenye Dashibodi"
+
+# Lands inside the app (tab bar visible), not back in the wizard
+- extendedWaitUntil:
+    notVisible: "Ingia kwenye Dashibodi"
+    timeout: 8000
+- takeScreenshot: 02_dashboard
