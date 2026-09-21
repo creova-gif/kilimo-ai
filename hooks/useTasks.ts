@@ -44,76 +44,20 @@ export interface Task {
   assignedRole?: AssignedRole;
 }
 
-// ─── Seed tasks ───────────────────────────────────────────────────────────────
-const SEED_TASKS: Task[] = [
-  {
-    id: 't1',
-    title: 'Irrigate Block B',
-    titleSw: 'Mwagilia Sehemu B',
-    category: 'irrigation',
-    priority: 'high',
-    status: 'pending',
-    dueDate: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
-    xpReward: 25,
-    farmBlock: 'Block B',
-    syncedOffline: false,
-    createdAt: new Date().toISOString(),
-    assignedRole: 'employee',
-  },
-  {
-    id: 't2',
-    title: 'Scout for Pests',
-    titleSw: 'Kagua Wadudu',
-    category: 'scouting',
-    priority: 'medium',
-    status: 'in_progress',
-    dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-    xpReward: 15,
-    farmBlock: 'Block A',
-    syncedOffline: false,
-    createdAt: new Date().toISOString(),
-    assignedRole: 'employee',
-  },
-  {
-    id: 't3',
-    title: 'Apply Fertilizer',
-    titleSw: 'Weka Mbolea',
-    category: 'planting',
-    priority: 'medium',
-    status: 'pending',
-    dueDate: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
-    xpReward: 20,
-    farmBlock: 'Block C',
-    syncedOffline: false,
-    createdAt: new Date().toISOString(),
-    assignedRole: 'employee',
-  },
-  {
-    id: 't4',
-    title: 'Co-op Payment Due',
-    titleSw: 'Malipo ya AMCOS',
-    category: 'finance',
-    priority: 'critical',
-    status: 'pending',
-    dueDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-    xpReward: 30,
-    coopId: 'AMCOS-KIL-001',
-    syncedOffline: false,
-    createdAt: new Date().toISOString(),
-    assignedRole: 'employee',
-  },
-];
-
-// Shared client (lib/supabase.ts); null when the backend is not configured.
-const supabase: any = getSupabase();
-
 export function useTasks() {
+  // Shared client (lib/supabase.ts); null when the backend is not configured. Resolved per call
+  // (a cheap singleton lookup) rather than at import time, so it is testable.
+  const supabase: any = getSupabase();
   const isOffline = useKilimoStore((s) => s.isOffline);
   const agroId = useKilimoStore((s) => s.agroId);
   const addToSyncQueue = useKilimoStore((s) => s.addToSyncQueue);
 
-  const [tasks, setTasks] = useState<Task[]>(SEED_TASKS);
+  // No seed data: a farmer sees only tasks that really exist (created by them, or fetched from
+  // the backend). An empty list is a valid, honest state — screens render an empty state.
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [totalXP, setTotalXP] = useState(0);
 
   // Compute XP from completed tasks
@@ -124,19 +68,25 @@ export function useTasks() {
 
   // ── Fetch from Supabase ───────────────────────────────────────────────────
   const fetchTasks = useCallback(async () => {
-    if (isOffline || !supabase || !process.env.EXPO_PUBLIC_SUPABASE_URL) return;
+    if (isOffline || !supabase) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data, error: dbError } = await supabase
         .from('tasks')
         .select('*')
         .order('due_date', { ascending: true });
 
-      if (!error && data && data.length > 0) {
-        setTasks(data.map(mapDbToTask));
+      if (dbError) {
+        setError(dbError.message);
+      } else {
+        // Replace local state with the server's truth — including an empty list.
+        setTasks((data ?? []).map(mapDbToTask));
+        setError(null);
+        setLoaded(true);
       }
-    } catch (err) {
-      console.warn('[Tasks] Fetch failed, using cache:', err);
+    } catch (err: any) {
+      console.warn('[Tasks] Fetch failed:', err);
+      setError(err?.message ?? 'fetch_failed');
     } finally {
       setLoading(false);
     }
@@ -233,6 +183,8 @@ export function useTasks() {
     completedTasks,
     totalXP,
     loading,
+    loaded,
+    error,
     completeTask,
     createTask,
     cancelTask,

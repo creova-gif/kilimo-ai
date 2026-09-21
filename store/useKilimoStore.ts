@@ -215,7 +215,7 @@ export const useKilimoStore = create<KilimoState>()(
       language: 'sw',
       themePreference: 'system' as ThemePreference,
       farmProfile: null,
-      registeredIds: ['12345678901234567890', '123456789'],
+      registeredIds: [],
 
       isOffline: false,
       isOnline: true,
@@ -231,33 +231,10 @@ export const useKilimoStore = create<KilimoState>()(
         lastUpdated: new Date().toISOString(),
       },
 
-      notifications: [
-        {
-          id: 'n1',
-          title: 'Unyevu wa Udongo Umeshuka',
-          body: 'Block B: Moisture dropped to 38%. Irrigate before 18:00.',
-          type: 'alert',
-          read: false,
-          timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-        },
-        {
-          id: 'n2',
-          title: 'Bei ya Mahindi Imepanda',
-          body: 'Maize price up 12% in Mbeya Market. Consider selling now.',
-          type: 'info',
-          read: false,
-          timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-        },
-        {
-          id: 'n3',
-          title: 'Sankofa AI Imefanya Utambuzi',
-          body: 'Crop scan completed. Maize Streak Virus detected in Plot 3.',
-          type: 'warning',
-          read: true,
-          timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-        },
-      ],
-      unreadCount: 2,
+      // No seeded notifications: a new install has none. Real ones come from the backend
+      // (user_notifications) or from on-device events.
+      notifications: [],
+      unreadCount: 0,
 
       wallet: {
         balanceTZS: 0,
@@ -436,7 +413,7 @@ export const useKilimoStore = create<KilimoState>()(
     {
       name: 'kilimo-ai-store',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 2,
+      version: 3,
       // Backfill: pre-v2 stores didn't have `onboardingComplete`. Returning
       // authenticated users (have agroId or were marked authenticated) should
       // skip onboarding instead of being forced back through it.
@@ -445,6 +422,20 @@ export const useKilimoStore = create<KilimoState>()(
         if (persisted.onboardingComplete == null) {
           persisted.onboardingComplete = Boolean(
             persisted.agroId || persisted.isAuthenticated || persisted.farmProfile
+          );
+        }
+        // v3: purge fabricated seed data that earlier builds wrote to every install.
+        const SEED_NOTIFICATION_IDS = ['n1', 'n2', 'n3'];
+        const SEED_IDS = ['12345678901234567890', '123456789'];
+        if (Array.isArray(persisted.notifications)) {
+          persisted.notifications = persisted.notifications.filter(
+            (n: any) => !SEED_NOTIFICATION_IDS.includes(n?.id)
+          );
+          persisted.unreadCount = persisted.notifications.filter((n: any) => !n.read).length;
+        }
+        if (Array.isArray(persisted.registeredIds)) {
+          persisted.registeredIds = persisted.registeredIds.filter(
+            (id: string) => !SEED_IDS.includes(id)
           );
         }
         return persisted;
