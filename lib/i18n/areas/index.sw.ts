@@ -6,6 +6,7 @@ import { swAi } from './ai.sw';
 import { swProfile } from './profile.sw';
 import { swPlanning } from './planning.sw';
 import { swIot } from './iot.sw';
+import { swCommunity } from './community.sw';
 
 /** All per-area Swahili dictionaries, merged into `sw`. */
 export const swAreas = {
@@ -17,4 +18,5 @@ export const swAreas = {
   ...swProfile,
   ...swPlanning,
   ...swIot,
+  ...swCommunity,
 };
