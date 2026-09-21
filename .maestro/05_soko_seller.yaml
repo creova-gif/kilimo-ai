@@ -20,6 +20,11 @@ appId: com.jaymafie.kilimoai
 - tapOn:
     id: "listing-price"
 - inputText: "480"
+- scrollUntilVisible:
+    element:
+      id: "listing-phone"
+    direction: DOWN
+    centerElement: true
 - tapOn:
     id: "listing-phone"
 - inputText: "0712 345 678"
