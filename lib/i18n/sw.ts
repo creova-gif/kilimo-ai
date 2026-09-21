@@ -1,7 +1,8 @@
-import type { TranslationKey } from './en';
+import type { TranslationKey, enCore } from './en';
+import { swAreas } from './areas/index.sw';
 
 /** Swahili resources. Must define every key in en.ts (checked by the parity test). */
-export const sw: Record<TranslationKey, string> = {
+const swCore: Record<keyof typeof enCore, string> = {
   'common.continue': 'Endelea',
   'common.back': 'Rudi',
   'common.cancel': 'Ghairi',
@@ -192,3 +193,5 @@ export const sw: Record<TranslationKey, string> = {
   'time.hours': 'saa {n} zilizopita',
   'time.days': 'siku {n} zilizopita',
 };
+
+export const sw: Record<TranslationKey, string> = { ...swCore, ...swAreas };

@@ -3,7 +3,9 @@
  * __tests__/i18n.parity.test.ts. Add new strings here first, then in sw.ts.
  * Keys are namespaced: `<area>.<name>`. Use {param} placeholders.
  */
-export const en = {
+import { enAreas } from './areas';
+
+export const enCore = {
   // Generic actions
   'common.continue': 'Continue',
   'common.back': 'Back',
@@ -201,5 +203,7 @@ export const en = {
   'time.hours': '{n} h ago',
   'time.days': '{n} d ago',
 } as const;
+
+export const en = { ...enCore, ...enAreas } as const;
 
 export type TranslationKey = keyof typeof en;
