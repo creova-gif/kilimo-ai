@@ -11,9 +11,10 @@ appId: com.jaymafie.kilimoai
 # Welcome -> registration
 - tapOn: "Anza sasa"
 - assertVisible: "Namba yako ya simu"
+# Tick consent first: with the keyboard open the checkbox scrolls out of view (drag to reveal).
+- tapOn: "Nakubali Masharti na Sera ya Faragha"
 - tapOn: "Namba ya simu"
 - inputText: ${output.phone}
-- tapOn: "Nakubali Masharti na Sera ya Faragha"
 # The primary button is ABOVE the keyboard now (G-018) — no dismiss trick needed.
 - tapOn: "Tuma msimbo"
 

@@ -5,6 +5,7 @@
 import React from 'react';
 import { ImageBackground, Pressable, StyleSheet, Switch, View } from 'react-native';
 import { Check } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../../constants/Theme';
 import { CROPS, MAX_CROPS, REGIONS } from '../../constants/onboardingOptions';
@@ -20,11 +21,14 @@ export function WelcomeStep({ onStart }: { onStart: () => void }) {
   const { t, lang } = useT();
   const { spacing, colors } = useTheme();
   const setLanguage = useKilimoStore((s) => s.setLanguage);
+  const insets = useSafeAreaInsets();
 
   return (
     <ImageBackground source={WELCOME_BG} style={styles.flex} imageStyle={styles.bgImage}>
       <View style={styles.scrim}>
-        <View style={[styles.langRow, { padding: spacing.lg }]}>
+        <View
+          style={[styles.langRow, { padding: spacing.lg, paddingTop: insets.top + spacing.sm }]}
+        >
           <View
             style={styles.langPill}
             accessibilityRole="radiogroup"
@@ -47,7 +51,12 @@ export function WelcomeStep({ onStart }: { onStart: () => void }) {
           </View>
         </View>
         <View style={{ flex: 1 }} />
-        <View style={{ padding: spacing.lg, paddingBottom: spacing.xl }}>
+        <View
+          style={{
+            padding: spacing.lg,
+            paddingBottom: Math.max(spacing.xl, insets.bottom + spacing.md),
+          }}
+        >
           <AppText variant="display" style={styles.onImage} accessibilityRole="header">
             {t('onb.welcome.title')}
           </AppText>
