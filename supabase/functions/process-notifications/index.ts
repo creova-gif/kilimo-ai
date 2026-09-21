@@ -36,6 +36,38 @@ serve(async (req) => {
   }
 
   try {
+    // The caller (the pg_cron job / scheduler) must supply the REAL event to
+    // notify about:  { "trigger": { "type": "weather_alert", "title": "...",
+    // "context": "..." } }.  This function used to hard-code
+    // "Heavy rain expected tomorrow in your registered farm area." and send it
+    // to every opted-in farmer regardless of reality — fabricated weather
+    // alerts. There is no weather/market data source wired into the backend
+    // yet, so with no supplied trigger there is nothing truthful to send.
+    const reqBody = await req.json().catch(() => ({}))
+    const trigger = reqBody?.trigger
+    const validTypes = ['insight', 'weather_alert', 'task_reminder', 'market_alert']
+    if (
+      !trigger ||
+      typeof trigger.context !== 'string' || !trigger.context.trim() ||
+      trigger.context.length > 500 ||
+      (trigger.type !== undefined && !validTypes.includes(trigger.type))
+    ) {
+      return new Response(
+        JSON.stringify({ status: 'skipped', reason: 'no_trigger_supplied' }),
+        { headers: { "Content-Type": "application/json" } }
+      )
+    }
+    const triggerType = trigger.type ?? 'insight'
+    const title = String(trigger.title ?? 'Taarifa').slice(0, 80)
+
+    // Rewording uses the LLM; report unavailability truthfully.
+    if (!Deno.env.get('OPENAI_API_KEY')) {
+      return new Response(
+        JSON.stringify({ error: 'ai_not_configured', detail: 'OPENAI_API_KEY is not set on this edge function' }),
+        { status: 503, headers: { "Content-Type": "application/json" } }
+      )
+    }
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -59,9 +91,7 @@ serve(async (req) => {
 
     // 2. Generate and Send Notifications
     for (const user of users) {
-      // In a real implementation, you'd fetch user-specific triggers here
-      // E.g., "Is there a storm in Arusha?" or "Did Maize price spike?"
-      const triggerContext = "Heavy rain expected tomorrow in your registered farm area."
+      const triggerContext = trigger.context
 
       // Generate localized, non-spammy message
       const completion = await getOpenAI().chat.completions.create({
@@ -75,14 +105,12 @@ serve(async (req) => {
 
       const messageBody = completion.choices[0].message.content
 
-      const title = 'Taarifa ya Hali ya Hewa'
-
       // Prepare notification log
       notificationsToSend.push({
         user_id: user.user_id,
         title,
         body: messageBody,
-        type: 'weather_alert',
+        type: triggerType,
         delivery_method: 'push',
       })
 
@@ -93,7 +121,7 @@ serve(async (req) => {
           sound: 'default',
           title,
           body: messageBody,
-          data: { type: 'weather_alert' },
+          data: { type: triggerType },
         })
       }
     }
@@ -121,8 +149,12 @@ serve(async (req) => {
 
     // 3. Log to database to prevent spam
     if (notificationsToSend.length > 0) {
-      await supabase.from('user_notifications').insert(notificationsToSend)
-      
+      const { error: insertErr } = await supabase.from('user_notifications').insert(notificationsToSend)
+      if (insertErr) {
+        console.error('user_notifications insert failed:', insertErr)
+        return new Response(JSON.stringify({ error: 'log_insert_failed', detail: insertErr.message }), { status: 500, headers: { "Content-Type": "application/json" } })
+      }
+
       // Update last_insight_sent_at
       const userIds = notificationsToSend.map(n => n.user_id)
       await supabase

@@ -12,6 +12,7 @@
 // @ts-nocheck — Deno runtime; types are not available in the Expo TS project.
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { corsHeaders } from '../_shared/cors.ts';
+import { getCallerId } from '../_shared/auth.ts';
 
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 const OPENAI_BASE = 'https://api.openai.com/v1';
@@ -111,8 +112,13 @@ async function transcribe(payload: any) {
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
+  // Require a real signed-in user. The public anon key also passes the gateway's
+  // verify_jwt check, so without this anyone holding the app's anon key could
+  // spend the OpenAI budget with no account.
+  if (!(await getCallerId(req))) return json({ error: 'not_authenticated' }, 401);
+
   if (!OPENAI_API_KEY) {
-    return json({ error: 'OPENAI_API_KEY not set on the edge function' }, 503);
+    return json({ error: 'OPENAI_API_KEY not set on the edge function', code: 'ai_not_configured' }, 503);
   }
 
   try {

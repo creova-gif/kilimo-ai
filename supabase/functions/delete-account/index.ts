@@ -9,7 +9,8 @@
 // themselves, never an id supplied in the request body.
 //
 // Deleting the auth user cascades to every user-owned table
-// (agro_profiles, agro_ledger, user_notification_preferences, user_notifications)
+// (agro_profiles, agro_ledger, farmer_profiles, verification_requests, tasks,
+// offline_sync_logs, user_notification_preferences, user_notifications)
 // because each declares `references auth.users(id) on delete cascade`. We also
 // issue explicit deletes first as belt-and-suspenders in case a future table is
 // added without the cascade.
@@ -44,6 +45,10 @@ function json(body: unknown, status = 200) {
 const USER_TABLES = [
   'agro_ledger',
   'agro_profiles',
+  'farmer_profiles',
+  'verification_requests',
+  'tasks',
+  'offline_sync_logs',
   'user_notification_preferences',
   'user_notifications',
 ];
@@ -68,6 +73,16 @@ serve(async (req) => {
       // A missing table or already-empty result is not fatal; keep going.
       if (error && !/does not exist/i.test(error.message ?? '')) {
         return json({ error: `purge_failed:${table}`, detail: error.message }, 500);
+      }
+    }
+
+    // market_listings.seller_id is `on delete set null` (a sold listing may
+    // outlive its seller for buyers' records), which would leave the deleted
+    // user's crop/price/location rows behind. Purge the user's own listings.
+    {
+      const { error } = await admin.from('market_listings').delete().eq('seller_id', userId);
+      if (error && !/does not exist/i.test(error.message ?? '')) {
+        return json({ error: 'purge_failed:market_listings', detail: error.message }, 500);
       }
     }
 

@@ -53,6 +53,9 @@ serve(async (req) => {
     const { docTag } = await req.json().catch(() => ({}));
     const tag = VALID_TAGS.includes(docTag) ? docTag : 'REG';
 
+    // A freshly minted id is 'unverified': minting only proves the account exists.
+    // submit-verification moves it to 'pending'; only a reviewer (service role)
+    // may set 'verified'.
     // Idempotent: return the existing id if this user already has one.
     const { data: existing, error: readErr } = await admin
       .from('agro_profiles')
@@ -65,7 +68,7 @@ serve(async (req) => {
     const agroId = `AGRO-2026-${tag}-${opaque()}`;
     const { error: writeErr } = await admin
       .from('agro_profiles')
-      .insert({ user_id: userId, agro_id: agroId, verification_status: 'verified' });
+      .insert({ user_id: userId, agro_id: agroId, verification_status: 'unverified' });
     if (writeErr) {
       // Concurrency: two overlapping requests can both pass the read above and
       // race the insert; the loser hits the user_id uniqueness constraint. Re-read

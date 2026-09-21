@@ -1,33 +1,63 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+// KILIMO AI — RAG chat edge function (retrieval-augmented agronomy answers).
+//
+// Auth: verify_jwt = true (config.toml) AND the caller must be a real signed-in
+// user (see _shared/auth.ts — the public anon key also passes verify_jwt). The
+// farm-profile context is looked up for the *authenticated caller*, never for a
+// `userId` supplied in the request body (that would let any signed-in user read
+// another farmer's region/crops through the service-role client).
+//
+// Availability: needs OPENAI_API_KEY. Without it the function answers a clean
+// 503 `ai_not_configured` instead of crashing the worker at cold start (the
+// OpenAI client used to be constructed at module load, which threw and took the
+// whole function down with a 500/504).
+// @ts-nocheck — Deno runtime.
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import OpenAI from 'https://esm.sh/openai@4.0.0'
+import { corsHeaders } from '../_shared/cors.ts'
+import { getCallerId } from '../_shared/auth.ts'
 
-const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') })
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+}
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: { 'Access-Control-Allow-Origin': '*' } })
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405)
 
   try {
-    const { query, userId } = await req.json()
+    const userId = await getCallerId(req)
+    if (!userId) return json({ error: 'not_authenticated' }, 401)
 
-    // 1. Initialize Supabase Client
+    const apiKey = Deno.env.get('OPENAI_API_KEY')
+    if (!apiKey) {
+      return json(
+        { error: 'ai_not_configured', detail: 'OPENAI_API_KEY is not set on this edge function' },
+        503,
+      )
+    }
+    const openai = new OpenAI({ apiKey })
+
+    const body = await req.json().catch(() => ({}))
+    const query = typeof body?.query === 'string' ? body.query.trim() : ''
+    if (!query || query.length > 2000) return json({ error: 'invalid_query' }, 400)
+
+    // 1. Service-role client (knowledge_base is RLS default-deny for clients).
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      { auth: { persistSession: false, autoRefreshToken: false } },
     )
 
-    // 2. Fetch User Profile/Digital Twin Context
-    // Was querying `user_profiles`, a table that has never existed in any
-    // migration — this always silently returned nothing. The real farm
-    // profile (written by app/edit-profile.tsx's save()) lives in
-    // farmer_profiles (see supabase/migrations/20260814000000_farmer_profiles.sql).
+    // 2. Farm profile context for the authenticated caller only.
     const { data: userContext } = await supabase
       .from('farmer_profiles')
       .select('region, farm_size_acres, primary_crops')
       .eq('user_id', userId)
-      .single()
+      .maybeSingle()
 
     // 3 & 4. Retrieve relevant local knowledge.
     //   Primary: pgvector similarity via match_knowledge.
@@ -37,7 +67,7 @@ serve(async (req) => {
     let ragKnowledge: any[] = []
     try {
       const embeddingResponse = await openai.embeddings.create({
-        model: "text-embedding-3-small",
+        model: 'text-embedding-3-small',
         input: query,
       })
       const queryEmbedding = embeddingResponse.data[0].embedding
@@ -52,7 +82,7 @@ serve(async (req) => {
     }
 
     if (!ragKnowledge.length) {
-      const keywords = String(query)
+      const keywords = query
         .toLowerCase()
         .split(/[^a-z0-9]+/)
         .filter((w) => w.length > 3)
@@ -90,21 +120,17 @@ serve(async (req) => {
 
     // 6. Generate Response via LLM
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // Fast, capable model
+      model: 'gpt-4o-mini', // Fast, capable model
       messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: query }
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: query },
       ],
       temperature: 0.2, // Low temp for factual accuracy
     })
 
-    return new Response(
-      JSON.stringify({ response: completion.choices[0].message.content }),
-      { headers: { "Content-Type": "application/json", 'Access-Control-Allow-Origin': '*' } }
-    )
-
+    return json({ response: completion.choices[0].message.content })
   } catch (error) {
-    console.error("Error in RAG execution:", error)
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 })
+    console.error('Error in RAG execution:', error)
+    return json({ error: 'rag_failed', detail: String(error?.message ?? error) }, 502)
   }
 })

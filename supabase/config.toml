@@ -30,6 +30,16 @@ enable_confirmations = true
 [auth.sms.test_otp]
 255700000001 = "123456"
 
+# GoTrue disables phone login entirely unless *some* SMS provider block is
+# enabled. Test-OTP numbers short-circuit before any provider call, so these
+# placeholder values are never sent anywhere. LOCAL ONLY: never `config push`
+# this block to a real project.
+[auth.sms.twilio]
+enabled = true
+account_sid = "local-dev-placeholder"
+message_service_sid = "local-dev-placeholder"
+auth_token = "local-dev-placeholder"
+
 [edge_runtime]
 enabled = true
 

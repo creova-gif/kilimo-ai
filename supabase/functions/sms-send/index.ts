@@ -15,6 +15,7 @@
 // @ts-nocheck — Deno runtime; types are not available in the Expo TS project.
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { corsHeaders } from '../_shared/cors.ts';
+import { getCallerId } from '../_shared/auth.ts';
 
 const AT_API_KEY = Deno.env.get('AFRICAS_TALKING_API_KEY');
 const AT_USERNAME = Deno.env.get('AFRICAS_TALKING_USERNAME');
@@ -29,6 +30,10 @@ function json(body: unknown, status = 200) {
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+
+  // Require a real signed-in user (the public anon key passes verify_jwt too;
+  // without this anyone with the app's anon key could burn SMS credits).
+  if (!(await getCallerId(req))) return json({ ok: false, reason: 'not_authenticated' }, 401);
 
   if (!AT_API_KEY || !AT_USERNAME) {
     return json({ ok: false, reason: 'sms_provider_not_configured' }, 503);
