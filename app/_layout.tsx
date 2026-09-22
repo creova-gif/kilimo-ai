@@ -11,17 +11,7 @@ import {
 } from '@expo-google-fonts/instrument-sans';
 import { InstrumentSerif_400Regular } from '@expo-google-fonts/instrument-serif';
 import { ThemeProvider, DarkTheme, DefaultTheme } from '@react-navigation/native';
-import {
-  AppState,
-  AppStateStatus,
-  Platform,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  useColorScheme,
-  View,
-} from 'react-native';
-import { WifiOff, X } from 'lucide-react-native';
+import { AppState, AppStateStatus, Platform, StyleSheet, useColorScheme, View } from 'react-native';
 import { pingActivity } from '../hooks/useIdleTimeout';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useKilimoStore } from '../store/useKilimoStore';
@@ -36,7 +26,7 @@ import { useSessionRestore } from '../hooks/useSessionRestore';
 import { useSyncEngine } from '../hooks/useSyncEngine';
 import { useNotifications } from '../hooks/useNotifications';
 import { useIdleTimeout } from '../hooks/useIdleTimeout';
-import { initializeOfflineManager } from '../lib/offline';
+import { SyncStatusBanner } from '../components/SyncStatusBanner';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -95,60 +85,7 @@ function useAuthOverlay(): boolean {
   return show;
 }
 
-/**
- * OfflineBanner — Task #14.
- * A slim, dismissible bar shown at the top of the screen when the device
- * has no internet connection. Auto-clears the dismissed flag when the
- * connection is restored so it can appear again on the next outage.
- */
-function OfflineBanner() {
-  const isOffline = useKilimoStore((s) => s.isOffline);
-  const language = useKilimoStore((s) => s.language);
-  const [dismissed, setDismissed] = useState(false);
-
-  useEffect(() => {
-    if (!isOffline) setDismissed(false);
-  }, [isOffline]);
-
-  if (!isOffline || dismissed) return null;
-
-  const msg =
-    language === 'sw'
-      ? 'Hakuna mtandao — data inaweza kuwa ya zamani'
-      : 'No connection — data may be stale';
-
-  return (
-    <View style={styles.offlineBanner} pointerEvents="box-none">
-      <WifiOff size={13} color="#fff" style={{ marginRight: 6 }} />
-      <Text style={styles.offlineText} numberOfLines={1}>
-        {msg}
-      </Text>
-      <TouchableOpacity onPress={() => setDismissed(true)} hitSlop={8} style={{ marginLeft: 8 }}>
-        <X size={13} color="#fff" />
-      </TouchableOpacity>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  offlineBanner: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 9999,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    backgroundColor: '#b91c1c',
-  },
-  offlineText: {
-    flex: 1,
-    color: '#fff',
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-  },
   authOverlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 9998,
@@ -162,7 +99,7 @@ const styles = StyleSheet.create({
  */
 function AppServices() {
   useSessionRestore(); // 🔐 Restore a signed-in farmer from the server (once, at boot)
-  useSyncEngine(); // 🔄 Offline queue drain
+  useSyncEngine(); // 🔄 Mounts the single offline engine (network listener + queue drainer)
   useNotifications(); // 🔔 Push notification registration
   useIdleTimeout(); // 🔒 AUTH-06 session inactivity gate
   useResumeRefresh(); // 🔁 Invalidate stale queries on foreground resume (#14)
@@ -265,12 +202,6 @@ function RootLayout() {
   });
 
   useEffect(() => {
-    // Start offline manager when layout mounts
-    const unsubscribe = initializeOfflineManager();
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
     if (error) throw error;
   }, [error]);
 
@@ -302,6 +233,9 @@ function RootLayout() {
           {hydrated && <AppServices />}
           <OnboardingGate hydrated={hydrated} />
           <View style={{ flex: 1 }} onTouchStart={pingActivity}>
+            {/* Connectivity + sync status (offline / waiting / failed). In normal flow, not an
+                overlay, so it can never cover a header or back button while it is showing. */}
+            <SyncStatusBanner />
             <Stack>
               <Stack.Screen name="onboarding" options={{ headerShown: false }} />
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -432,8 +366,6 @@ function RootLayout() {
           </View>
           {/* Task #15 — opaque overlay during auth-expire → onboarding redirect */}
           {showAuthOverlay && <View style={styles.authOverlay} pointerEvents="none" />}
-          {/* Task #14 — offline banner sits above everything */}
-          <OfflineBanner />
           <StatusBar style={themePreference === 'system' ? 'auto' : isDark ? 'light' : 'dark'} />
         </ThemeProvider>
       </QueryClientProvider>

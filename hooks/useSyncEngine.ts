@@ -1,105 +1,43 @@
 /**
- * Kilimo AI — Offline Sync Engine
+ * Kilimo AI — offline sync engine hook.
  *
- * A background service that monitors network connectivity and drains
- * the offline sync queue when connection is restored.
+ * Mounts the ONE offline engine (lib/offline.ts: network listener + queue drainer) for as long as
+ * the calling component lives, and exposes the queue state for UI. It does not drain anything
+ * itself and it never writes to `offline_sync_logs` (that is an audit trail, written by the
+ * drainer). Calling it from several components is safe: the engine is reference-counted.
  *
  * Usage:
- *   const { isOnline, pendingCount, forcSync } = useSyncEngine();
+ *   const { isOnline, pendingCount, failedCount, forceSync, retryFailed } = useSyncEngine();
  */
 
-import { useEffect, useRef, useCallback } from 'react';
-import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
+import { useEffect, useMemo } from 'react';
 import { useKilimoStore } from '../store/useKilimoStore';
-import { getSupabase } from '../lib/supabase';
+import { drainQueue, retryFailed, startOfflineEngine } from '../lib/offline';
+import { summarizeQueue } from '../lib/syncQueue';
 
-async function pushItem(
-  item: ReturnType<typeof useKilimoStore.getState>['syncQueue'][0]
-): Promise<boolean> {
-  try {
-    const supabase = getSupabase();
-    if (!supabase) return false;
-
-    const { error } = await supabase.from('offline_sync_logs').insert({
-      sync_id: item.id,
-      event_type: item.type,
-      payload: item.payload,
-      created_at: item.createdAt,
-    });
-
-    if (error) {
-      console.error('Supabase sync error:', error);
-      return false;
-    }
-    return true;
-  } catch {
-    return false;
-  }
+/** Queue counts only — no side effects. Use this for read-only UI (badges, banners). */
+export function useQueueCounts() {
+  const queue = useKilimoStore((s) => s.syncQueue);
+  return useMemo(() => summarizeQueue(queue), [queue]);
 }
 
 export function useSyncEngine() {
-  const {
-    isOffline,
-    syncQueue,
-    setOffline,
-    removeFromSyncQueue,
-    setLastSyncedAt,
-    addNotification,
-  } = useKilimoStore();
+  const isOnline = useKilimoStore((s) => s.isOnline);
+  const isSyncing = useKilimoStore((s) => s.isSyncing);
+  const lastSyncedAt = useKilimoStore((s) => s.lastSyncedAt);
+  const { pending, failed } = useQueueCounts();
 
-  const isSyncing = useRef(false);
-
-  // ── Drain the sync queue ────────────────────────────────────────────────
-  const drainQueue = useCallback(async () => {
-    if (isSyncing.current || syncQueue.length === 0) return;
-    isSyncing.current = true;
-
-    let successCount = 0;
-    for (const item of [...syncQueue]) {
-      const ok = await pushItem(item);
-      if (ok) {
-        removeFromSyncQueue(item.id);
-        successCount++;
-      }
-    }
-
-    isSyncing.current = false;
-    if (successCount > 0) {
-      setLastSyncedAt(new Date().toISOString());
-      addNotification({
-        title: `Sync Imekamilika ✓`,
-        body: `${successCount} record(s) synced to your Agro ID cloud.`,
-        type: 'success',
-      });
-    }
-  }, [syncQueue, removeFromSyncQueue, setLastSyncedAt, addNotification]);
-
-  // ── Subscribe to network changes ────────────────────────────────────────
-  useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener((state: NetInfoState) => {
-      const online = state.isConnected === true && state.isInternetReachable !== false;
-      setOffline(!online);
-
-      if (online && syncQueue.length > 0) {
-        // Small delay to let network stabilize
-        setTimeout(() => drainQueue(), 1500);
-      }
-    });
-
-    return () => unsubscribe();
-  }, [setOffline, drainQueue, syncQueue.length]);
-
-  // ── Initial check ───────────────────────────────────────────────────────
-  useEffect(() => {
-    NetInfo.fetch().then((state: NetInfoState) => {
-      const online = state.isConnected === true && state.isInternetReachable !== false;
-      setOffline(!online);
-    });
-  }, [setOffline]);
+  useEffect(() => startOfflineEngine(), []);
 
   return {
-    isOnline: !isOffline,
-    pendingCount: syncQueue.length,
-    forceSync: drainQueue,
+    isOnline,
+    isSyncing,
+    lastSyncedAt,
+    pendingCount: pending,
+    failedCount: failed,
+    /** Sync now (ignores backoff timers). */
+    forceSync: () => drainQueue({ force: true }),
+    /** Re-queue every failed item with a fresh attempt budget and sync. */
+    retryFailed,
   };
 }

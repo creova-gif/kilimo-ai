@@ -37,6 +37,8 @@ import { useKilimoStore } from '../../store/useKilimoStore';
 import { useAgroAuth } from '../../hooks/useAgroAuth';
 import { ArrowUpRight } from 'lucide-react-native';
 import { Alert, AlertButton } from 'react-native';
+import { signOutCurrentUser, countUnsyncedChanges } from '../../lib/session';
+import { translate as translateOffline } from '../../lib/i18n';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -481,10 +483,27 @@ export default function ProfileScreen() {
                 activeOpacity={0.8}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                  showSafeAlert('Ondoka', 'Una uhakika unataka kutoka? Utahitaji kuingia tena.', [
-                    { text: 'Ghairi', style: 'cancel' },
-                    { text: 'Ondoka', style: 'destructive', onPress: () => resetOnboarding() },
-                  ]);
+                  // Offline-safe sign-out (lib/session.ts): drains the outbox if online, always
+                  // removes the persisted session locally, clears user-scoped data (incl. the queue).
+                  const unsynced = countUnsyncedChanges();
+                  const so = (key: Parameters<typeof translateOffline>[1], n?: number) =>
+                    translateOffline(language, key, n === undefined ? undefined : { count: n });
+                  showSafeAlert(
+                    so('offline.signOut.title'),
+                    unsynced > 0
+                      ? `${so('offline.signOut.body')}\n\n${so('offline.signOut.unsynced', unsynced)}`
+                      : so('offline.signOut.body'),
+                    [
+                      { text: translateOffline(language, 'common.cancel'), style: 'cancel' },
+                      {
+                        text: so('offline.signOut.confirm'),
+                        style: 'destructive',
+                        onPress: () => {
+                          void signOutCurrentUser();
+                        },
+                      },
+                    ]
+                  );
                 }}
                 style={styles.logoutBtn}
                 accessibilityRole="button"

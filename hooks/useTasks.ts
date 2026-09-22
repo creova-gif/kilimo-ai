@@ -3,16 +3,20 @@
  *
  * Full task management with:
  * - Supabase persistence
- * - Offline queue integration
+ * - Every write goes through the offline outbox (lib/offline.ts), online or not, so writes are
+ *   ordered, retried with backoff and never silently lost. Tasks get a client-generated uuid that
+ *   is also the server row id, so a retry can never create a duplicate and a task completed before
+ *   it has synced still refers to the right row.
  * - Co-op shared tasks via coop_id
  * - XP gamification
- * - Optimistic UI updates
+ * - Optimistic UI updates (reconciled with the queue when the list is re-fetched)
  * - Assigned roles (vet, mechanic, employee)
  */
 
 import { getSupabase } from '../lib/supabase';
-import { useEffect, useState, useCallback } from 'react';
-import { useKilimoStore } from '../store/useKilimoStore';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { useKilimoStore, type SyncQueueItem } from '../store/useKilimoStore';
+import { enqueueAction, generateId } from '../lib/offline';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
@@ -49,8 +53,7 @@ export function useTasks() {
   // (a cheap singleton lookup) rather than at import time, so it is testable.
   const supabase: any = getSupabase();
   const isOffline = useKilimoStore((s) => s.isOffline);
-  const agroId = useKilimoStore((s) => s.agroId);
-  const addToSyncQueue = useKilimoStore((s) => s.addToSyncQueue);
+  const syncQueue = useKilimoStore((s) => s.syncQueue);
 
   // No seed data: a farmer sees only tasks that really exist (created by them, or fetched from
   // the backend). An empty list is a valid, honest state — screens render an empty state.
@@ -79,8 +82,14 @@ export function useTasks() {
       if (dbError) {
         setError(dbError.message);
       } else {
-        // Replace local state with the server's truth — including an empty list.
-        setTasks((data ?? []).map(mapDbToTask));
+        // Replace local state with the server's truth — including an empty list — then lay the
+        // still-unsynced local writes on top so a task saved on this phone does not vanish.
+        setTasks(
+          overlayPendingTasks(
+            (data ?? []).map(mapDbToTask),
+            useKilimoStore.getState().syncQueue
+          )
+        );
         setError(null);
         setLoaded(true);
       }
@@ -92,45 +101,46 @@ export function useTasks() {
     }
   }, [isOffline]);
 
+  // Load on mount, and again when connectivity returns (an app opened offline has nothing to show
+  // until it is online).
   useEffect(() => {
     fetchTasks();
-  }, []);
+  }, [fetchTasks]);
+
+  // When the last queued task write has synced, re-fetch once so local state matches the server.
+  const queuedTaskWrites = syncQueue.filter(
+    (i) => i.type.startsWith('task_') && i.status !== 'failed'
+  ).length;
+  const prevQueued = useRef(queuedTaskWrites);
+  useEffect(() => {
+    if (prevQueued.current > 0 && queuedTaskWrites === 0) fetchTasks();
+    prevQueued.current = queuedTaskWrites;
+  }, [queuedTaskWrites, fetchTasks]);
 
   // ── Complete a task (offline-aware) ───────────────────────────────────────
-  const completeTask = useCallback(
-    async (id: string) => {
-      const now = new Date().toISOString();
+  const completeTask = useCallback(async (id: string) => {
+    const now = new Date().toISOString();
 
-      // Optimistic update
-      setTasks((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, status: 'done', completedAt: now } : t))
-      );
+    // Optimistic update
+    setTasks((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, status: 'done', completedAt: now } : t))
+    );
 
-      if (isOffline) {
-        addToSyncQueue({
-          type: 'task_complete',
-          payload: { taskId: id, completedAt: now, userId: agroId?.id },
-        });
-        return;
-      }
-
-      if (supabase) {
-        const { error } = await supabase
-          .from('tasks')
-          .update({ status: 'done', completed_at: now })
-          .eq('id', id);
-        if (error) console.warn('[Tasks] Complete failed:', error);
-      }
-    },
-    [isOffline, addToSyncQueue, agroId]
-  );
+    enqueueAction({
+      type: 'task_complete',
+      table: 'tasks',
+      op: 'update',
+      payload: { match: { id }, values: { status: 'done', completed_at: now } },
+    });
+  }, []);
 
   // ── Create task (offline-aware) ───────────────────────────────────────────
   const createTask = useCallback(
     async (task: Omit<Task, 'id' | 'createdAt' | 'syncedOffline'>) => {
       const newTask: Task = {
         ...task,
-        id: `local_${Date.now()}`,
+        // A real uuid, generated here: it is the local id AND the server row id.
+        id: generateId(),
         syncedOffline: isOffline,
         createdAt: new Date().toISOString(),
       };
@@ -138,41 +148,26 @@ export function useTasks() {
       // Optimistic add
       setTasks((prev) => [newTask, ...prev]);
 
-      if (isOffline) {
-        addToSyncQueue({ type: 'task_complete', payload: newTask as any });
-        return;
-      }
-
-      if (supabase) {
-        const { error } = await supabase.from('tasks').insert({
-          title: task.title,
-          title_sw: task.titleSw,
-          category: task.category,
-          priority: task.priority,
-          status: task.status,
-          due_date: task.dueDate,
-          xp_reward: task.xpReward,
-          farm_block: task.farmBlock,
-          coop_id: task.coopId,
-          synced_offline: false,
-          assigned_role: task.assignedRole,
-        });
-        if (error) console.warn('[Tasks] Create failed:', error);
-      }
-    },
-    [isOffline, addToSyncQueue]
-  );
-
-  // ── Delete / cancel task ──────────────────────────────────────────────────
-  const cancelTask = useCallback(
-    async (id: string) => {
-      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, status: 'cancelled' } : t)));
-      if (!isOffline && supabase) {
-        await supabase.from('tasks').update({ status: 'cancelled' }).eq('id', id);
-      }
+      enqueueAction({
+        type: 'task_create',
+        table: 'tasks',
+        op: 'insert',
+        payload: taskToRow(newTask),
+      });
     },
     [isOffline]
   );
+
+  // ── Delete / cancel task ──────────────────────────────────────────────────
+  const cancelTask = useCallback(async (id: string) => {
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, status: 'cancelled' } : t)));
+    enqueueAction({
+      type: 'task_cancel',
+      table: 'tasks',
+      op: 'update',
+      payload: { match: { id }, values: { status: 'cancelled' } },
+    });
+  }, []);
 
   const pendingTasks = tasks.filter((t) => t.status === 'pending' || t.status === 'in_progress');
   const completedTasks = tasks.filter((t) => t.status === 'done');
@@ -190,6 +185,53 @@ export function useTasks() {
     cancelTask,
     refresh: fetchTasks,
   };
+}
+
+/** Server-shaped row for a new task. `id` doubles as the idempotency key. */
+export function taskToRow(task: Task): Record<string, unknown> {
+  return {
+    id: task.id,
+    title: task.title,
+    title_sw: task.titleSw,
+    description: task.description,
+    category: task.category,
+    priority: task.priority,
+    status: task.status,
+    due_date: task.dueDate,
+    xp_reward: task.xpReward,
+    farm_block: task.farmBlock,
+    coop_id: task.coopId,
+    synced_offline: task.syncedOffline,
+    assigned_role: task.assignedRole,
+  };
+}
+
+/**
+ * Lay writes that are still in the outbox on top of a server list, so an unsynced create/complete/
+ * cancel stays visible after a refresh. Pure; exported for tests.
+ */
+export function overlayPendingTasks(server: Task[], queue: readonly SyncQueueItem[]): Task[] {
+  let list = [...server];
+  for (const item of queue) {
+    const p = item.payload as any;
+    if (item.type === 'task_create' && p && typeof p.id === 'string') {
+      if (!list.some((t) => t.id === p.id)) {
+        list = [
+          mapDbToTask({ ...p, created_at: item.createdAt, synced_offline: true }),
+          ...list,
+        ];
+      }
+    } else if (item.type === 'task_complete' && p?.match?.id) {
+      list = list.map((t) =>
+        t.id === p.match.id
+          ? { ...t, status: 'done', completedAt: p.values?.completed_at ?? t.completedAt }
+          : t
+      );
+    } else if (item.type === 'task_cancel' && p?.match?.id) {
+      list = list.map((t) => (t.id === p.match.id ? { ...t, status: 'cancelled' } : t));
+    }
+  }
+  return list;
 }
 
 function mapDbToTask(row: any): Task {

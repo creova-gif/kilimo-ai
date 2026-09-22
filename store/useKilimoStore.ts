@@ -13,6 +13,14 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  createSyncQueueItem,
+  migrateSyncQueue,
+  type NewSyncAction,
+  type SyncQueueItem,
+} from '../lib/syncQueue';
+
+export type { SyncQueueItem, SyncQueueStatus, NewSyncAction } from '../lib/syncQueue';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -33,14 +41,6 @@ export interface AgroID {
   tinNumber?: string;
   businessLicense?: string;
   certifications?: string[];
-}
-
-export interface SyncQueueItem {
-  id: string;
-  type: 'scan_result' | 'task_complete' | 'market_order' | 'irrigation_log' | 'voice_note';
-  payload: Record<string, unknown>;
-  createdAt: string;
-  retries: number;
 }
 
 export interface FarmVitals {
@@ -110,12 +110,15 @@ interface KilimoState {
   farmProfile: FarmProfile | null;
   registeredIds: string[];
 
-  // Network / Offline
+  // Network / Offline — `isOnline` and `isOffline` are always exact opposites; both are only ever
+  // written through `setConnectivity` (see lib/offline.ts for the single definition of "online").
   isOffline: boolean;
-  // Offline Sync
   isOnline: boolean;
+  /** Persisted outbox of writes made on this phone; drained by lib/offline.ts `drainQueue` only. */
   syncQueue: SyncQueueItem[];
   lastSyncedAt: string | null;
+  /** True while a drain pass is running. Not persisted. */
+  isSyncing: boolean;
 
   // Farm Intelligence
   /** null until real sensor / soil-test data exists — never a made-up default. */
@@ -158,16 +161,25 @@ interface KilimoState {
   resetOnboarding: () => void;
   addRegisteredId: (id: string) => void;
 
-  // Network
+  // Network / offline queue
+  setConnectivity: (online: boolean) => void;
+  /** @deprecated use setConnectivity. Kept so existing callers keep working. */
   setOffline: (offline: boolean) => void;
-  addToSyncQueue: (item: Omit<SyncQueueItem, 'id' | 'createdAt' | 'retries'>) => void;
-  removeFromSyncQueue: (id: string) => void;
-  // Offline Sync
+  /** @deprecated use setConnectivity. */
   setOnlineStatus: (status: boolean) => void;
+  setSyncing: (syncing: boolean) => void;
   setLastSyncedAt: (timestamp: string) => void;
-  enqueueAction: (action: Omit<SyncQueueItem, 'id' | 'createdAt' | 'retries'>) => void;
+  /** Append an item to the outbox. Prefer `enqueueAction` from lib/offline.ts (it also kicks a drain). */
+  enqueueAction: (action: NewSyncAction) => SyncQueueItem;
+  /** Alias of enqueueAction (legacy name). */
+  addToSyncQueue: (action: NewSyncAction) => SyncQueueItem;
+  patchSyncQueueItem: (id: string, patch: Partial<SyncQueueItem>) => void;
+  /** Remove one item (sync success, or an explicit user discard). */
   dequeueAction: (id: string) => void;
+  removeFromSyncQueue: (id: string) => void;
   clearQueue: () => void;
+  /** Sign-out: forget everything that belongs to the signed-in person on this device. */
+  clearUserData: () => void;
 
   // Farm Vitals
   updateFarmVitals: (vitals: Partial<FarmVitals>) => void;
@@ -222,6 +234,7 @@ export const useKilimoStore = create<KilimoState>()(
       isOnline: true,
       syncQueue: [],
       lastSyncedAt: null,
+      isSyncing: false,
 
       farmVitals: null,
 
@@ -270,47 +283,47 @@ export const useKilimoStore = create<KilimoState>()(
         set({ onboardingComplete: false, agroId: null, farmProfile: null, isAuthenticated: false }),
       addRegisteredId: (id) => set((state) => ({ registeredIds: [...state.registeredIds, id] })),
 
-      // ── Network Actions ────────────────────────────────────────
-      setOffline: (offline) => set({ isOffline: offline }),
-
-      addToSyncQueue: (item) =>
-        set((state) => ({
-          syncQueue: [
-            ...state.syncQueue,
-            {
-              ...item,
-              id: `sync_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-              createdAt: new Date().toISOString(),
-              retries: 0,
-            },
-          ],
-        })),
-
-      removeFromSyncQueue: (id) =>
-        set((state) => ({
-          syncQueue: state.syncQueue.filter((item) => item.id !== id),
-        })),
-
-      // ── Offline Actions ────────────────────────────────────────
-      setOnlineStatus: (status) => set({ isOnline: status }),
+      // ── Network / Offline Queue Actions ────────────────────────
+      setConnectivity: (online) => set({ isOnline: online, isOffline: !online }),
+      setOffline: (offline) => set({ isOffline: offline, isOnline: !offline }),
+      setOnlineStatus: (status) => set({ isOnline: status, isOffline: !status }),
+      setSyncing: (isSyncing) => set({ isSyncing }),
       setLastSyncedAt: (timestamp) => set({ lastSyncedAt: timestamp }),
-      enqueueAction: (action) =>
+
+      enqueueAction: (action) => {
+        const item = createSyncQueueItem(action);
+        set((state) => ({ syncQueue: [...state.syncQueue, item] }));
+        return item;
+      },
+      addToSyncQueue: (action) => get().enqueueAction(action),
+      patchSyncQueueItem: (id, patch) =>
         set((state) => ({
-          syncQueue: [
-            ...state.syncQueue,
-            {
-              ...action,
-              id: `sync_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-              createdAt: new Date().toISOString(),
-              retries: 0,
-            },
-          ],
+          syncQueue: state.syncQueue.map((q) => (q.id === id ? { ...q, ...patch } : q)),
         })),
       dequeueAction: (id) =>
-        set((state) => ({
-          syncQueue: state.syncQueue.filter((q) => q.id !== id),
-        })),
+        set((state) => ({ syncQueue: state.syncQueue.filter((q) => q.id !== id) })),
+      removeFromSyncQueue: (id) =>
+        set((state) => ({ syncQueue: state.syncQueue.filter((q) => q.id !== id) })),
       clearQueue: () => set({ syncQueue: [] }),
+
+      clearUserData: () =>
+        set({
+          agroId: null,
+          isAuthenticated: false,
+          onboardingComplete: false,
+          farmProfile: null,
+          syncQueue: [],
+          lastSyncedAt: null,
+          isSyncing: false,
+          farmVitals: null,
+          notifications: [],
+          unreadCount: 0,
+          wallet: { balanceTZS: 0, mpesaPhone: null, lastTransaction: null },
+          sankofaHistory: [],
+          activities: [],
+          cropHealthLogs: [],
+          activeExcelData: null,
+        }),
 
       // ── Farm Vitals Actions ────────────────────────────────────
       updateFarmVitals: (vitals) =>
@@ -407,7 +420,7 @@ export const useKilimoStore = create<KilimoState>()(
     {
       name: 'kilimo-ai-store',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 4,
+      version: 5,
       // Backfill: pre-v2 stores didn't have `onboardingComplete`. Returning
       // authenticated users (have agroId or were marked authenticated) should
       // skip onboarding instead of being forced back through it.
@@ -418,6 +431,8 @@ export const useKilimoStore = create<KilimoState>()(
             persisted.agroId || persisted.isAuthenticated || persisted.farmProfile
           );
         }
+        // v5: the offline queue gained ids/status/backoff fields and distinct action types.
+        if (version < 5) persisted.syncQueue = migrateSyncQueue(persisted.syncQueue);
         // v4: earlier builds persisted invented vitals (soil health 84, moisture 42, pH 6.8, …).
         if (version < 4) persisted.farmVitals = null;
         // v3: purge fabricated seed data that earlier builds wrote to every install.
