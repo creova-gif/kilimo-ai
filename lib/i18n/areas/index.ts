@@ -7,6 +7,7 @@ import { enProfile } from './profile.en';
 import { enPlanning } from './planning.en';
 import { enIot } from './iot.en';
 import { enCommunity } from './community.en';
+import { enSchedule } from './schedule.en';
 
 /** All per-area English dictionaries, merged into `en`. */
 export const enAreas = {
@@ -19,4 +20,5 @@ export const enAreas = {
   ...enPlanning,
   ...enIot,
   ...enCommunity,
+  ...enSchedule,
 } as const;
