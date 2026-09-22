@@ -61,7 +61,8 @@ export default function AITrainingHubScreen() {
   };
   const goBack = () => {
     if (openIdx !== null) return open(null);
-    router.canGoBack() ? router.back() : router.replace('/');
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
   };
 
   const mod = openIdx !== null ? TRAINING_MODULES[openIdx] : null;

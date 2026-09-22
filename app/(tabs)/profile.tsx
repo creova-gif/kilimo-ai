@@ -6,7 +6,7 @@
  * (never a placeholder identity), the sync row reads the real offline outbox, and the More section
  * hides every feature the person's role cannot use (lib/access.tsx).
  */
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   StyleSheet,
   View,
@@ -41,7 +41,7 @@ import {
   allFeatures,
   normalizeRole,
   roleLabel,
-  useAccess,
+  accessFor,
   type AccessLevel,
   type Feature,
 } from '../../lib/access';
@@ -91,14 +91,14 @@ const showSafeAlert = (
   }
 };
 
-/** Access level for every feature for the current role (fixed-order loop: hook order is stable). */
+/** Access level for every feature for the current role (one store read, pure lookups). */
 function useAccessMap(): Record<Feature, AccessLevel> {
-  const map = {} as Record<Feature, AccessLevel>;
-  for (const f of allFeatures()) {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    map[f] = useAccess(f);
-  }
-  return map;
+  const role = useKilimoStore((s) => s.agroId?.role);
+  return useMemo(() => {
+    const map = {} as Record<Feature, AccessLevel>;
+    for (const f of allFeatures()) map[f] = accessFor(role, f);
+    return map;
+  }, [role]);
 }
 
 /** Haptics are a nicety: never let an unavailable module (web, tests) break a press. */

@@ -65,7 +65,6 @@ export default function AiVoiceScreen() {
       opRef.current++;
       recorder.stop().catch(() => undefined);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
 

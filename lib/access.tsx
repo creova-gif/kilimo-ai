@@ -365,11 +365,15 @@ export function allRoles(): CanonicalRole[] {
   return Object.keys(ROLE_LABELS) as CanonicalRole[];
 }
 
+/** Pure lookup: access level for a feature given a free-form Agro ID role. */
+export function accessFor(role: string | undefined | null, feature: Feature): AccessLevel {
+  return MATRIX[normalizeRole(role)][feature];
+}
+
 /** Hook: returns access level for a feature based on the current Agro ID role. */
 export function useAccess(feature: Feature): AccessLevel {
   const role = useKilimoStore((s) => s.agroId?.role);
-  const canon = normalizeRole(role);
-  return MATRIX[canon][feature];
+  return accessFor(role, feature);
 }
 
 /** Hook: returns true if user has any access (full OR basic). */
