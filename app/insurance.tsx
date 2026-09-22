@@ -1,1726 +1,830 @@
 /**
- * Insurance Hub — crop & livestock insurance discovery + claims
- * Integrates prefilled Agro ID profiles, Tanzanian insurers (Jubilee, NIC, Reliance),
- * and an interactive claims-filing process with photo uploads.
+ * Insurance records — a farmer's own record book of policies and claims.
+ *
+ * This screen used to fake enrolment, a camera capture and claim "submission". It is now honest:
+ * you record the policies you already hold and keep claim records, and you can share a plain-text
+ * summary through your phone's share sheet. Kilimo AI is not connected to any insurer, so recording a
+ * claim here does NOT file it — the screen says so wherever it matters. There is no photo evidence:
+ * nothing could store or forward it, so it is not offered.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
   Alert,
-  TextInput,
-  Modal,
-  ScrollView,
-  Image,
-  ActivityIndicator,
+  KeyboardAvoidingView,
   Platform,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  Share,
+  View,
 } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
+import { Plus, Shield } from 'lucide-react-native';
+
 import {
-  Shield,
-  FileCheck2,
-  CheckCircle2,
-  Clock,
-  AlertTriangle,
-  ChevronRight,
-  Camera,
-  Image as ImageIcon,
-  Check,
-  User,
-  Phone,
-  MapPin,
-  X,
-  Sparkles,
-} from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
-import PageScaffold, { GlassCard, SectionHeader, EmptyState } from '../components/PageScaffold';
+  AlertCard,
+  AppText,
+  Badge,
+  Button,
+  Card,
+  Chip,
+  EmptyState,
+  ErrorState,
+  OfflineBanner,
+  ScreenHeader,
+  SkeletonBlock,
+  SkeletonGroup,
+  TextField,
+} from '../components/ui';
 import { useTheme } from '../constants/Theme';
-import { useFarmDataStore, InsurancePolicy } from '../store/useFarmDataStore';
-import { useKilimoStore } from '../store/useKilimoStore';
+import { useInsurance } from '../hooks/useInsurance';
 import { Gate } from '../lib/access';
+import { useT } from '../lib/i18n';
+import type { TranslationKey } from '../lib/i18n/en';
+import {
+  INCIDENT_TYPES,
+  addMonths,
+  buildClaimSummary,
+  claimStatusKey,
+  failed,
+  hasErrors,
+  incidentKey,
+  incidentWithinPolicy,
+  parseDay,
+  policyOverview,
+  policyStanding,
+  todayString,
+  validateClaimInput,
+  validatePolicyInput,
+  type ClaimErrors,
+  type ClaimStatus,
+  type IncidentType,
+  type InsuranceClaim,
+  type InsurancePolicy,
+  type PolicyErrors,
+  type PolicyState,
+} from '../lib/insurance';
+import { formatMoney } from '../lib/listings';
 
-const fmt = (n: number) => new Intl.NumberFormat('en-US').format(n);
-const INSURANCE_INTEGRATION_LIVE = false;
+type Translate = (key: TranslationKey, params?: Record<string, string | number>) => string;
+type FormState = null | { type: 'policy' } | { type: 'claim'; policyId: string };
 
-const STATUS_META = {
-  browse: { color: '#94a3b8', label: 'Available' },
-  pending: { color: '#f59e0b', label: 'Pending' },
-  active: { color: '#2E6F40', label: 'Active' },
-  expired: { color: '#64748b', label: 'Expired' },
-  claimed: { color: '#3b82f6', label: 'Claim Filed' },
+const STANDING_BADGE: Record<PolicyState, 'success' | 'warning' | 'info' | 'neutral'> = {
+  active: 'success',
+  expiring_soon: 'warning',
+  upcoming: 'info',
+  expired: 'neutral',
+  cancelled: 'neutral',
 };
 
-// Tanzanian Insurers & Policies list
-const INSURER_POLICIES = [
-  {
-    id: 'p_jubilee',
-    product: 'Mazao Bima — Crop Index Cover',
-    provider: 'Jubilee Insurance',
-    coverage: 'crop' as const,
-    premiumTZS: 55_000,
-    payoutMaxTZS: 1_500_000,
-    termMonths: 6,
-    status: 'browse' as const,
-    desc: 'Bima ya mazao dhidi ya ukame, mafuriko, na wadudu kulingana na fahirisi ya hali ya hewa ya satelaiti.',
-  },
-  {
-    id: 'p_nic',
-    product: 'Mifugo Care — Livestock Cover',
-    provider: 'NIC Insurance',
-    coverage: 'livestock' as const,
-    premiumTZS: 95_000,
-    payoutMaxTZS: 2_800_000,
-    termMonths: 12,
-    status: 'browse' as const,
-    desc: "Kinga thabiti kwa ng'ombe na mbuzi dhidi ya magonjwa ya mlipuko na vifo vya dharura.",
-  },
-  {
-    id: 'p_reliance',
-    product: 'Drought Shield — Tomato Cover',
-    provider: 'Reliance Insurance',
-    coverage: 'crop' as const,
-    premiumTZS: 40_000,
-    payoutMaxTZS: 1_200_000,
-    termMonths: 4,
-    status: 'browse' as const,
-    desc: 'Bima maalum kwa wakulima wa mboga mboga dhidi ya ukosefu wa mvua wakati wa maua na matunda.',
-  },
-];
+const CLAIM_BADGE: Record<ClaimStatus, 'neutral' | 'info'> = {
+  draft: 'neutral',
+  submitted_record: 'info',
+  closed: 'neutral',
+};
 
 export default function InsuranceScreen() {
-  const { colors, isDark } = useTheme();
+  const router = useRouter();
+  const { t } = useT();
+  const { colors } = useTheme();
 
-  // Stores
-  const agroId = useKilimoStore((s) => s.agroId);
-  const farmProfile = useKilimoStore((s) => s.farmProfile);
-  const language = useKilimoStore((s) => s.language);
-
-  const storePolicies = useFarmDataStore((s) => s.insurance);
-  const enroll = useFarmDataStore((s) => s.enrollPolicy);
-  const fileClaim = useFarmDataStore((s) => s.fileClaim);
-
-  // Combine store policies and our custom Tanzanian insurer policies, ensuring uniqueness by ID
-  const allPolicies = React.useMemo(() => {
-    const map = new Map<string, InsurancePolicy>();
-    // Seed initial policies from store
-    storePolicies.forEach((p) => map.set(p.id, p));
-    // Add custom ones if not already present
-    INSURER_POLICIES.forEach((p) => {
-      if (!map.has(p.id)) {
-        map.set(p.id, p);
-      }
-    });
-    return Array.from(map.values());
-  }, [storePolicies]);
-
-  const myPolicies = allPolicies.filter(
-    (p) => p.status === 'active' || p.status === 'pending' || p.status === 'claimed'
+  const denied = (
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <ScreenHeader
+        title={t('insurance.title')}
+        showBack
+        onBack={() => router.back()}
+        backLabel={t('common.back')}
+      />
+      <EmptyState title={t('insurance.gate.title')} description={t('insurance.gate.body')} />
+    </SafeAreaView>
   );
-  const available = allPolicies.filter((p) => p.status === 'browse');
-
-  // Modal States
-  const [enrollModalVisible, setEnrollModalVisible] = useState(false);
-  const [selectedEnrollPolicy, setSelectedEnrollPolicy] = useState<InsurancePolicy | null>(null);
-  const [enrollStep, setEnrollStep] = useState(1);
-  const [loadingEnroll, setLoadingEnroll] = useState(false);
-
-  // Form Fields for Enrollment (Prefilled from Agro ID)
-  const [farmerName, setFarmerName] = useState('');
-  const [farmerPhone, setFarmerPhone] = useState('');
-  const [farmerRegion, setFarmerRegion] = useState('');
-  const [cropCovered, setCropCovered] = useState('');
-  const [farmAcres, setFarmAcres] = useState('');
-  const [nationalId, setNationalId] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('mpesa');
-
-  // Claims Modal States
-  const [claimModalVisible, setClaimModalVisible] = useState(false);
-  const [selectedClaimPolicy, setSelectedClaimPolicy] = useState<InsurancePolicy | null>(null);
-  const [claimStep, setClaimStep] = useState(1);
-  const [claimReason, setClaimReason] = useState('');
-  const [damageLevel, setDamageLevel] = useState<'low' | 'medium' | 'high' | 'total'>('medium');
-  const [claimPhoto, setClaimPhoto] = useState<string | null>(null);
-  const [isCapturing, setIsCapturing] = useState(false);
-  const [loadingClaim, setLoadingClaim] = useState(false);
-
-  // Prefill helper
-  function openEnrollment(p: InsurancePolicy) {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (!INSURANCE_INTEGRATION_LIVE) {
-      Alert.alert(
-        language === 'sw' ? 'Bado Haipatikani' : 'Coming Soon',
-        language === 'sw'
-          ? 'Usajili wa bima haujaunganishwa na mtoa bima. Hakuna sera au malipo yatakayoundwa.'
-          : 'Insurance enrollment is not connected to a provider yet. No policy or payment will be created.'
-      );
-      return;
-    }
-    setSelectedEnrollPolicy(p);
-    setEnrollStep(1);
-
-    // Pre-populate with store settings
-    setFarmerName(agroId?.name || '');
-    setFarmerPhone(agroId?.phoneNumber || '');
-    setFarmerRegion(farmProfile?.region || agroId?.location || '');
-    setCropCovered(farmProfile?.primaryCrops?.join(', ') || 'Maize');
-    setFarmAcres(farmProfile?.farmSizeAcres ? String(farmProfile.farmSizeAcres) : '2.5');
-    setNationalId(agroId?.nationalId || '');
-    setPaymentMethod(agroId?.mpesaLinked ? 'mpesa' : 'tigo_pesa');
-
-    setEnrollModalVisible(true);
-  }
-
-  function handleEnrollSubmit() {
-    if (!selectedEnrollPolicy) return;
-    setLoadingEnroll(true);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-    setTimeout(() => {
-      enroll(selectedEnrollPolicy.id);
-      setLoadingEnroll(false);
-      setEnrollModalVisible(false);
-      Alert.alert(
-        language === 'sw' ? 'Usajili Umefanikiwa' : 'Enrollment Successful',
-        language === 'sw'
-          ? `Umesajiliwa kikamilifu kwenye ${selectedEnrollPolicy.product}. Malipo yako yatahakikiwa.`
-          : `You have successfully enrolled in ${selectedEnrollPolicy.product}. Your premium payment is being verified.`
-      );
-    }, 1500);
-  }
-
-  function openClaimModal(p: InsurancePolicy) {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (!INSURANCE_INTEGRATION_LIVE) {
-      Alert.alert(
-        language === 'sw' ? 'Bado Haipatikani' : 'Coming Soon',
-        language === 'sw'
-          ? 'Uwasilishaji wa madai haujaunganishwa na mtoa bima. Usipakie ushahidi kwenye onyesho hili.'
-          : 'Claims submission is not connected to a provider yet. Do not upload evidence through this preview.'
-      );
-      return;
-    }
-    setSelectedClaimPolicy(p);
-    setClaimStep(1);
-    setClaimReason('');
-    setDamageLevel('medium');
-    setClaimPhoto(null);
-    setClaimModalVisible(true);
-  }
-
-  function simulateCameraCapture() {
-    setIsCapturing(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    setTimeout(() => {
-      // Simulate taking a photo of a dry crop
-      setClaimPhoto(
-        'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?auto=format&fit=crop&q=80&w=400'
-      );
-      setIsCapturing(false);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }, 1200);
-  }
-
-  function handleClaimSubmit() {
-    if (!selectedClaimPolicy) return;
-    setLoadingClaim(true);
-
-    const payoutRatio =
-      damageLevel === 'low'
-        ? 0.2
-        : damageLevel === 'medium'
-          ? 0.5
-          : damageLevel === 'high'
-            ? 0.8
-            : 1.0;
-    const estPayout = Math.round(selectedClaimPolicy.payoutMaxTZS * payoutRatio);
-
-    setTimeout(() => {
-      fileClaim(selectedClaimPolicy.id, claimReason || 'Drought damage to farm blocks', estPayout);
-      setLoadingClaim(false);
-      setClaimModalVisible(false);
-      Alert.alert(
-        language === 'sw' ? 'Dai Limewasilishwa' : 'Claim Submitted',
-        language === 'sw'
-          ? `Dai lako la TZS ${fmt(estPayout)} limepokewa na linafanyiwa kazi na ${selectedClaimPolicy.provider}.`
-          : `Your claim of TZS ${fmt(estPayout)} was received and is under review by ${selectedClaimPolicy.provider}.`
-      );
-    }, 1500);
-  }
 
   return (
-    <Gate
-      feature="insurance"
-      fallback={
-        <PageScaffold title="Bima" badge="INSURANCE">
-          <AccessDenied />
-        </PageScaffold>
-      }
-    >
-      <PageScaffold
-        title="Bima ya Kilimo"
-        subtitle="Crop & livestock protection"
-        badge="INSURANCE HUB"
-      >
-        {/* Verification Alert Banner */}
-        {agroId && agroId.verificationStatus !== 'verified' && (
-          <View style={{ paddingHorizontal: 24, marginBottom: 14 }}>
-            <GlassCard
-              style={{
-                padding: 14,
-                borderColor: '#f59e0b40',
-                backgroundColor: '#f59e0b10',
-                flexDirection: 'row',
-                gap: 10,
-                alignItems: 'center',
-              }}
-            >
-              <AlertTriangle size={18} color="#f59e0b" />
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: '#f59e0b' }}>
-                  {language === 'sw' ? 'Agro ID haijathibitishwa' : 'Agro ID unverified'}
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontFamily: 'Inter_500Medium',
-                    color: colors.textMute,
-                    marginTop: 1,
-                  }}
-                >
-                  {language === 'sw'
-                    ? 'Thibitisha wasifu wako ili upate punguzo la ruzuku ya bima kupitia ushirika wako.'
-                    : 'Verify your profile to unlock cooperative insurance subsidies.'}
-                </Text>
-              </View>
-            </GlassCard>
-          </View>
-        )}
-
-        <SectionHeader title={language === 'sw' ? 'Sera Zangu · My Policies' : 'My Policies'} />
-        {myPolicies.length === 0 ? (
-          <View style={{ paddingHorizontal: 24, marginBottom: 20 }}>
-            <GlassCard style={{ padding: 20, alignItems: 'center' }}>
-              <Shield size={24} color={colors.textMute} style={{ opacity: 0.7 }} />
-              <Text style={[s.empty, { color: colors.textMute }]}>
-                {language === 'sw'
-                  ? 'Hakuna sera bado · No active policies'
-                  : 'No active policies yet'}
-              </Text>
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontFamily: 'Inter_500Medium',
-                  color: colors.textMute,
-                  textAlign: 'center',
-                  marginTop: 4,
-                }}
-              >
-                {language === 'sw'
-                  ? 'Sajili mazao au mifugo yako ili ujilinde na majanga ya tabianchi.'
-                  : 'Enroll in a coverage below to protect your farming investments.'}
-              </Text>
-            </GlassCard>
-          </View>
-        ) : (
-          <View style={{ paddingHorizontal: 24, gap: 10, marginBottom: 20 }}>
-            {myPolicies.map((p) => (
-              <PolicyCard key={p.id} p={p} onClaim={() => openClaimModal(p)} />
-            ))}
-          </View>
-        )}
-
-        <SectionHeader
-          title={language === 'sw' ? 'Chagua Sera · Available Coverage' : 'Available Coverage'}
-        />
-        <View style={{ paddingHorizontal: 24, gap: 12, paddingBottom: 80 }}>
-          {available.map((p) => (
-            <GlassCard key={p.id} style={{ padding: 18 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <View style={[s.iconBg, { backgroundColor: colors.primary + '15' }]}>
-                  <Shield size={20} color={colors.primary} />
-                </View>
-                <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={[s.product, { color: colors.text }]}>{p.product}</Text>
-                  <Text style={[s.provider, { color: colors.textMute }]}>
-                    {p.provider} · {p.coverage.toUpperCase()}
-                  </Text>
-                </View>
-              </View>
-
-              <Text
-                style={{
-                  fontSize: 11.5,
-                  fontFamily: 'Inter_500Medium',
-                  color: colors.text,
-                  marginTop: 10,
-                  lineHeight: 17,
-                }}
-              >
-                {(p as any).desc ||
-                  (language === 'sw'
-                    ? 'Kinga dhidi ya mabadiliko ya hali ya hewa.'
-                    : 'Coverage against climatic anomalies.')}
-              </Text>
-
-              <View style={[s.specs, { borderTopColor: colors.border }]}>
-                <Spec label="Premium / Ada" value={`TZS ${fmt(p.premiumTZS)}`} />
-                <Spec label="Max Payout / Fidia" value={`TZS ${fmt(p.payoutMaxTZS)}`} highlight />
-                <Spec label="Term / Muda" value={`${p.termMonths} mo`} />
-              </View>
-
-              <TouchableOpacity
-                onPress={() => openEnrollment(p)}
-                style={[s.enrollBtn, { backgroundColor: colors.primary }]}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  language === 'sw'
-                    ? `Omba bima ya ${p.product} kutoka ${p.provider}`
-                    : `Apply for ${p.product} from ${p.provider}`
-                }
-              >
-                <Text style={s.enrollText}>
-                  {language === 'sw' ? 'Omba Bima · Apply Now' : 'Apply Now'}
-                </Text>
-              </TouchableOpacity>
-            </GlassCard>
-          ))}
-        </View>
-
-        {/* ─── MODAL 1: ENROLLMENT FORM (PREFILLED) ─── */}
-        <Modal
-          visible={enrollModalVisible}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={() => setEnrollModalVisible(false)}
-        >
-          <View style={[s.modalContainer, { backgroundColor: colors.background }]}>
-            <View style={[s.modalHeader, { borderBottomColor: colors.border }]}>
-              <View>
-                <Text style={[s.modalTitle, { color: colors.text }]}>
-                  {language === 'sw' ? 'Ombi la Bima' : 'Insurance Application'}
-                </Text>
-                <Text
-                  style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: colors.primary }}
-                >
-                  {selectedEnrollPolicy?.product}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setEnrollModalVisible(false)}
-                style={s.closeBtn}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  language === 'sw' ? 'Funga dirisha la maombi' : 'Close application modal'
-                }
-              >
-                <X size={20} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Stepper indicator */}
-            <View style={s.stepperRow}>
-              {[1, 2, 3].map((step) => (
-                <View key={step} style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-                  <View
-                    style={[
-                      s.stepNumCircle,
-                      {
-                        backgroundColor: enrollStep >= step ? colors.primary : colors.border,
-                        borderColor: enrollStep === step ? colors.primary : 'transparent',
-                      },
-                    ]}
-                  >
-                    <Text style={{ color: '#000', fontSize: 12, fontFamily: 'Inter_800ExtraBold' }}>
-                      {step}
-                    </Text>
-                  </View>
-                  {step < 3 && (
-                    <View
-                      style={[
-                        s.stepLine,
-                        { backgroundColor: enrollStep > step ? colors.primary : colors.border },
-                      ]}
-                    />
-                  )}
-                </View>
-              ))}
-            </View>
-
-            <ScrollView
-              contentContainerStyle={{ padding: 24, paddingBottom: 60 }}
-              showsVerticalScrollIndicator={false}
-            >
-              {/* STEP 1: Personal & Agro ID Sync */}
-              {enrollStep === 1 && (
-                <View style={{ gap: 14 }}>
-                  <View style={s.prefillBanner}>
-                    <Sparkles size={14} color={colors.primary} />
-                    <Text style={s.prefillBannerText}>
-                      {language === 'sw'
-                        ? 'Habari zimejazwa moja kwa moja kutoka kwenye Agro ID yako.'
-                        : 'Details prefilled using your verified Agro ID profile.'}
-                    </Text>
-                  </View>
-
-                  <View style={s.inputGroup}>
-                    <Text style={[s.inputLabel, { color: colors.textMute }]}>
-                      Jina la Mkulima / Farmer Name
-                    </Text>
-                    <View style={[s.inputWrap, { borderColor: colors.border }]}>
-                      <User size={16} color={colors.textMute} />
-                      <TextInput
-                        style={[s.textInput, { color: colors.text }]}
-                        value={farmerName}
-                        onChangeText={setFarmerName}
-                        placeholder="Enter full name"
-                        placeholderTextColor={colors.textMute}
-                        accessibilityLabel={language === 'sw' ? 'Jina la Mkulima' : 'Farmer Name'}
-                        accessibilityHint={
-                          language === 'sw' ? 'Weka jina lako kamili' : 'Enter your full name'
-                        }
-                      />
-                    </View>
-                  </View>
-
-                  <View style={s.inputGroup}>
-                    <Text style={[s.inputLabel, { color: colors.textMute }]}>
-                      Nambari ya Simu / Phone
-                    </Text>
-                    <View style={[s.inputWrap, { borderColor: colors.border }]}>
-                      <Phone size={16} color={colors.textMute} />
-                      <TextInput
-                        style={[s.textInput, { color: colors.text }]}
-                        value={farmerPhone}
-                        onChangeText={setFarmerPhone}
-                        keyboardType="phone-pad"
-                        placeholder="e.g. +255 765 123 456"
-                        placeholderTextColor={colors.textMute}
-                        accessibilityLabel={language === 'sw' ? 'Nambari ya Simu' : 'Phone Number'}
-                        accessibilityHint={
-                          language === 'sw'
-                            ? 'Weka nambari yako ya simu ya mkononi'
-                            : 'Enter your mobile phone number'
-                        }
-                      />
-                    </View>
-                  </View>
-
-                  <View style={s.inputGroup}>
-                    <Text style={[s.inputLabel, { color: colors.textMute }]}>
-                      NIDA / National ID Number
-                    </Text>
-                    <View style={[s.inputWrap, { borderColor: colors.border }]}>
-                      <Shield size={16} color={colors.textMute} />
-                      <TextInput
-                        style={[s.textInput, { color: colors.text }]}
-                        value={nationalId}
-                        onChangeText={setNationalId}
-                        placeholder="NIDA Number (digits)"
-                        placeholderTextColor={colors.textMute}
-                        accessibilityLabel={
-                          language === 'sw' ? 'Nambari ya NIDA' : 'National ID Number'
-                        }
-                        accessibilityHint={
-                          language === 'sw'
-                            ? 'Weka nambari yako ya NIDA ya Kitanzania'
-                            : 'Enter your Tanzanian NIDA number'
-                        }
-                      />
-                    </View>
-                  </View>
-
-                  <View style={s.inputGroup}>
-                    <Text style={[s.inputLabel, { color: colors.textMute }]}>
-                      Mkoa na Wilaya / Region
-                    </Text>
-                    <View style={[s.inputWrap, { borderColor: colors.border }]}>
-                      <MapPin size={16} color={colors.textMute} />
-                      <TextInput
-                        style={[s.textInput, { color: colors.text }]}
-                        value={farmerRegion}
-                        onChangeText={setFarmerRegion}
-                        placeholder="e.g. Mbeya, Rungwe"
-                        placeholderTextColor={colors.textMute}
-                        accessibilityLabel={
-                          language === 'sw' ? 'Mkoa na Wilaya' : 'Region and District'
-                        }
-                        accessibilityHint={
-                          language === 'sw'
-                            ? 'Weka eneo lilipo shamba lako'
-                            : 'Enter where your farm is located'
-                        }
-                      />
-                    </View>
-                  </View>
-                </View>
-              )}
-
-              {/* STEP 2: Farm Specifics */}
-              {enrollStep === 2 && (
-                <View style={{ gap: 14 }}>
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      fontFamily: 'Inter_700Bold',
-                      color: colors.text,
-                      marginBottom: 4,
-                    }}
-                  >
-                    {language === 'sw' ? 'Maelezo ya Shamba' : 'Farm Details'}
-                  </Text>
-
-                  <View style={s.inputGroup}>
-                    <Text style={[s.inputLabel, { color: colors.textMute }]}>
-                      Zao Linalokatiwa Bima / Crop to Cover
-                    </Text>
-                    <TextInput
-                      style={[
-                        s.singleTextInput,
-                        { color: colors.text, borderColor: colors.border },
-                      ]}
-                      value={cropCovered}
-                      onChangeText={setCropCovered}
-                      placeholder="e.g. Maize / Nyanya"
-                      placeholderTextColor={colors.textMute}
-                      accessibilityLabel={
-                        language === 'sw' ? 'Zao Linalokatiwa Bima' : 'Crop to Cover'
-                      }
-                      accessibilityHint={
-                        language === 'sw' ? 'Weka jina la zao' : 'Enter the crop type'
-                      }
-                    />
-                  </View>
-
-                  <View style={s.inputGroup}>
-                    <Text style={[s.inputLabel, { color: colors.textMute }]}>
-                      Ukubwa wa Shamba (Acres) / Farm Size
-                    </Text>
-                    <TextInput
-                      style={[
-                        s.singleTextInput,
-                        { color: colors.text, borderColor: colors.border },
-                      ]}
-                      value={farmAcres}
-                      onChangeText={setFarmAcres}
-                      keyboardType="numeric"
-                      placeholder="e.g. 5"
-                      placeholderTextColor={colors.textMute}
-                      accessibilityLabel={
-                        language === 'sw' ? 'Ukubwa wa Shamba kwa Ekari' : 'Farm Size in Acres'
-                      }
-                      accessibilityHint={
-                        language === 'sw'
-                          ? 'Weka idadi ya ekari za shamba'
-                          : 'Enter the size of the farm in acres'
-                      }
-                    />
-                  </View>
-
-                  <GlassCard
-                    style={{ padding: 14, marginTop: 10, borderColor: colors.primary + '20' }}
-                  >
-                    <Text
-                      style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: colors.textMute }}
-                    >
-                      COVERAGE LIMITS
-                    </Text>
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        marginTop: 8,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          fontFamily: 'Inter_600SemiBold',
-                          color: colors.text,
-                        }}
-                      >
-                        Max Loss Payout:
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          fontFamily: 'Inter_800ExtraBold',
-                          color: colors.primary,
-                        }}
-                      >
-                        TZS{' '}
-                        {fmt(
-                          (selectedEnrollPolicy?.payoutMaxTZS ?? 0) * (parseFloat(farmAcres) || 1)
-                        )}
-                      </Text>
-                    </View>
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        color: colors.textMute,
-                        marginTop: 4,
-                        fontFamily: 'Inter_500Medium',
-                      }}
-                    >
-                      Payout is adjusted dynamically based on satellite NDVI vegetation stress index
-                      readings.
-                    </Text>
-                  </GlassCard>
-                </View>
-              )}
-
-              {/* STEP 3: Premium Billing Integration */}
-              {enrollStep === 3 && (
-                <View style={{ gap: 16 }}>
-                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: colors.text }}>
-                    {language === 'sw' ? 'Malipo ya Bima' : 'Premium Payment'}
-                  </Text>
-
-                  <View style={[s.pnlBox, { borderColor: colors.border }]}>
-                    <View style={s.pnlRow}>
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          fontFamily: 'Inter_600SemiBold',
-                          color: colors.text,
-                        }}
-                      >
-                        Premium Rate:
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 13,
-                          fontFamily: 'Inter_800ExtraBold',
-                          color: colors.text,
-                        }}
-                      >
-                        TZS {fmt(selectedEnrollPolicy?.premiumTZS ?? 0)}
-                      </Text>
-                    </View>
-                    <View style={s.pnlRow}>
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          fontFamily: 'Inter_600SemiBold',
-                          color: colors.text,
-                        }}
-                      >
-                        Cooperative Subsidy (30%):
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 13,
-                          fontFamily: 'Inter_800ExtraBold',
-                          color: colors.primary,
-                        }}
-                      >
-                        - TZS {fmt(Math.round((selectedEnrollPolicy?.premiumTZS ?? 0) * 0.3))}
-                      </Text>
-                    </View>
-                    <View
-                      style={{ height: 1, backgroundColor: colors.border, marginVertical: 4 }}
-                    />
-                    <View style={s.pnlRow}>
-                      <Text
-                        style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: colors.text }}
-                      >
-                        Total Due:
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 15,
-                          fontFamily: 'Inter_800ExtraBold',
-                          color: colors.primary,
-                        }}
-                      >
-                        TZS {fmt(Math.round((selectedEnrollPolicy?.premiumTZS ?? 0) * 0.7))}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <Text style={[s.inputLabel, { color: colors.textMute, marginBottom: -6 }]}>
-                    Chagua Njia ya Malipo / Payment Method
-                  </Text>
-
-                  <TouchableOpacity
-                    onPress={() => setPaymentMethod('mpesa')}
-                    style={[
-                      s.payMethodCard,
-                      { borderColor: paymentMethod === 'mpesa' ? colors.primary : colors.border },
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityLabel="Vodacom M-Pesa"
-                    accessibilityState={{ selected: paymentMethod === 'mpesa' }}
-                  >
-                    <View
-                      style={[
-                        s.radioCircle,
-                        { borderColor: paymentMethod === 'mpesa' ? colors.primary : colors.border },
-                      ]}
-                    >
-                      {paymentMethod === 'mpesa' && (
-                        <View style={[s.radioInner, { backgroundColor: colors.primary }]} />
-                      )}
-                    </View>
-                    <View style={{ gap: 2 }}>
-                      <Text
-                        style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: colors.text }}
-                      >
-                        Vodacom M-Pesa
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          color: colors.textMute,
-                          fontFamily: 'Inter_500Medium',
-                        }}
-                      >
-                        Auto-deduct linked number: {farmerPhone || 'Not set'}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={() => setPaymentMethod('tigo')}
-                    style={[
-                      s.payMethodCard,
-                      { borderColor: paymentMethod === 'tigo' ? colors.primary : colors.border },
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityLabel="Tigo Pesa"
-                    accessibilityState={{ selected: paymentMethod === 'tigo' }}
-                  >
-                    <View
-                      style={[
-                        s.radioCircle,
-                        { borderColor: paymentMethod === 'tigo' ? colors.primary : colors.border },
-                      ]}
-                    >
-                      {paymentMethod === 'tigo' && (
-                        <View style={[s.radioInner, { backgroundColor: colors.primary }]} />
-                      )}
-                    </View>
-                    <View style={{ gap: 2 }}>
-                      <Text
-                        style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: colors.text }}
-                      >
-                        Tigo Pesa
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          color: colors.textMute,
-                          fontFamily: 'Inter_500Medium',
-                        }}
-                      >
-                        Manual push USSD prompt
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  <View
-                    style={{ flexDirection: 'row', gap: 6, alignItems: 'flex-start', marginTop: 8 }}
-                  >
-                    <CheckCircle2 size={14} color={colors.primary} style={{ marginTop: 2 }} />
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontFamily: 'Inter_500Medium',
-                        color: colors.textMute,
-                        flex: 1,
-                      }}
-                    >
-                      {language === 'sw'
-                        ? 'Mkataba wako wa bima utaanza mara moja baada ya malipo kuthibitishwa.'
-                        : 'Your cover goes active immediately upon automated mobile money confirmation.'}
-                    </Text>
-                  </View>
-                </View>
-              )}
-
-              {/* Bottom Nav inside modal */}
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 30 }}>
-                {enrollStep > 1 && (
-                  <TouchableOpacity
-                    onPress={() => setEnrollStep(enrollStep - 1)}
-                    style={[s.modalSecBtn, { borderColor: colors.border }]}
-                    accessibilityRole="button"
-                    accessibilityLabel={language === 'sw' ? 'Rudi nyuma' : 'Go back'}
-                  >
-                    <Text style={[s.modalSecBtnText, { color: colors.text }]}>Back</Text>
-                  </TouchableOpacity>
-                )}
-
-                {enrollStep < 3 ? (
-                  <TouchableOpacity
-                    onPress={() => setEnrollStep(enrollStep + 1)}
-                    style={[s.modalPriBtn, { backgroundColor: colors.primary, flex: 1 }]}
-                    accessibilityRole="button"
-                    accessibilityLabel={language === 'sw' ? 'Endelea' : 'Continue'}
-                  >
-                    <Text style={s.modalPriBtnText}>Continue</Text>
-                    <ChevronRight size={16} color="#000" />
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity
-                    onPress={handleEnrollSubmit}
-                    disabled={loadingEnroll}
-                    style={[s.modalPriBtn, { backgroundColor: colors.primary, flex: 1 }]}
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      language === 'sw'
-                        ? 'Thibitisha malipo na utume'
-                        : 'Confirm payment and submit'
-                    }
-                  >
-                    {loadingEnroll ? (
-                      <ActivityIndicator size="small" color="#000" />
-                    ) : (
-                      <>
-                        <Text style={s.modalPriBtnText}>
-                          {language === 'sw' ? 'Thibitisha Malipo' : 'Submit & Pay'}
-                        </Text>
-                        <Check size={16} color="#000" />
-                      </>
-                    )}
-                  </TouchableOpacity>
-                )}
-              </View>
-            </ScrollView>
-          </View>
-        </Modal>
-
-        {/* ─── MODAL 2: INTERACTIVE CLAIMS FLOW (WITH CAMERA VIEWER) ─── */}
-        <Modal
-          visible={claimModalVisible}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={() => setClaimModalVisible(false)}
-        >
-          <View style={[s.modalContainer, { backgroundColor: colors.background }]}>
-            <View style={[s.modalHeader, { borderBottomColor: colors.border }]}>
-              <View>
-                <Text style={[s.modalTitle, { color: colors.text }]}>
-                  {language === 'sw' ? 'Wasilisha Dai la Fidia' : 'Submit Insurance Claim'}
-                </Text>
-                <Text
-                  style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: colors.primary }}
-                >
-                  {selectedClaimPolicy?.product} · {selectedClaimPolicy?.provider}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setClaimModalVisible(false)}
-                style={s.closeBtn}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  language === 'sw' ? 'Funga dirisha la madai' : 'Close claims modal'
-                }
-              >
-                <X size={20} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Stepper */}
-            <View style={s.stepperRow}>
-              {[1, 2, 3].map((step) => (
-                <View key={step} style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-                  <View
-                    style={[
-                      s.stepNumCircle,
-                      {
-                        backgroundColor: claimStep >= step ? colors.primary : colors.border,
-                        borderColor: claimStep === step ? colors.primary : 'transparent',
-                      },
-                    ]}
-                  >
-                    <Text style={{ color: '#000', fontSize: 12, fontFamily: 'Inter_800ExtraBold' }}>
-                      {step}
-                    </Text>
-                  </View>
-                  {step < 3 && (
-                    <View
-                      style={[
-                        s.stepLine,
-                        { backgroundColor: claimStep > step ? colors.primary : colors.border },
-                      ]}
-                    />
-                  )}
-                </View>
-              ))}
-            </View>
-
-            <ScrollView
-              contentContainerStyle={{ padding: 24, paddingBottom: 60 }}
-              showsVerticalScrollIndicator={false}
-            >
-              {/* STEP 1: Assessment details */}
-              {claimStep === 1 && (
-                <View style={{ gap: 14 }}>
-                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: colors.text }}>
-                    {language === 'sw' ? 'Hatua ya 1: Chanzo cha hasara' : 'Step 1: Cause of Loss'}
-                  </Text>
-
-                  <View style={s.inputGroup}>
-                    <Text style={[s.inputLabel, { color: colors.textMute }]}>
-                      Sababu ya Hasara / Reason for Loss
-                    </Text>
-                    <TextInput
-                      style={[s.textarea, { color: colors.text, borderColor: colors.border }]}
-                      multiline
-                      numberOfLines={4}
-                      value={claimReason}
-                      onChangeText={setClaimReason}
-                      placeholder={
-                        language === 'sw'
-                          ? 'Eleza kwa kifupi uharibifu uliotokea na tarehe yake...'
-                          : 'Describe what happened (e.g. drought impact, armyworms, flooding)...'
-                      }
-                      placeholderTextColor={colors.textMute}
-                      accessibilityLabel={
-                        language === 'sw' ? 'Sababu ya Hasara' : 'Reason for Loss'
-                      }
-                      accessibilityHint={
-                        language === 'sw'
-                          ? 'Eleza kwa nini unadai fidia na nini kilitokea shambani'
-                          : 'Explain why you are filing a claim and what happened'
-                      }
-                    />
-                  </View>
-
-                  <Text style={[s.inputLabel, { color: colors.textMute, marginBottom: -6 }]}>
-                    Kiwango cha Uharibifu / Damage Severity
-                  </Text>
-
-                  <View style={s.severityRow}>
-                    {(['low', 'medium', 'high', 'total'] as const).map((sev) => (
-                      <TouchableOpacity
-                        key={sev}
-                        onPress={() => setDamageLevel(sev)}
-                        style={[
-                          s.sevCard,
-                          {
-                            borderColor: damageLevel === sev ? colors.primary : colors.border,
-                            backgroundColor:
-                              damageLevel === sev ? colors.primary + '10' : 'transparent',
-                          },
-                        ]}
-                        accessibilityRole="button"
-                        accessibilityLabel={
-                          language === 'sw'
-                            ? `Kiwango cha uharibifu: ${sev}`
-                            : `Damage level: ${sev}`
-                        }
-                        accessibilityState={{ selected: damageLevel === sev }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 11.5,
-                            fontFamily: 'Inter_700Bold',
-                            color: damageLevel === sev ? colors.primary : colors.text,
-                            textTransform: 'capitalize',
-                          }}
-                        >
-                          {sev}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  {selectedClaimPolicy && (
-                    <GlassCard
-                      style={{
-                        padding: 14,
-                        borderColor: '#ef444430',
-                        backgroundColor: '#ef444405',
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          fontFamily: 'Inter_700Bold',
-                          color: colors.textMute,
-                        }}
-                      >
-                        ESTIMATED PAYOUT
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 18,
-                          fontFamily: 'Inter_800ExtraBold',
-                          color: '#ef4444',
-                          marginTop: 4,
-                        }}
-                      >
-                        TZS{' '}
-                        {fmt(
-                          Math.round(
-                            selectedClaimPolicy.payoutMaxTZS *
-                              (damageLevel === 'low'
-                                ? 0.2
-                                : damageLevel === 'medium'
-                                  ? 0.5
-                                  : damageLevel === 'high'
-                                    ? 0.8
-                                    : 1.0)
-                          )
-                        )}
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          color: colors.textMute,
-                          marginTop: 4,
-                          fontFamily: 'Inter_500Medium',
-                        }}
-                      >
-                        * Fidia halisi imedhamiriwa baada ya ukaguzi wa picha na uthibitisho wa
-                        satelaiti.
-                      </Text>
-                    </GlassCard>
-                  )}
-                </View>
-              )}
-
-              {/* STEP 2: Photo evidence camera simulator */}
-              {claimStep === 2 && (
-                <View style={{ gap: 14 }}>
-                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: colors.text }}>
-                    {language === 'sw'
-                      ? 'Hatua ya 2: Ushahidi wa Picha'
-                      : 'Step 2: Upload Photo Evidence'}
-                  </Text>
-
-                  {/* Viewfinder simulator */}
-                  {!claimPhoto ? (
-                    <View
-                      style={[
-                        s.viewfinder,
-                        {
-                          backgroundColor: isDark ? '#111810' : '#f4fbf3',
-                          borderColor: colors.border,
-                        },
-                      ]}
-                    >
-                      {isCapturing ? (
-                        <View style={{ alignItems: 'center', gap: 10 }}>
-                          <ActivityIndicator size="large" color={colors.primary} />
-                          <Text
-                            style={{
-                              fontSize: 12,
-                              fontFamily: 'Inter_600SemiBold',
-                              color: colors.textMute,
-                            }}
-                          >
-                            {language === 'sw'
-                              ? 'Inapakua picha ya ushahidi...'
-                              : 'Analyzing crop damage image...'}
-                          </Text>
-                        </View>
-                      ) : (
-                        <View style={{ alignItems: 'center', padding: 24, gap: 14 }}>
-                          <Camera size={44} color={colors.textMute} style={{ opacity: 0.6 }} />
-                          <Text
-                            style={{
-                              fontSize: 12,
-                              fontFamily: 'Inter_600SemiBold',
-                              color: colors.textMute,
-                              textAlign: 'center',
-                            }}
-                          >
-                            {language === 'sw'
-                              ? 'Piga picha ya shamba lako au mifugo ili kuthibitisha hasara.'
-                              : 'Take a clear photo of the damaged area to prove the claim.'}
-                          </Text>
-                          <TouchableOpacity
-                            onPress={simulateCameraCapture}
-                            style={[s.cameraBtn, { backgroundColor: colors.primary }]}
-                            accessibilityRole="button"
-                            accessibilityLabel={
-                              language === 'sw'
-                                ? 'Piga picha ya ushahidi wa hasara'
-                                : 'Capture photo evidence of damage'
-                            }
-                          >
-                            <Camera size={16} color="#000" />
-                            <Text style={s.cameraBtnText}>
-                              {language === 'sw' ? 'Piga Picha · Capture' : 'Capture Evidence'}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                      )}
-                    </View>
-                  ) : (
-                    <View style={{ gap: 12 }}>
-                      <View style={[s.photoPreviewContainer, { borderColor: colors.border }]}>
-                        <Image source={{ uri: claimPhoto }} style={s.photoPreview} />
-                        <View style={s.photoSuccessOverlay}>
-                          <CheckCircle2 size={24} color={colors.primary} />
-                        </View>
-                      </View>
-
-                      <View style={{ flexDirection: 'row', gap: 10 }}>
-                        <TouchableOpacity
-                          onPress={() => setClaimPhoto(null)}
-                          style={[s.modalSecBtn, { borderColor: colors.border, flex: 1 }]}
-                          accessibilityRole="button"
-                          accessibilityLabel={
-                            language === 'sw' ? 'Piga picha tena' : 'Retake photo'
-                          }
-                        >
-                          <Text style={[s.modalSecBtnText, { color: colors.text }]}>
-                            {language === 'sw' ? 'Piga Tena' : 'Retake'}
-                          </Text>
-                        </TouchableOpacity>
-                        <View
-                          style={[
-                            s.evidenceBadge,
-                            {
-                              flex: 1.5,
-                              backgroundColor: colors.primary + '15',
-                              borderColor: colors.primary,
-                            },
-                          ]}
-                        >
-                          <Sparkles size={12} color={colors.primary} />
-                          <Text
-                            style={{
-                              fontSize: 12,
-                              fontFamily: 'Inter_700Bold',
-                              color: colors.primary,
-                            }}
-                          >
-                            Geo-Tagged & Secured
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {/* STEP 3: Confirm & Submit */}
-              {claimStep === 3 && (
-                <View style={{ gap: 16 }}>
-                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: colors.text }}>
-                    {language === 'sw'
-                      ? 'Hatua ya 3: Uhakiki na Kutuma'
-                      : 'Step 3: Review & Submit'}
-                  </Text>
-
-                  <View style={[s.pnlBox, { borderColor: colors.border }]}>
-                    <View style={s.pnlRow}>
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          fontFamily: 'Inter_600SemiBold',
-                          color: colors.textMute,
-                        }}
-                      >
-                        Sera / Policy:
-                      </Text>
-                      <Text
-                        style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: colors.text }}
-                      >
-                        {selectedClaimPolicy?.product}
-                      </Text>
-                    </View>
-                    <View style={s.pnlRow}>
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          fontFamily: 'Inter_600SemiBold',
-                          color: colors.textMute,
-                        }}
-                      >
-                        Mtoa Huduma / Provider:
-                      </Text>
-                      <Text
-                        style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: colors.text }}
-                      >
-                        {selectedClaimPolicy?.provider}
-                      </Text>
-                    </View>
-                    <View style={s.pnlRow}>
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          fontFamily: 'Inter_600SemiBold',
-                          color: colors.textMute,
-                        }}
-                      >
-                        Kiwango cha Hasara:
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          fontFamily: 'Inter_800ExtraBold',
-                          color: '#ef4444',
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        {damageLevel}
-                      </Text>
-                    </View>
-                    <View
-                      style={{ height: 1, backgroundColor: colors.border, marginVertical: 4 }}
-                    />
-                    <View style={s.pnlRow}>
-                      <Text
-                        style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: colors.text }}
-                      >
-                        Fidia Inayotarajiwa:
-                      </Text>
-                      <Text
-                        style={{ fontSize: 16, fontFamily: 'Inter_800ExtraBold', color: '#ef4444' }}
-                      >
-                        TZS{' '}
-                        {fmt(
-                          Math.round(
-                            (selectedClaimPolicy?.payoutMaxTZS ?? 0) *
-                              (damageLevel === 'low'
-                                ? 0.2
-                                : damageLevel === 'medium'
-                                  ? 0.5
-                                  : damageLevel === 'high'
-                                    ? 0.8
-                                    : 1.0)
-                          )
-                        )}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-                    {claimPhoto && <Image source={{ uri: claimPhoto }} style={s.thumbnail} />}
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: colors.text }}
-                      >
-                        {language === 'sw'
-                          ? 'Ushahidi wa picha umepakiwa'
-                          : 'Photo evidence attached'}
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          color: colors.textMute,
-                          marginTop: 1,
-                          fontFamily: 'Inter_500Medium',
-                        }}
-                        numberOfLines={2}
-                      >
-                        {claimReason || 'No text description entered.'}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={s.agreeBox}>
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        color: colors.textMute,
-                        lineHeight: 15,
-                        fontFamily: 'Inter_500Medium',
-                      }}
-                    >
-                      Nathibitisha kuwa taarifa zote zilizotolewa hapa ni za kweli na zinaonyesha
-                      uhalisia wa hasara iliyotokea shambani kwangu.
-                    </Text>
-                  </View>
-                </View>
-              )}
-
-              {/* Navigation buttons inside Claims Modal */}
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 30 }}>
-                {claimStep > 1 && (
-                  <TouchableOpacity
-                    onPress={() => setClaimStep(claimStep - 1)}
-                    style={[s.modalSecBtn, { borderColor: colors.border }]}
-                    accessibilityRole="button"
-                    accessibilityLabel={language === 'sw' ? 'Rudi nyuma' : 'Go back'}
-                  >
-                    <Text style={[s.modalSecBtnText, { color: colors.text }]}>Back</Text>
-                  </TouchableOpacity>
-                )}
-
-                {claimStep < 3 ? (
-                  <TouchableOpacity
-                    onPress={() => {
-                      if (claimStep === 2 && !claimPhoto) {
-                        Alert.alert(
-                          language === 'sw' ? 'Ushahidi unahitajika' : 'Evidence required',
-                          language === 'sw'
-                            ? 'Tafadhali piga picha kwanza.'
-                            : 'Please capture photo evidence before continuing.'
-                        );
-                        return;
-                      }
-                      setClaimStep(claimStep + 1);
-                    }}
-                    style={[s.modalPriBtn, { backgroundColor: colors.primary, flex: 1 }]}
-                    accessibilityRole="button"
-                    accessibilityLabel={language === 'sw' ? 'Endelea' : 'Continue'}
-                  >
-                    <Text style={s.modalPriBtnText}>Continue</Text>
-                    <ChevronRight size={16} color="#000" />
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity
-                    onPress={handleClaimSubmit}
-                    disabled={loadingClaim}
-                    style={[s.modalPriBtn, { backgroundColor: colors.primary, flex: 1 }]}
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      language === 'sw' ? 'Tuma dai la fidia' : 'Submit crop claim'
-                    }
-                  >
-                    {loadingClaim ? (
-                      <ActivityIndicator size="small" color="#000" />
-                    ) : (
-                      <>
-                        <Text style={s.modalPriBtnText}>
-                          {language === 'sw' ? 'Tuma Dai Sasa' : 'Submit Claim'}
-                        </Text>
-                        <Check size={16} color="#000" />
-                      </>
-                    )}
-                  </TouchableOpacity>
-                )}
-              </View>
-            </ScrollView>
-          </View>
-        </Modal>
-      </PageScaffold>
+    <Gate feature="insurance" fallback={denied}>
+      <InsuranceRecords />
     </Gate>
   );
 }
 
-function PolicyCard({ p, onClaim }: { p: InsurancePolicy; onClaim: () => void }) {
-  const { colors } = useTheme();
-  const meta = STATUS_META[p.status];
-  return (
-    <GlassCard style={{ padding: 18 }}>
-      <View style={s.policyRow}>
-        <View style={[s.statusBadge, { backgroundColor: meta.color + '25' }]}>
-          <View style={[s.statusDot, { backgroundColor: meta.color }]} />
-          <Text style={[s.statusText, { color: meta.color }]}>{meta.label.toUpperCase()}</Text>
-        </View>
-        {p.expiresAt && (
-          <Text style={[s.expires, { color: colors.textMute }]}>
-            <Clock size={10} color={colors.textMute} /> Until{' '}
-            {new Date(p.expiresAt).toLocaleDateString('en-GB')}
-          </Text>
-        )}
-      </View>
-      <Text style={[s.product, { color: colors.text, marginTop: 8 }]}>{p.product}</Text>
-      <Text style={[s.provider, { color: colors.textMute }]}>{p.provider}</Text>
+function InsuranceRecords() {
+  const router = useRouter();
+  const { t } = useT();
+  const { colors, spacing } = useTheme();
+  const ins = useInsurance();
+  const { policies, claims, loading, loaded, error, isOffline } = ins;
 
-      {p.status === 'claimed' ? (
-        <View style={[s.claimBox, { borderColor: '#3b82f640', backgroundColor: '#3b82f605' }]}>
-          <FileCheck2 size={14} color="#3b82f6" />
-          <Text style={[s.claimText, { color: '#3b82f6' }]}>
-            Claim filed: TZS {fmt(p.claimAmountTZS ?? 0)} — under review
-          </Text>
-        </View>
-      ) : p.status === 'active' ? (
-        <TouchableOpacity onPress={onClaim} style={[s.claimBtn, { borderColor: colors.primary }]}>
-          <Text style={[s.claimBtnText, { color: colors.primary }]}>Omba Fidia · File Claim</Text>
-        </TouchableOpacity>
-      ) : null}
-    </GlassCard>
-  );
-}
+  const [form, setForm] = useState<FormState>(null);
+  const [flash, setFlash] = useState<string | null>(null);
 
-function Spec({ label, value, highlight }: any) {
-  const { colors } = useTheme();
+  useEffect(() => {
+    if (!flash) return;
+    const id = setTimeout(() => setFlash(null), 6000);
+    return () => clearTimeout(id);
+  }, [flash]);
+
+  const writeError = (reason: string) =>
+    reason === 'offline' ? t('insurance.write.offline') : t('insurance.write.failed');
+
+  const confirmDeletePolicy = (p: InsurancePolicy) =>
+    Alert.alert(t('insurance.policy.delete.confirmTitle'), t('insurance.policy.delete.confirmBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('insurance.policy.delete'),
+        style: 'destructive',
+        onPress: async () => {
+          const r = await ins.removePolicy(p.id);
+          if (failed(r)) Alert.alert(t('state.error.title'), writeError(r.reason));
+        },
+      },
+    ]);
+
+  const confirmDeleteClaim = (c: InsuranceClaim) =>
+    Alert.alert(t('insurance.claim.delete.confirmTitle'), t('insurance.claim.delete.confirmBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('insurance.claim.delete'),
+        style: 'destructive',
+        onPress: async () => {
+          const r = await ins.removeClaim(c.id);
+          if (failed(r)) Alert.alert(t('state.error.title'), writeError(r.reason));
+        },
+      },
+    ]);
+
+  const changeClaimStatus = async (c: InsuranceClaim, status: ClaimStatus) => {
+    const r = await ins.setClaimStatus(c.id, status);
+    if (failed(r)) Alert.alert(t('state.error.title'), writeError(r.reason));
+  };
+
+  const cancelPolicy = async (p: InsurancePolicy) => {
+    const r = await ins.setPolicyStatus(p.id, 'cancelled');
+    if (failed(r)) Alert.alert(t('state.error.title'), writeError(r.reason));
+  };
+
+  // Opens the phone's share sheet. Nothing is sent by the app itself.
+  const shareClaim = async (p: InsurancePolicy, c: InsuranceClaim) => {
+    try {
+      await Share.share({ message: buildClaimSummary(p, c, t) });
+    } catch {
+      Alert.alert(t('state.error.title'), t('insurance.claim.share.failed'));
+    }
+  };
+
+  // ── body ────────────────────────────────────────────────────────────────────
+  let body: React.ReactNode;
+  if (loading && !loaded) {
+    body = (
+      <SkeletonGroup label={t('state.loading')}>
+        {[0, 1].map((i) => (
+          <SkeletonBlock key={i} height={150} radius={16} style={{ marginBottom: spacing.md }} />
+        ))}
+      </SkeletonGroup>
+    );
+  } else if (error === 'not_configured') {
+    body = <EmptyState title={t('insurance.unconfigured')} />;
+  } else if (!loaded) {
+    body = (
+      <ErrorState
+        title={t('insurance.error.title')}
+        description={isOffline ? t('insurance.offline.banner') : t('state.error.body')}
+        retryLabel={t('common.retry')}
+        onRetry={ins.refresh}
+      />
+    );
+  } else {
+    body = (
+      <>
+        {error ? (
+          <AlertCard
+            variant="warning"
+            title={t('insurance.error.title')}
+            actionLabel={t('common.retry')}
+            onAction={ins.refresh}
+            style={{ marginBottom: spacing.md }}
+          />
+        ) : null}
+
+        {flash ? (
+          <AlertCard variant="success" title={flash} announce style={{ marginBottom: spacing.md }} />
+        ) : null}
+
+        {form?.type === 'policy' ? (
+          <PolicyForm
+            t={t}
+            onCancel={() => setForm(null)}
+            onSave={async (input) => {
+              const r = await ins.addPolicy(input);
+              if (failed(r)) return writeError(r.reason);
+              setForm(null);
+              setFlash(t('insurance.policy.saved'));
+              return null;
+            }}
+          />
+        ) : policies.length > 0 ? (
+          <>
+            <AppText variant="h3" accessibilityRole="header" style={{ marginBottom: spacing.sm }}>
+              {t('insurance.policies.heading')}
+            </AppText>
+            <Button
+              label={t('insurance.addPolicy')}
+              icon={<Plus size={20} color={colors.textOnPrimary} />}
+              onPress={() => setForm({ type: 'policy' })}
+              size="md"
+              style={{ marginBottom: spacing.md }}
+            />
+          </>
+        ) : null}
+
+        {policies.length === 0 && form?.type !== 'policy' ? (
+          <EmptyState
+            title={t('insurance.empty.title')}
+            description={t('insurance.empty.body')}
+            icon={<Shield size={48} color={colors.primary} />}
+            actionLabel={t('insurance.addPolicy')}
+            onAction={() => setForm({ type: 'policy' })}
+            style={{ flex: 0 }}
+          />
+        ) : null}
+
+        {policies.map((p) => {
+          const own = claims.filter((c) => c.policyId === p.id);
+          return (
+            <View key={p.id} style={{ marginBottom: spacing.md }}>
+              <PolicyCard
+                t={t}
+                policy={p}
+                claims={own}
+                onAddClaim={() => setForm({ type: 'claim', policyId: p.id })}
+                onCancel={() => cancelPolicy(p)}
+                onDelete={() => confirmDeletePolicy(p)}
+                onClaimStatus={changeClaimStatus}
+                onShare={(c) => shareClaim(p, c)}
+                onDeleteClaim={confirmDeleteClaim}
+              />
+              {form?.type === 'claim' && form.policyId === p.id ? (
+                <ClaimForm
+                  t={t}
+                  policy={p}
+                  onCancel={() => setForm(null)}
+                  onSave={async (input) => {
+                    const r = await ins.addClaim(input);
+                    if (failed(r)) return writeError(r.reason);
+                    setForm(null);
+                    setFlash(t('insurance.claim.saved'));
+                    return null;
+                  }}
+                />
+              ) : null}
+            </View>
+          );
+        })}
+      </>
+    );
+  }
+
   return (
-    <View style={{ flex: 1 }}>
-      <Text style={[s.specLabel, { color: colors.textMute }]}>{label.toUpperCase()}</Text>
-      <Text
-        style={[s.specValue, { color: highlight ? colors.primary : colors.text }]}
-        numberOfLines={1}
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <ScreenHeader
+        title={t('insurance.title')}
+        showBack
+        onBack={() => router.back()}
+        backLabel={t('common.back')}
+      />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {value}
-      </Text>
-    </View>
+        <ScrollView
+          contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxxl }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          refreshControl={<RefreshControl refreshing={loading && loaded} onRefresh={ins.refresh} />}
+        >
+          {isOffline ? (
+            <OfflineBanner
+              message={t('insurance.offline.banner')}
+              style={{ marginBottom: spacing.md }}
+            />
+          ) : null}
+          <AlertCard
+            variant="info"
+            title={t('insurance.notice.title')}
+            body={t('insurance.notice.body')}
+            style={{ marginBottom: spacing.lg }}
+          />
+          {body}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
-function AccessDenied() {
-  const language = useKilimoStore((s) => s.language);
+/* ── policy + claim cards ────────────────────────────────────────────────────────────────── */
+function PolicyCard({
+  t,
+  policy,
+  claims,
+  onAddClaim,
+  onCancel,
+  onDelete,
+  onClaimStatus,
+  onShare,
+  onDeleteClaim,
+}: {
+  t: Translate;
+  policy: InsurancePolicy;
+  claims: InsuranceClaim[];
+  onAddClaim: () => void;
+  onCancel: () => void;
+  onDelete: () => void;
+  onClaimStatus: (c: InsuranceClaim, status: ClaimStatus) => void;
+  onShare: (c: InsuranceClaim) => void;
+  onDeleteClaim: (c: InsuranceClaim) => void;
+}) {
+  const { spacing } = useTheme();
+  const standing = policyStanding(policy);
+  const overview = policyOverview(policy, claims);
+  const standingLabel =
+    standing.state === 'expiring_soon'
+      ? t('insurance.standing.expiring_soon', { n: standing.daysLeft ?? 0 })
+      : t(`insurance.standing.${standing.state}` as TranslationKey);
+
   return (
-    <EmptyState
-      icon={<AlertTriangle size={36} color="#f59e0b" />}
-      title="Haipatikani"
-      body={
-        language === 'sw'
-          ? 'Bima haipatikani kwa jukumu lako.'
-          : 'Insurance features are not accessible for your role.'
-      }
-    />
+    <Card>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
+        <View style={{ flex: 1 }}>
+          <AppText variant="h3">{policy.provider}</AppText>
+          <AppText variant="body">{policy.cropOrAsset}</AppText>
+        </View>
+        <Badge label={standingLabel} variant={STANDING_BADGE[standing.state]} />
+      </View>
+
+      <View style={{ marginTop: spacing.sm, gap: spacing.xxs }}>
+        {policy.policyNumber ? (
+          <AppText variant="small" tone="muted">
+            {t('insurance.policy.number', { value: policy.policyNumber })}
+          </AppText>
+        ) : null}
+        <AppText variant="small" tone="muted">
+          {t('insurance.policy.period', { start: policy.startDate, end: policy.endDate })}
+        </AppText>
+        {policy.coverAmountTzs !== null ? (
+          <AppText variant="small" tone="muted">
+            {t('insurance.policy.cover', { amount: formatMoney(policy.coverAmountTzs) })}
+          </AppText>
+        ) : null}
+        {policy.premiumTzs !== null ? (
+          <AppText variant="small" tone="muted">
+            {t('insurance.policy.premium', { amount: formatMoney(policy.premiumTzs) })}
+          </AppText>
+        ) : null}
+        <AppText variant="caption" tone="muted">
+          {t('insurance.policy.selfReported')}
+        </AppText>
+      </View>
+
+      <AppText variant="smallStrong" style={{ marginTop: spacing.md }}>
+        {overview.totals.count === 0
+          ? t('insurance.policy.noClaims')
+          : t('insurance.policy.claimsSummary', {
+              count: overview.totals.count,
+              amount: formatMoney(overview.totals.totalEstimatedLossTzs),
+            })}
+      </AppText>
+      {overview.exceedsCover ? (
+        <AlertCard
+          variant="warning"
+          title={t('insurance.policy.exceedsCover')}
+          style={{ marginTop: spacing.sm }}
+        />
+      ) : null}
+
+      {claims.length > 0 ? (
+        <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+          <AppText variant="label" accessibilityRole="header">
+            {t('insurance.claims.heading')}
+          </AppText>
+          {claims.map((c) => (
+            <ClaimCard
+              key={c.id}
+              t={t}
+              claim={c}
+              onStatus={(s) => onClaimStatus(c, s)}
+              onShare={() => onShare(c)}
+              onDelete={() => onDeleteClaim(c)}
+            />
+          ))}
+        </View>
+      ) : null}
+
+      <View style={{ gap: spacing.sm, marginTop: spacing.lg }}>
+        <Button label={t('insurance.policy.addClaim')} onPress={onAddClaim} size="sm" />
+        {policy.status !== 'cancelled' ? (
+          <Button
+            label={t('insurance.policy.cancel')}
+            onPress={onCancel}
+            variant="outline"
+            size="sm"
+          />
+        ) : null}
+        <Button
+          label={t('insurance.policy.delete')}
+          onPress={onDelete}
+          variant="destructiveOutline"
+          size="sm"
+        />
+      </View>
+    </Card>
   );
 }
 
-const s = StyleSheet.create({
-  empty: { fontSize: 13, fontFamily: 'Inter_700Bold', marginTop: 8 },
-  iconBg: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  product: {
-    fontSize: 16,
-    fontFamily: 'InstrumentSerif_400Regular',
-    letterSpacing: -0.3,
-    fontWeight: '600',
-  },
-  provider: { fontSize: 12, fontFamily: 'Inter_700Bold', letterSpacing: 0.8, marginTop: 2 },
-  specs: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 10,
-  },
-  specLabel: { fontSize: 12, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
-  specValue: { fontSize: 12, fontFamily: 'Inter_800ExtraBold', marginTop: 2 },
-  enrollBtn: {
-    marginTop: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  enrollText: { color: '#000', fontSize: 13, fontFamily: 'Inter_700Bold', letterSpacing: 0.5 },
-  policyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusText: { fontSize: 12, fontFamily: 'Inter_700Bold', letterSpacing: 0.8 },
-  expires: {
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  claimBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    marginTop: 12,
-  },
-  claimText: { fontSize: 12, fontFamily: 'Inter_700Bold', flex: 1 },
-  claimBtn: {
-    marginTop: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  claimBtnText: { fontSize: 12, fontFamily: 'Inter_700Bold', letterSpacing: 0.3 },
+function ClaimCard({
+  t,
+  claim,
+  onStatus,
+  onShare,
+  onDelete,
+}: {
+  t: Translate;
+  claim: InsuranceClaim;
+  onStatus: (s: ClaimStatus) => void;
+  onShare: () => void;
+  onDelete: () => void;
+}) {
+  const { spacing } = useTheme();
+  return (
+    <Card variant="tinted" padding={12}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
+        <View style={{ flex: 1 }}>
+          <AppText variant="label">
+            {t(incidentKey(claim.incidentType))} · {claim.incidentDate}
+          </AppText>
+        </View>
+        <Badge label={t(claimStatusKey(claim.status))} variant={CLAIM_BADGE[claim.status]} />
+      </View>
+      <AppText variant="body" style={{ marginTop: spacing.xs }}>
+        {claim.description}
+      </AppText>
+      <AppText variant="small" tone="muted" style={{ marginTop: spacing.xs }}>
+        {claim.estimatedLossTzs !== null
+          ? t('insurance.claim.estimated', { amount: formatMoney(claim.estimatedLossTzs) })
+          : t('insurance.claim.noEstimate')}
+      </AppText>
 
-  // Modals
-  modalContainer: { flex: 1 },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 24,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  modalTitle: { fontSize: 22, fontFamily: 'InstrumentSerif_400Regular', fontWeight: 'bold' },
-  closeBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+      <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
+        {claim.status === 'draft' ? (
+          <>
+            <Button
+              label={t('insurance.claim.markSent')}
+              onPress={() => onStatus('submitted_record')}
+              size="sm"
+              variant="secondary"
+            />
+            <AppText variant="caption" tone="muted">
+              {t('insurance.claim.markSent.hint')}
+            </AppText>
+          </>
+        ) : null}
+        {claim.status === 'submitted_record' ? (
+          <Button
+            label={t('insurance.claim.markClosed')}
+            onPress={() => onStatus('closed')}
+            size="sm"
+            variant="secondary"
+          />
+        ) : null}
+        {claim.status !== 'draft' ? (
+          <Button
+            label={t('insurance.claim.reopen')}
+            onPress={() => onStatus('draft')}
+            size="sm"
+            variant="ghost"
+          />
+        ) : null}
+        <Button label={t('insurance.claim.share')} onPress={onShare} size="sm" variant="outline" />
+        <Button
+          label={t('insurance.claim.delete')}
+          onPress={onDelete}
+          size="sm"
+          variant="destructiveOutline"
+        />
+      </View>
+    </Card>
+  );
+}
 
-  stepperRow: { flexDirection: 'row', paddingHorizontal: 24, paddingTop: 16, gap: 4 },
-  stepNumCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1.5,
-  },
-  stepLine: { height: 2, flex: 1, marginHorizontal: 6 },
+/* ── forms ───────────────────────────────────────────────────────────────────────────────── */
+const digitsOnly = (v: string) => v.replace(/[^0-9]/g, '');
 
-  prefillBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 10,
-    backgroundColor: 'rgba(46, 111, 64,0.06)',
-    borderRadius: 10,
-    borderWidth: 0.5,
-    borderColor: 'rgba(46, 111, 64,0.2)',
-    marginBottom: 8,
-  },
-  prefillBannerText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#146e2e', flex: 1 },
+function PolicyForm({
+  t,
+  onSave,
+  onCancel,
+}: {
+  t: Translate;
+  onSave: (input: {
+    provider: string;
+    policyNumber: string;
+    cropOrAsset: string;
+    coverAmount: string;
+    premium: string;
+    startDate: string;
+    endDate: string;
+    notes: string;
+  }) => Promise<string | null>;
+  onCancel: () => void;
+}) {
+  const { spacing } = useTheme();
+  const [provider, setProvider] = useState('');
+  const [policyNumber, setPolicyNumber] = useState('');
+  const [asset, setAsset] = useState('');
+  const [cover, setCover] = useState('');
+  const [premium, setPremium] = useState('');
+  const [start, setStart] = useState(todayString());
+  const [end, setEnd] = useState('');
+  const [notes, setNotes] = useState('');
+  const [errors, setErrors] = useState<PolicyErrors>({});
+  const [failure, setFailure] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  inputGroup: { gap: 6 },
-  inputLabel: { fontSize: 12, fontFamily: 'Inter_700Bold' },
-  inputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 48,
-  },
-  textInput: { flex: 1, fontSize: 13, fontFamily: 'Inter_500Medium', padding: 0 },
-  singleTextInput: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    height: 48,
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
-  },
-  textarea: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    minHeight: 90,
-    textAlignVertical: 'top',
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
-  },
+  const endBase = parseDay(start) !== null ? start : todayString();
 
-  pnlBox: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 14,
-    gap: 8,
-    backgroundColor: 'rgba(0,0,0,0.01)',
-  },
-  pnlRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  const submit = async () => {
+    const input = {
+      provider,
+      policyNumber,
+      cropOrAsset: asset,
+      coverAmount: cover,
+      premium,
+      startDate: start,
+      endDate: end,
+      notes,
+    };
+    const e = validatePolicyInput(input);
+    setErrors(e);
+    if (hasErrors(e)) {
+      setFailure(t('insurance.form.invalid'));
+      return;
+    }
+    setBusy(true);
+    setFailure(null);
+    const msg = await onSave(input);
+    setBusy(false);
+    if (msg) setFailure(msg);
+  };
 
-  payMethodCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 14,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  radioCircle: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  radioInner: { width: 8, height: 8, borderRadius: 4 },
+  const endError = errors.endDate
+    ? parseDay(end) === null
+      ? t('insurance.form.dateInvalid')
+      : t('insurance.form.endBeforeStart')
+    : undefined;
 
-  modalPriBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 48,
-    borderRadius: 14,
-    gap: 6,
-  },
-  modalPriBtnText: { color: '#000', fontSize: 13.5, fontFamily: 'Inter_700Bold' },
-  modalSecBtn: {
-    borderWidth: 1,
-    borderRadius: 14,
-    height: 48,
-    paddingHorizontal: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalSecBtnText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  return (
+    <Card style={{ marginBottom: spacing.md }}>
+      <AppText variant="h3" accessibilityRole="header">
+        {t('insurance.form.policy.title')}
+      </AppText>
+      <TextField
+        label={t('insurance.form.provider')}
+        placeholder={t('insurance.form.provider.ph')}
+        value={provider}
+        onChangeText={setProvider}
+        maxLength={120}
+        error={errors.provider ? t('insurance.form.invalid') : undefined}
+        wrapperStyle={{ marginTop: spacing.md }}
+        testID="insurance-provider"
+      />
+      <TextField
+        label={t('insurance.form.policyNumber')}
+        value={policyNumber}
+        onChangeText={setPolicyNumber}
+        maxLength={60}
+        autoCapitalize="characters"
+        testID="insurance-policy-number"
+      />
+      <TextField
+        label={t('insurance.form.asset')}
+        placeholder={t('insurance.form.asset.ph')}
+        value={asset}
+        onChangeText={setAsset}
+        maxLength={120}
+        error={errors.cropOrAsset ? t('insurance.form.invalid') : undefined}
+        testID="insurance-asset"
+      />
+      <TextField
+        label={t('insurance.form.cover')}
+        value={cover}
+        onChangeText={(v) => setCover(digitsOnly(v))}
+        keyboardType="number-pad"
+        error={errors.coverAmount ? t('insurance.form.invalid') : undefined}
+        testID="insurance-cover"
+      />
+      <TextField
+        label={t('insurance.form.premium')}
+        value={premium}
+        onChangeText={(v) => setPremium(digitsOnly(v))}
+        keyboardType="number-pad"
+        error={errors.premium ? t('insurance.form.invalid') : undefined}
+        testID="insurance-premium"
+      />
 
-  severityRow: { flexDirection: 'row', gap: 8 },
-  sevCard: {
-    flex: 1,
-    height: 44,
-    borderRadius: 10,
-    borderWidth: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+      <TextField
+        label={t('insurance.form.start')}
+        hint={t('insurance.form.dateHint')}
+        value={start}
+        onChangeText={setStart}
+        keyboardType="numbers-and-punctuation"
+        maxLength={10}
+        error={errors.startDate ? t('insurance.form.dateInvalid') : undefined}
+        testID="insurance-start"
+      />
+      <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg }}>
+        <Chip label={t('insurance.form.today')} onPress={() => setStart(todayString())} />
+      </View>
 
-  viewfinder: {
-    height: 200,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  cameraBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  cameraBtnText: { color: '#000', fontSize: 12, fontFamily: 'Inter_700Bold' },
+      <TextField
+        label={t('insurance.form.end')}
+        hint={t('insurance.form.dateHint')}
+        value={end}
+        onChangeText={setEnd}
+        keyboardType="numbers-and-punctuation"
+        maxLength={10}
+        error={endError}
+        testID="insurance-end"
+      />
+      <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg }}>
+        <Chip
+          label={t('insurance.form.plus6')}
+          onPress={() => setEnd(addMonths(endBase, 6) ?? '')}
+        />
+        <Chip
+          label={t('insurance.form.plus12')}
+          onPress={() => setEnd(addMonths(endBase, 12) ?? '')}
+        />
+      </View>
 
-  photoPreviewContainer: {
-    height: 220,
-    borderRadius: 16,
-    borderWidth: 1,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  photoPreview: { width: '100%', height: '100%' },
-  photoSuccessOverlay: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#fff',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  evidenceBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderRadius: 14,
-    justifyContent: 'center',
-    height: 48,
-  },
-  thumbnail: { width: 56, height: 56, borderRadius: 10 },
-  agreeBox: {
-    padding: 12,
-    backgroundColor: 'rgba(0,0,0,0.02)',
-    borderRadius: 10,
-    borderWidth: 0.5,
-    borderColor: '#ccc',
-  },
-});
+      <TextField
+        label={t('insurance.form.notes')}
+        value={notes}
+        onChangeText={setNotes}
+        multiline
+        maxLength={1000}
+      />
+
+      {failure ? (
+        <AppText variant="small" tone="error" accessibilityLiveRegion="polite" style={{ marginBottom: spacing.sm }}>
+          {failure}
+        </AppText>
+      ) : null}
+      <View style={{ gap: spacing.sm }}>
+        <Button label={t('insurance.form.save')} onPress={submit} loading={busy} size="md" />
+        <Button label={t('common.cancel')} onPress={onCancel} variant="ghost" size="md" disabled={busy} />
+      </View>
+    </Card>
+  );
+}
+
+function ClaimForm({
+  t,
+  policy,
+  onSave,
+  onCancel,
+}: {
+  t: Translate;
+  policy: InsurancePolicy;
+  onSave: (input: {
+    policyId: string;
+    incidentDate: string;
+    incidentType: IncidentType;
+    description: string;
+    estimatedLoss: string;
+  }) => Promise<string | null>;
+  onCancel: () => void;
+}) {
+  const { spacing } = useTheme();
+  const [date, setDate] = useState(todayString());
+  const [type, setType] = useState<IncidentType | ''>('');
+  const [description, setDescription] = useState('');
+  const [loss, setLoss] = useState('');
+  const [errors, setErrors] = useState<ClaimErrors>({});
+  const [failure, setFailure] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const validDate = parseDay(date) !== null;
+  const outside = validDate && !incidentWithinPolicy(policy, date);
+
+  const submit = async () => {
+    const e = validateClaimInput({
+      policyId: policy.id,
+      incidentDate: date,
+      incidentType: type,
+      description,
+      estimatedLoss: loss,
+    });
+    setErrors(e);
+    if (hasErrors(e) || type === '') {
+      setFailure(t('insurance.form.invalid'));
+      return;
+    }
+    setBusy(true);
+    setFailure(null);
+    const msg = await onSave({
+      policyId: policy.id,
+      incidentDate: date,
+      incidentType: type,
+      description,
+      estimatedLoss: loss,
+    });
+    setBusy(false);
+    if (msg) setFailure(msg);
+  };
+
+  return (
+    <Card variant="tinted" style={{ marginTop: spacing.sm }}>
+      <AppText variant="h3" accessibilityRole="header">
+        {t('insurance.claim.form.title')}
+      </AppText>
+      <AppText variant="small" tone="muted" style={{ marginTop: spacing.xs }}>
+        {t('insurance.claim.form.policy')}: {policy.provider} · {policy.cropOrAsset}
+      </AppText>
+
+      <TextField
+        label={t('insurance.claim.form.date')}
+        hint={t('insurance.form.dateHint')}
+        value={date}
+        onChangeText={setDate}
+        keyboardType="numbers-and-punctuation"
+        maxLength={10}
+        error={
+          errors.incidentDate
+            ? validDate
+              ? t('insurance.claim.form.future')
+              : t('insurance.form.dateInvalid')
+            : undefined
+        }
+        wrapperStyle={{ marginTop: spacing.md }}
+        testID="claim-date"
+      />
+      <View style={{ flexDirection: 'row', marginBottom: spacing.md }}>
+        <Chip label={t('insurance.form.today')} onPress={() => setDate(todayString())} />
+      </View>
+      {outside ? (
+        <AlertCard
+          variant="warning"
+          title={t('insurance.claim.form.outsidePeriod')}
+          style={{ marginBottom: spacing.md }}
+        />
+      ) : null}
+
+      <AppText variant="label" style={{ marginBottom: spacing.sm }}>
+        {t('insurance.claim.form.type')}
+      </AppText>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+        {INCIDENT_TYPES.map((it) => (
+          <Chip key={it} label={t(incidentKey(it))} selected={type === it} onPress={() => setType(it)} />
+        ))}
+      </View>
+      {errors.incidentType ? (
+        <AppText variant="caption" tone="error" style={{ marginTop: spacing.xs }}>
+          {t('insurance.form.invalid')}
+        </AppText>
+      ) : null}
+
+      <TextField
+        label={t('insurance.claim.form.description')}
+        placeholder={t('insurance.claim.form.description.ph')}
+        value={description}
+        onChangeText={setDescription}
+        multiline
+        maxLength={2000}
+        error={errors.description ? t('insurance.form.invalid') : undefined}
+        wrapperStyle={{ marginTop: spacing.lg }}
+        testID="claim-description"
+      />
+      <TextField
+        label={t('insurance.claim.form.loss')}
+        value={loss}
+        onChangeText={(v) => setLoss(digitsOnly(v))}
+        keyboardType="number-pad"
+        error={errors.estimatedLoss ? t('insurance.form.invalid') : undefined}
+        testID="claim-loss"
+      />
+
+      <AppText variant="caption" tone="muted" style={{ marginBottom: spacing.sm }}>
+        {t('insurance.notice.body')}
+      </AppText>
+      {failure ? (
+        <AppText variant="small" tone="error" accessibilityLiveRegion="polite" style={{ marginBottom: spacing.sm }}>
+          {failure}
+        </AppText>
+      ) : null}
+      <View style={{ gap: spacing.sm }}>
+        <Button label={t('insurance.claim.form.save')} onPress={submit} loading={busy} size="md" />
+        <Button label={t('common.cancel')} onPress={onCancel} variant="ghost" size="md" disabled={busy} />
+      </View>
+    </Card>
+  );
+}
