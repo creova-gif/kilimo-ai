@@ -1,9 +1,7 @@
 /**
  * Kilimo AI — Farm Data Store
  *
- * One persisted Zustand store backing the six "missing feature" PRD pages:
- *   - Livestock
- *   - Inventory
+ * One persisted Zustand store backing the remaining "missing feature" PRD pages:
  *   - Insurance Hub
  *   - Input Supply (orders)
  *   - Peer Groups
@@ -12,42 +10,19 @@
  *
  * Phase 1 wires UI + state. Phase 2 swaps `useEffect` data loaders for
  * Supabase queries; the shapes here are already DB-friendly.
+ *
+ * Livestock and Inventory are NOT here any more (KIL-004): they are real, per-farmer Supabase
+ * features (lib/livestock.ts, lib/inventory.ts, hooks/useLivestock.ts, hooks/useInventory.ts).
+ * The persist `migrate` below drops the old local copies (which were seeded prototype data).
  */
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// ─── Livestock ───────────────────────────────────────────────────────────────
-export type LivestockSpecies = 'cattle' | 'goat' | 'sheep' | 'poultry' | 'pig';
-
-export interface LivestockAnimal {
-  id: string;
-  tag: string; // ear-tag / RFID
-  species: LivestockSpecies;
-  name?: string;
-  birthDate?: string;
-  weightKg?: number;
-  lastVaccineDate?: string;
-  nextVaccineDue?: string;
-  healthStatus: 'healthy' | 'attention' | 'sick';
-  notes?: string;
-}
-
-// ─── Inventory ───────────────────────────────────────────────────────────────
+// ─── Units ───────────────────────────────────────────────────────────────────
+// Still used by InputOrder below. (The inventory feature itself now lives in lib/inventory.ts.)
 export type InventoryUnit = 'kg' | 'L' | 'bag' | 'piece' | 'pack';
-
-export interface InventoryItem {
-  id: string;
-  name: string;
-  category: 'seed' | 'fertilizer' | 'pesticide' | 'feed' | 'tool' | 'other';
-  unit: InventoryUnit;
-  qty: number;
-  lowStockAt: number;
-  costPerUnitTZS?: number;
-  expiresOn?: string;
-  supplier?: string;
-}
 
 // ─── Insurance ───────────────────────────────────────────────────────────────
 export type InsurancePolicyStatus = 'browse' | 'pending' | 'active' | 'expired' | 'claimed';
@@ -150,8 +125,6 @@ export interface LedgerEntry {
 // ─── Store ───────────────────────────────────────────────────────────────────
 interface FarmDataState {
   // Collections
-  livestock: LivestockAnimal[];
-  inventory: InventoryItem[];
   insurance: InsurancePolicy[];
   suppliers: InputSupplier[];
   orders: InputOrder[];
@@ -160,16 +133,6 @@ interface FarmDataState {
   experts: Expert[];
   consultations: Consultation[];
   ledger: LedgerEntry[];
-
-  // Livestock
-  addAnimal: (a: Omit<LivestockAnimal, 'id'>) => void;
-  updateAnimal: (id: string, patch: Partial<LivestockAnimal>) => void;
-  removeAnimal: (id: string) => void;
-
-  // Inventory
-  addItem: (i: Omit<InventoryItem, 'id'>) => void;
-  adjustItem: (id: string, delta: number) => void;
-  removeItem: (id: string) => void;
 
   // Insurance
   enrollPolicy: (id: string) => void;
@@ -194,47 +157,6 @@ interface FarmDataState {
 }
 
 // ─── Seeds ───────────────────────────────────────────────────────────────────
-const SEED_INVENTORY: InventoryItem[] = [
-  {
-    id: 'i1',
-    name: 'DAP Fertilizer',
-    category: 'fertilizer',
-    unit: 'bag',
-    qty: 4,
-    lowStockAt: 2,
-    costPerUnitTZS: 95_000,
-    supplier: 'YARA',
-  },
-  {
-    id: 'i2',
-    name: 'Maize Seed — DK 8033',
-    category: 'seed',
-    unit: 'kg',
-    qty: 15,
-    lowStockAt: 5,
-    costPerUnitTZS: 12_000,
-    supplier: 'East African Seed',
-  },
-  {
-    id: 'i3',
-    name: 'Bee Repellent',
-    category: 'pesticide',
-    unit: 'L',
-    qty: 1,
-    lowStockAt: 2,
-    costPerUnitTZS: 18_000,
-  },
-  {
-    id: 'i4',
-    name: 'Layer Mash',
-    category: 'feed',
-    unit: 'bag',
-    qty: 6,
-    lowStockAt: 3,
-    costPerUnitTZS: 64_000,
-  },
-];
-
 const SEED_INSURANCE: InsurancePolicy[] = [
   {
     id: 'p1',
@@ -605,8 +527,6 @@ const uid = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toStrin
 export const useFarmDataStore = create<FarmDataState>()(
   persist(
     (set, get) => ({
-      livestock: [],
-      inventory: SEED_INVENTORY,
       insurance: SEED_INSURANCE,
       suppliers: SEED_SUPPLIERS,
       orders: SEED_ORDERS,
@@ -615,20 +535,6 @@ export const useFarmDataStore = create<FarmDataState>()(
       experts: SEED_EXPERTS,
       consultations: SEED_CONSULTATIONS,
       ledger: SEED_LEDGER,
-
-      addAnimal: (a) => set((s) => ({ livestock: [{ ...a, id: uid('a') }, ...s.livestock] })),
-      updateAnimal: (id, patch) =>
-        set((s) => ({ livestock: s.livestock.map((x) => (x.id === id ? { ...x, ...patch } : x)) })),
-      removeAnimal: (id) => set((s) => ({ livestock: s.livestock.filter((x) => x.id !== id) })),
-
-      addItem: (i) => set((s) => ({ inventory: [{ ...i, id: uid('i') }, ...s.inventory] })),
-      adjustItem: (id, delta) =>
-        set((s) => ({
-          inventory: s.inventory.map((x) =>
-            x.id === id ? { ...x, qty: Math.max(0, x.qty + delta) } : x
-          ),
-        })),
-      removeItem: (id) => set((s) => ({ inventory: s.inventory.filter((x) => x.id !== id) })),
 
       enrollPolicy: (id) =>
         set((s) => ({
@@ -718,14 +624,13 @@ export const useFarmDataStore = create<FarmDataState>()(
     {
       name: 'kilimo-farm-data',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 1,
+      version: 2,
       migrate: (persistedState) => {
-        const state = persistedState as Partial<FarmDataState>;
-        const legacyAnimalIds = new Set(['a1', 'a2', 'a3']);
-        return {
-          ...state,
-          livestock: state.livestock?.filter((animal) => !legacyAnimalIds.has(animal.id)) ?? [],
-        };
+        // v2: livestock + inventory moved to Supabase. Discard the old local copies — they only
+        // ever held seeded prototype data — and keep every other collection as persisted.
+        const { livestock: _livestock, inventory: _inventory, ...rest } = (persistedState ??
+          {}) as Record<string, unknown>;
+        return rest as unknown as Partial<FarmDataState>;
       },
     }
   )

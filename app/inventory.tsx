@@ -1,1068 +1,391 @@
 /**
- * Inventory — redesigned
- * Category filter chips · pill qty stepper · animated fill bars · value tiles
+ * Inventory — the farmer's real stock (KIL-004): items with opening stock, stock changes recorded as
+ * movements (applied atomically by a database trigger), low-stock and expiry alerts. Backed by
+ * `inventory_items` / `inventory_movements` (owner-only RLS); no seeded data.
  */
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import { FlatList, RefreshControl, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { Package, Plus, ShieldOff } from 'lucide-react-native';
+
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Modal,
-  TextInput,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-} from 'react-native';
+  IconButton,
+  LoadStateView,
+  RecordSheet,
+  daysLabel,
+  unitLabel,
+  useNotice,
+} from '../components/records';
+import { ItemDetail } from '../components/records/ItemDetail';
+import { ItemForm } from '../components/records/ItemForm';
+import { ProgressBar } from '../components/farms/ProgressBar';
 import {
-  Package,
-  AlertTriangle,
-  Plus,
-  Minus,
-  Boxes,
-  Sprout,
-  Syringe,
-  Wrench,
-  Beef,
-  Wheat,
-  Trash2,
-  X,
-  ChevronDown,
-  ChevronUp,
-  TrendingDown,
-  ShieldCheck,
-  DollarSign,
-} from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
-import { BlurView } from 'expo-blur';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
-import PageScaffold, { GlassCard, SectionHeader, EmptyState } from '../components/PageScaffold';
+  AlertCard,
+  AppText,
+  Badge,
+  Card,
+  Chip,
+  EmptyState,
+  OfflineBanner,
+  ScreenHeader,
+} from '../components/ui';
 import { useTheme } from '../constants/Theme';
-import { useFarmDataStore, InventoryItem, InventoryUnit } from '../store/useFarmDataStore';
+import { useInventory } from '../hooks/useInventory';
 import { Gate } from '../lib/access';
+import { useT } from '../lib/i18n';
+import {
+  CATEGORIES,
+  categoryCounts,
+  emptyItemInput,
+  expiryStatus,
+  filterItems,
+  isLowStock,
+  isOutOfStock,
+  itemToInput,
+  stockFill,
+  type Category,
+  type Item,
+} from '../lib/inventory';
+import { formatQuantity, formatTzs, loadState } from '../lib/recordsCommon';
 
-// ─── Category config ──────────────────────────────────────────────────────────
-const CATEGORIES: {
-  key: InventoryItem['category'];
-  label: string;
-  swahili: string;
-  color: string;
-  Icon: any;
-}[] = [
-  { key: 'seed', label: 'Seed', swahili: 'Mbegu', color: '#2E6F40', Icon: Wheat },
-  { key: 'fertilizer', label: 'Fertilizer', swahili: 'Mbolea', color: '#3b82f6', Icon: Sprout },
-  { key: 'pesticide', label: 'Pesticide', swahili: 'Dawa', color: '#f59e0b', Icon: Syringe },
-  { key: 'feed', label: 'Feed', swahili: 'Chakula', color: '#8b5cf6', Icon: Beef },
-  { key: 'tool', label: 'Tool', swahili: 'Zana', color: '#64748b', Icon: Wrench },
-  { key: 'other', label: 'Other', swahili: 'Nyingine', color: '#94a3b8', Icon: Package },
-];
+type Sheet = { type: 'add' } | { type: 'edit'; id: string } | { type: 'detail'; id: string } | null;
 
-const UNITS: { key: InventoryUnit; label: string }[] = [
-  { key: 'kg', label: 'kg' },
-  { key: 'L', label: 'Lit' },
-  { key: 'bag', label: 'Mfuko' },
-  { key: 'piece', label: 'Kipande' },
-  { key: 'pack', label: 'Pakiti' },
-];
-
-const fmt = (n: number) => new Intl.NumberFormat('en-US').format(n);
-const fmtShort = (n: number) =>
-  n >= 1_000_000
-    ? `${(n / 1_000_000).toFixed(1)}M`
-    : n >= 1000
-      ? `${(n / 1000).toFixed(0)}K`
-      : String(n);
-const catMeta = (c: InventoryItem['category']) =>
-  CATEGORIES.find((x) => x.key === c) ?? CATEGORIES[5];
-
-// ─── Fill bar ─────────────────────────────────────────────────────────────────
-function FillBar({ progress, color }: { progress: number; color: string }) {
-  return (
-    <View style={fb.track}>
-      <View
-        style={[
-          fb.fill,
-          { backgroundColor: color, width: `${Math.round(progress * 100)}%` as any },
-        ]}
-      />
-    </View>
-  );
-}
-const fb = StyleSheet.create({
-  track: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(0,0,0,0.08)',
-    overflow: 'hidden',
-    marginTop: 12,
-  },
-  fill: { height: '100%', borderRadius: 3 },
-});
-
-// ─── Stat tile ────────────────────────────────────────────────────────────────
-function StatTile({
-  icon,
-  label,
-  value,
-  sub,
-  accent,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  sub?: string;
-  accent: string;
-}) {
-  const { colors } = useTheme();
-  return (
-    <View style={[st.tile, { backgroundColor: colors.card, borderColor: accent + '30' }]}>
-      <View style={[st.iconRing, { backgroundColor: accent + '15' }]}>{icon}</View>
-      <Text style={[st.value, { color: colors.text }]}>{value}</Text>
-      <Text style={[st.label, { color: colors.textMute }]}>{label}</Text>
-      {sub && <Text style={[st.sub, { color: accent }]}>{sub}</Text>}
-    </View>
-  );
-}
-const st = StyleSheet.create({
-  tile: { flex: 1, borderRadius: 20, borderWidth: 1, padding: 14, alignItems: 'center', gap: 4 },
-  iconRing: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  value: { fontSize: 20, fontFamily: 'InstrumentSerif_400Regular', letterSpacing: -0.5 },
-  label: { fontSize: 12, fontFamily: 'Inter_700Bold', letterSpacing: 0.8, textAlign: 'center' },
-  sub: { fontSize: 12, fontFamily: 'Inter_800ExtraBold', letterSpacing: 0.5 },
-});
-
-// ─── Add modal ────────────────────────────────────────────────────────────────
-function AddItemModal({
-  visible,
-  onClose,
-  onSave,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  onSave: (i: Omit<InventoryItem, 'id'>) => void;
-}) {
-  const { colors, isDark } = useTheme();
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState<InventoryItem['category']>('seed');
-  const [unit, setUnit] = useState<InventoryUnit>('kg');
-  const [qty, setQty] = useState('');
-  const [cost, setCost] = useState('');
-  const [lowAt, setLowAt] = useState('');
-  const [supplier, setSupplier] = useState('');
-
-  function handleSave() {
-    if (!name.trim()) {
-      Alert.alert('Jina linahitajika', 'Tafadhali weka jina la bidhaa.');
-      return;
-    }
-    const q = parseFloat(qty) || 0;
-    if (q <= 0) {
-      Alert.alert('Kiasi kinahitajika', 'Tafadhali weka kiasi cha sasa hivi.');
-      return;
-    }
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    onSave({
-      name: name.trim(),
-      category,
-      unit,
-      qty: q,
-      lowStockAt: parseFloat(lowAt) || 0,
-      costPerUnitTZS: parseFloat(cost) || undefined,
-      supplier: supplier.trim() || undefined,
-    });
-    setName('');
-    setQty('');
-    setCost('');
-    setLowAt('');
-    setSupplier('');
-    onClose();
-  }
-
-  const cm = catMeta(category);
-  const CatIcon = cm.Icon;
-
-  return (
-    <Modal visible={visible} animationType="slide" transparent presentationStyle="overFullScreen">
-      <BlurView
-        intensity={isDark ? 40 : 60}
-        tint={isDark ? 'dark' : 'light'}
-        style={StyleSheet.absoluteFill}
-      />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1, justifyContent: 'flex-end' }}
-      >
-        <View style={[mo.sheet, { backgroundColor: isDark ? '#141c10' : '#fff' }]}>
-          <View style={[mo.handle, { backgroundColor: colors.border }]} />
-
-          {/* Header */}
-          <View style={mo.header}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <View style={[mo.preview, { backgroundColor: cm.color + '20' }]}>
-                <CatIcon size={20} color={cm.color} />
-              </View>
-              <View>
-                <Text style={[mo.title, { color: colors.text }]}>Bidhaa Mpya</Text>
-                <Text style={[mo.sub, { color: colors.textMute }]}>Ongeza kwenye hifadhi yako</Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              onPress={onClose}
-              style={[mo.closeBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-            >
-              <X size={16} color={colors.textMute} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            {/* Category chips */}
-            <Text style={[mo.label, { color: colors.textMute }]}>AINA YA BIDHAA</Text>
-            <View style={mo.catGrid}>
-              {CATEGORIES.map((c) => {
-                const Icon = c.Icon;
-                const active = category === c.key;
-                return (
-                  <TouchableOpacity
-                    key={c.key}
-                    onPress={() => {
-                      Haptics.selectionAsync();
-                      setCategory(c.key);
-                    }}
-                    style={[
-                      mo.catChip,
-                      {
-                        borderColor: active ? c.color : colors.border,
-                        backgroundColor: active ? c.color + '18' : colors.card,
-                      },
-                    ]}
-                  >
-                    <Icon size={14} color={active ? c.color : colors.textMute} />
-                    <Text style={[mo.catText, { color: active ? c.color : colors.textMute }]}>
-                      {c.swahili}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <Text style={[mo.label, { color: colors.textMute }]}>JINA LA BIDHAA *</Text>
-            <View
-              style={[mo.inputWrap, { borderColor: colors.border, backgroundColor: colors.card }]}
-            >
-              <TextInput
-                value={name}
-                onChangeText={setName}
-                style={[mo.input, { color: colors.text }]}
-                placeholderTextColor={colors.textMute}
-                placeholder="e.g. DAP Fertilizer, Maize Seed..."
-              />
-            </View>
-
-            <Text style={[mo.label, { color: colors.textMute }]}>KIPIMO</Text>
-            <View style={mo.unitRow}>
-              {UNITS.map((u) => (
-                <TouchableOpacity
-                  key={u.key}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setUnit(u.key);
-                  }}
-                  style={[
-                    mo.unitPill,
-                    {
-                      borderColor: unit === u.key ? colors.primary : colors.border,
-                      backgroundColor: unit === u.key ? colors.primary + '18' : colors.card,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      mo.unitText,
-                      { color: unit === u.key ? colors.primary : colors.textMute },
-                    ]}
-                  >
-                    {u.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={[mo.label, { color: colors.textMute }]}>KIASI SASA *</Text>
-                <View
-                  style={[
-                    mo.inputWrap,
-                    { borderColor: colors.border, backgroundColor: colors.card },
-                  ]}
-                >
-                  <TextInput
-                    value={qty}
-                    onChangeText={setQty}
-                    keyboardType="decimal-pad"
-                    style={[mo.input, { color: colors.text }]}
-                    placeholderTextColor={colors.textMute}
-                    placeholder="0"
-                  />
-                </View>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[mo.label, { color: colors.textMute }]}>KIWANGO CHA CHINI</Text>
-                <View
-                  style={[
-                    mo.inputWrap,
-                    { borderColor: colors.border, backgroundColor: colors.card },
-                  ]}
-                >
-                  <TextInput
-                    value={lowAt}
-                    onChangeText={setLowAt}
-                    keyboardType="decimal-pad"
-                    style={[mo.input, { color: colors.text }]}
-                    placeholderTextColor={colors.textMute}
-                    placeholder="0"
-                  />
-                </View>
-              </View>
-            </View>
-
-            <Text style={[mo.label, { color: colors.textMute }]}>GHARAMA KWA KIPIMO (TZS)</Text>
-            <View
-              style={[mo.inputWrap, { borderColor: colors.border, backgroundColor: colors.card }]}
-            >
-              <TextInput
-                value={cost}
-                onChangeText={setCost}
-                keyboardType="decimal-pad"
-                style={[mo.input, { color: colors.text }]}
-                placeholderTextColor={colors.textMute}
-                placeholder="e.g. 95,000"
-              />
-            </View>
-
-            <Text style={[mo.label, { color: colors.textMute }]}>MUUZAJI (HIARI)</Text>
-            <View
-              style={[mo.inputWrap, { borderColor: colors.border, backgroundColor: colors.card }]}
-            >
-              <TextInput
-                value={supplier}
-                onChangeText={setSupplier}
-                style={[mo.input, { color: colors.text }]}
-                placeholderTextColor={colors.textMute}
-                placeholder="e.g. YARA, East African Seed..."
-              />
-            </View>
-
-            <TouchableOpacity
-              onPress={handleSave}
-              style={[mo.saveBtn, { backgroundColor: cm.color }]}
-            >
-              <Plus size={18} color="#fff" />
-              <Text style={mo.saveBtnText}>Hifadhi Bidhaa</Text>
-            </TouchableOpacity>
-            <View style={{ height: 32 }} />
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
-// ─── Item card — redesigned ───────────────────────────────────────────────────
-function ItemCard({
-  item,
-  idx,
-  adjust,
-  remove,
-}: {
-  item: InventoryItem;
-  idx: number;
-  adjust: (id: string, delta: number) => void;
-  remove: (id: string) => void;
-}) {
-  const { colors, isDark } = useTheme();
-  const [expanded, setExpanded] = useState(false);
-  const cm = catMeta(item.category);
-  const { Icon } = cm;
-  const low = item.qty <= item.lowStockAt && item.lowStockAt > 0;
-  const warn = !low && item.lowStockAt > 0 && item.qty <= item.lowStockAt * 1.5;
-
-  const maxVal = Math.max(item.qty, item.lowStockAt * 2, 1);
-  const progress = Math.min(item.qty / maxVal, 1);
-  const barColor = low ? '#ef4444' : warn ? '#f59e0b' : cm.color;
-
-  const totalValue = item.qty * (item.costPerUnitTZS ?? 0);
-
-  function confirmDelete() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    Alert.alert('Futa Bidhaa', `Futa "${item.name}" kutoka hifadhi?`, [
-      { text: 'Ghairi', style: 'cancel' },
-      { text: 'Futa', style: 'destructive', onPress: () => remove(item.id) },
-    ]);
-  }
-
-  return (
-    <Animated.View entering={FadeInDown.delay(idx * 50).springify()}>
-      <GlassCard style={[ic.card, low && { borderColor: '#ef444440', borderWidth: 1.5 }]}>
-        {/* Top accent stripe */}
-        <View style={[ic.stripe, { backgroundColor: cm.color }]} />
-
-        <View style={ic.body}>
-          {/* Row 1 — icon · name · stepper */}
-          <View style={ic.topRow}>
-            <View style={[ic.iconCircle, { backgroundColor: cm.color + '15' }]}>
-              <Icon size={22} color={cm.color} />
-            </View>
-
-            <View style={ic.nameBlock}>
-              <Text style={[ic.name, { color: colors.text }]} numberOfLines={1}>
-                {item.name}
-              </Text>
-              <View style={{ flexDirection: 'row', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                <View style={[ic.badge, { backgroundColor: cm.color + '18' }]}>
-                  <Text style={[ic.badgeText, { color: cm.color }]}>
-                    {cm.swahili.toUpperCase()}
-                  </Text>
-                </View>
-                {item.supplier && (
-                  <View style={[ic.badge, { backgroundColor: colors.border + '80' }]}>
-                    <Text style={[ic.badgeText, { color: colors.textMute }]}>{item.supplier}</Text>
-                  </View>
-                )}
-              </View>
-            </View>
-
-            {/* Pill stepper */}
-            <View
-              style={[
-                ic.stepper,
-                {
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <TouchableOpacity
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  adjust(item.id, -1);
-                }}
-                style={ic.stepBtn}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
-              >
-                <Minus size={12} color={item.qty <= 0 ? colors.border : colors.textMute} />
-              </TouchableOpacity>
-              <Text style={[ic.stepVal, { color: low ? '#ef4444' : colors.text }]}>
-                {item.qty}
-                <Text
-                  style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: colors.textMute }}
-                >
-                  {item.unit}
-                </Text>
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  adjust(item.id, 1);
-                }}
-                style={ic.stepBtn}
-                hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
-              >
-                <Plus size={12} color={colors.primary} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Fill bar */}
-          <FillBar progress={progress} color={barColor} />
-
-          {/* Low-stock banner */}
-          {low && (
-            <Animated.View
-              entering={FadeIn}
-              style={[ic.lowBanner, { backgroundColor: '#ef444410', borderColor: '#ef444430' }]}
-            >
-              <TrendingDown size={12} color="#ef4444" />
-              <Text style={ic.lowText}>
-                Stock chini — min. {item.lowStockAt}
-                {item.unit}
-              </Text>
-            </Animated.View>
-          )}
-
-          {/* Row 2 — value + expand */}
-          <TouchableOpacity
-            onPress={() => {
-              setExpanded(!expanded);
-              Haptics.selectionAsync();
-            }}
-            style={[ic.footRow, { borderTopColor: colors.border }]}
-          >
-            <View style={{ gap: 1 }}>
-              {item.costPerUnitTZS ? (
-                <>
-                  <Text style={[ic.priceTag, { color: colors.textMute }]}>
-                    TZS {fmt(item.costPerUnitTZS)}/{item.unit}
-                  </Text>
-                  <Text style={[ic.totalTag, { color: colors.text }]}>
-                    Thamani:{' '}
-                    <Text style={{ color: cm.color, fontFamily: 'Inter_500Medium' }}>
-                      TZS {fmt(totalValue)}
-                    </Text>
-                  </Text>
-                </>
-              ) : (
-                <Text style={[ic.priceTag, { color: colors.textMute }]}>Bonyeza kwa maelezo</Text>
-              )}
-            </View>
-            <View style={[ic.expandChip, { backgroundColor: colors.border + '50' }]}>
-              {expanded ? (
-                <ChevronUp size={14} color={colors.textMute} />
-              ) : (
-                <ChevronDown size={14} color={colors.textMute} />
-              )}
-            </View>
-          </TouchableOpacity>
-
-          {/* Expanded detail */}
-          {expanded && (
-            <Animated.View
-              entering={FadeIn}
-              style={[
-                ic.detail,
-                {
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              {item.costPerUnitTZS ? (
-                <DetailRow
-                  label="Gharama kwa kipimo"
-                  value={`TZS ${fmt(item.costPerUnitTZS)}`}
-                  colors={colors}
-                />
-              ) : null}
-              {item.costPerUnitTZS ? (
-                <DetailRow
-                  label="Thamani yote"
-                  value={`TZS ${fmt(totalValue)}`}
-                  colors={colors}
-                  accent={cm.color}
-                />
-              ) : null}
-              {item.expiresOn ? (
-                <DetailRow
-                  label="Tarehe ya mwisho"
-                  value={new Date(item.expiresOn).toLocaleDateString('en-GB')}
-                  colors={colors}
-                />
-              ) : null}
-              {item.supplier ? (
-                <DetailRow label="Muuzaji" value={item.supplier} colors={colors} />
-              ) : null}
-              <TouchableOpacity onPress={confirmDelete} style={ic.deleteBtn}>
-                <Trash2 size={13} color="#ef4444" />
-                <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: '#ef4444' }}>
-                  Futa bidhaa hii
-                </Text>
-              </TouchableOpacity>
-            </Animated.View>
-          )}
-        </View>
-      </GlassCard>
-    </Animated.View>
-  );
-}
-
-function DetailRow({
-  label,
-  value,
-  colors,
-  accent,
-}: {
-  label: string;
-  value: string;
-  colors: any;
-  accent?: string;
-}) {
-  return (
-    <View
-      style={{
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 5,
-      }}
-    >
-      <Text style={{ color: colors.textMute, fontSize: 12, fontFamily: 'Inter_500Medium' }}>
-        {label}
-      </Text>
-      <Text style={{ color: accent ?? colors.text, fontSize: 13, fontFamily: 'Inter_700Bold' }}>
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-// ─── Main screen ──────────────────────────────────────────────────────────────
 export default function InventoryScreen() {
+  const { t } = useT();
   const { colors } = useTheme();
-  const items = useFarmDataStore((s) => s.inventory);
-  const adjust = useFarmDataStore((s) => s.adjustItem);
-  const addItem = useFarmDataStore((s) => s.addItem);
-  const removeItem = useFarmDataStore((s) => s.removeItem);
-
-  const [showModal, setShowModal] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<InventoryItem['category'] | 'all'>('all');
-
-  const lowStock = items.filter((i) => i.qty <= i.lowStockAt && i.lowStockAt > 0);
-  const totalValue = items.reduce((sum, i) => sum + i.qty * (i.costPerUnitTZS ?? 0), 0);
-
-  const filtered = useMemo(
-    () => (activeFilter === 'all' ? items : items.filter((i) => i.category === activeFilter)),
-    [items, activeFilter]
-  );
-
-  // Category counts for filter badges
-  const catCounts = useMemo(() => {
-    const map: Record<string, number> = {};
-    items.forEach((i) => {
-      map[i.category] = (map[i.category] ?? 0) + 1;
-    });
-    return map;
-  }, [items]);
+  const router = useRouter();
+  const goBack = () => router.back();
 
   return (
-    <Gate
-      feature="inventory"
-      fallback={
-        <PageScaffold title="Hifadhi" badge="INVENTORY">
-          <AccessDenied />
-        </PageScaffold>
-      }
-    >
-      <AddItemModal
-        visible={showModal}
-        onClose={() => setShowModal(false)}
-        onSave={(i) => addItem(i)}
-      />
-      <PageScaffold
-        title="Hifadhi"
-        subtitle="Pembejeo zako zote"
-        badge="INVENTORY"
-        headerRight={
-          <TouchableOpacity
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              setShowModal(true);
-            }}
-            style={[s.addBtn, { backgroundColor: colors.primary }]}
-          >
-            <Plus size={20} color="#000" />
-          </TouchableOpacity>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
+      <Gate
+        feature="inventory"
+        fallback={
+          <>
+            <ScreenHeader
+              title={t('records.inventory.title')}
+              showBack
+              onBack={goBack}
+              backLabel={t('common.back')}
+            />
+            <EmptyState
+              icon={<ShieldOff size={48} color={colors.primary} />}
+              title={t('records.noAccess.title')}
+              description={t('records.noAccess.body')}
+            />
+          </>
         }
       >
-        {/* ── Stat tiles ── */}
-        {items.length > 0 && (
-          <Animated.View entering={FadeInDown.delay(30).springify()}>
-            <View style={{ paddingHorizontal: 24, flexDirection: 'row', gap: 10 }}>
-              <StatTile
-                icon={<Boxes size={18} color={colors.primary} />}
-                label="Bidhaa Zote"
-                value={String(items.length)}
-                accent={colors.primary}
-              />
-              <StatTile
-                icon={
-                  <TrendingDown size={18} color={lowStock.length > 0 ? '#ef4444' : '#2E6F40'} />
-                }
-                label="Stock Chini"
-                value={String(lowStock.length)}
-                sub={lowStock.length > 0 ? 'Angalia' : 'Salama'}
-                accent={lowStock.length > 0 ? '#ef4444' : '#2E6F40'}
-              />
-              <StatTile
-                icon={<DollarSign size={18} color="#8b5cf6" />}
-                label="Thamani Yote"
-                value={`${fmtShort(totalValue)}`}
-                sub="TZS"
-                accent="#8b5cf6"
-              />
-            </View>
-          </Animated.View>
-        )}
+        <InventoryContent onBack={goBack} />
+      </Gate>
+    </SafeAreaView>
+  );
+}
 
-        {/* ── Low stock alert banner ── */}
-        {lowStock.length > 0 && (
-          <Animated.View entering={FadeInDown.delay(80).springify()}>
-            <View style={{ paddingHorizontal: 24, marginTop: 14 }}>
-              <View
-                style={[s.alertBanner, { backgroundColor: '#ef444412', borderColor: '#ef444435' }]}
-              >
-                <View style={s.alertIconRing}>
-                  <AlertTriangle size={16} color="#ef4444" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={[s.alertTitle, { color: colors.text }]}>
-                    Bidhaa {lowStock.length} {lowStock.length === 1 ? 'ina' : 'zina'} stock chini
-                  </Text>
-                  <Text style={[s.alertBody, { color: colors.textMute }]} numberOfLines={1}>
-                    {lowStock.map((i) => `${i.name} (${i.qty}${i.unit})`).join(' · ')}
-                  </Text>
-                </View>
-                <View style={[s.alertCount, { backgroundColor: '#ef4444' }]}>
-                  <Text style={s.alertCountText}>{lowStock.length}</Text>
-                </View>
-              </View>
-            </View>
-          </Animated.View>
-        )}
+function InventoryContent({ onBack }: { onBack: () => void }) {
+  const { t } = useT();
+  const { colors, spacing } = useTheme();
+  const inv = useInventory();
+  const { notice, show: showNotice } = useNotice();
+  const [category, setCategory] = useState<Category | 'all'>('all');
+  const [sheet, setSheet] = useState<Sheet>(null);
 
-        {/* ── Category filter chips ── */}
-        {items.length > 0 && (
-          <Animated.View entering={FadeInDown.delay(120).springify()}>
-            <View style={{ paddingTop: 20, paddingBottom: 2 }}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingHorizontal: 24, gap: 8 }}
-              >
-                {/* All */}
-                <TouchableOpacity
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setActiveFilter('all');
-                  }}
-                  style={[
-                    s.filterChip,
-                    {
-                      backgroundColor: activeFilter === 'all' ? colors.primary : colors.card,
-                      borderColor: activeFilter === 'all' ? colors.primary : colors.border,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      s.filterText,
-                      { color: activeFilter === 'all' ? '#000' : colors.textMute },
-                    ]}
-                  >
-                    Zote {items.length}
-                  </Text>
-                </TouchableOpacity>
-                {CATEGORIES.filter((c) => (catCounts[c.key] ?? 0) > 0).map((c) => {
-                  const active = activeFilter === c.key;
-                  return (
-                    <TouchableOpacity
-                      key={c.key}
-                      onPress={() => {
-                        Haptics.selectionAsync();
-                        setActiveFilter(c.key);
-                      }}
-                      style={[
-                        s.filterChip,
-                        {
-                          backgroundColor: active ? c.color + '20' : colors.card,
-                          borderColor: active ? c.color : colors.border,
-                        },
-                      ]}
-                    >
-                      <c.Icon size={12} color={active ? c.color : colors.textMute} />
-                      <Text style={[s.filterText, { color: active ? c.color : colors.textMute }]}>
-                        {c.swahili} {catCounts[c.key]}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          </Animated.View>
-        )}
+  const state = loadState({ loaded: inv.loaded, isOffline: inv.isOffline, error: inv.error });
+  const visible = useMemo(() => filterItems(inv.items, category), [inv.items, category]);
+  const counts = useMemo(() => categoryCounts(inv.items), [inv.items]);
+  const present = CATEGORIES.filter((c) => counts[c] > 0);
+  const sheetItem =
+    sheet && sheet.type !== 'add' ? (inv.items.find((i) => i.id === sheet.id) ?? null) : null;
+  const closeSheet = () => setSheet(null);
+  const { summary } = inv;
 
-        {/* ── Item list ── */}
-        <SectionHeader
-          title={
-            activeFilter === 'all'
-              ? `Hifadhi · ${items.length} bidhaa`
-              : `${catMeta(activeFilter).swahili} · ${filtered.length} bidhaa`
+  const lowLines = summary.lowStock.map((i) =>
+    t('records.inventory.alert.low.line', {
+      name: i.name,
+      qty: formatQuantity(i.quantity),
+      unit: unitLabel(t, i.unit),
+    })
+  );
+  const expiryLines = [
+    ...summary.expired.map(({ item, daysLeft }) =>
+      t('records.inventory.alert.expiry.expired', {
+        name: item.name,
+        days: daysLabel(t, -daysLeft),
+      })
+    ),
+    ...summary.expiring.map(({ item, daysLeft }) =>
+      daysLeft === 0
+        ? t('records.inventory.alert.expiry.today', { name: item.name })
+        : t('records.inventory.alert.expiry.soon', {
+            name: item.name,
+            days: daysLabel(t, daysLeft),
+          })
+    ),
+  ];
+
+  const header = (
+    <View style={{ marginBottom: spacing.md }}>
+      {notice ? (
+        <AlertCard variant="success" announce title={notice} style={{ marginBottom: spacing.lg }} />
+      ) : null}
+      {inv.error && inv.loaded ? (
+        <AlertCard
+          variant="warning"
+          title={t('state.stale')}
+          actionLabel={t('common.retry')}
+          onAction={inv.refresh}
+          style={{ marginBottom: spacing.lg }}
+        />
+      ) : null}
+
+      <Card style={{ marginBottom: spacing.lg }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md }}>
+          <Stat
+            label={t('records.inventory.summary.items')}
+            value={formatQuantity(summary.itemCount)}
+          />
+          <Stat
+            label={t('records.inventory.summary.low')}
+            value={formatQuantity(summary.lowStock.length)}
+          />
+          <Stat
+            label={t('records.inventory.summary.value')}
+            value={formatTzs(summary.totalValue)}
+          />
+        </View>
+        {summary.unvalued > 0 ? (
+          <AppText variant="caption" tone="muted" style={{ marginTop: spacing.md }}>
+            {t('records.inventory.summary.valueNote', { n: summary.unvalued })}
+          </AppText>
+        ) : null}
+      </Card>
+
+      {lowLines.length > 0 ? (
+        <AlertCard
+          variant="warning"
+          title={t('records.inventory.alert.low.title')}
+          body={lowLines.join('\n')}
+          style={{ marginBottom: spacing.lg }}
+        />
+      ) : null}
+      {expiryLines.length > 0 ? (
+        <AlertCard
+          variant={summary.expired.length > 0 ? 'danger' : 'warning'}
+          title={t('records.inventory.alert.expiry.title')}
+          body={expiryLines.join('\n')}
+          style={{ marginBottom: spacing.lg }}
+        />
+      ) : null}
+
+      {present.length > 1 ? (
+        <View
+          accessibilityRole="radiogroup"
+          accessibilityLabel={t('records.inventory.form.category')}
+          style={{
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: spacing.sm,
+            marginBottom: spacing.md,
+          }}
+        >
+          {(['all', ...present] as const).map((c) => (
+            <Chip
+              key={c}
+              selected={category === c}
+              label={
+                c === 'all'
+                  ? `${t('records.inventory.filter.all')} ${inv.items.length}`
+                  : `${t(`records.inventory.category.${c}` as const)} ${counts[c]}`
+              }
+              onPress={() => setCategory(c)}
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+
+  const emptyView =
+    inv.items.length === 0 ? (
+      <EmptyState
+        icon={<Package size={48} color={colors.primary} />}
+        title={t('records.inventory.empty.title')}
+        description={t('records.inventory.empty.body')}
+        actionLabel={t('records.inventory.empty.cta')}
+        onAction={() => setSheet({ type: 'add' })}
+      />
+    ) : (
+      <EmptyState
+        title={t('records.inventory.emptyFilter.title')}
+        description={t('records.inventory.emptyFilter.body')}
+        style={{ paddingVertical: spacing.xl }}
+      />
+    );
+
+  return (
+    <View style={{ flex: 1 }}>
+      <ScreenHeader
+        title={t('records.inventory.title')}
+        showBack
+        onBack={onBack}
+        backLabel={t('common.back')}
+        trailing={
+          state === 'ready' ? (
+            <IconButton
+              variant="filled"
+              label={t('records.inventory.add.a11y')}
+              icon={<Plus size={22} color={colors.textOnPrimary} />}
+              onPress={() => setSheet({ type: 'add' })}
+            />
+          ) : undefined
+        }
+      />
+      <OfflineBanner visible={inv.isOffline} message={t('records.offline.banner')} />
+
+      {state !== 'ready' ? (
+        <LoadStateView state={state} onRetry={inv.refresh} />
+      ) : (
+        <FlatList
+          data={inv.items.length === 0 ? [] : visible}
+          keyExtractor={(i) => i.id}
+          ListHeaderComponent={inv.items.length === 0 ? null : header}
+          ListEmptyComponent={emptyView}
+          renderItem={({ item }) => (
+            <ItemRow item={item} onPress={() => setSheet({ type: 'detail', id: item.id })} />
+          )}
+          contentContainerStyle={{ padding: spacing.lg, flexGrow: 1 }}
+          refreshControl={
+            <RefreshControl refreshing={inv.loading && inv.loaded} onRefresh={inv.refresh} />
           }
         />
+      )}
 
-        {items.length === 0 ? (
-          <EmptyState
-            icon={<Boxes size={40} color={colors.primary} />}
-            title="Hakuna bidhaa bado"
-            body="Anza kufuatilia mbegu, mbolea, dawa na zana zako zote."
-            cta="Ongeza Bidhaa ya Kwanza"
-            onCta={() => setShowModal(true)}
+      <RecordSheet
+        visible={sheet !== null && (sheet.type === 'add' || sheetItem !== null)}
+        title={
+          sheet?.type === 'add'
+            ? t('records.inventory.form.title.add')
+            : sheet?.type === 'edit'
+              ? t('records.inventory.form.title.edit')
+              : (sheetItem?.name ?? '')
+        }
+        onClose={closeSheet}
+        closeLabel={t('common.close')}
+        banner={<OfflineBanner visible={inv.isOffline} message={t('records.offline.banner')} />}
+      >
+        {sheet?.type === 'add' ? (
+          <ItemForm
+            key="add"
+            mode="add"
+            initial={emptyItemInput()}
+            offline={inv.isOffline}
+            onSubmit={inv.add}
+            onDone={() => {
+              closeSheet();
+              showNotice(t('records.inventory.saved'));
+            }}
+            onCancel={closeSheet}
           />
-        ) : filtered.length === 0 ? (
-          <View style={{ paddingHorizontal: 24 }}>
-            <GlassCard style={{ padding: 24, alignItems: 'center' }}>
-              <Text
-                style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: colors.textMute }}
-              >
-                Hakuna bidhaa za {catMeta(activeFilter as InventoryItem['category']).swahili} bado.
-              </Text>
-            </GlassCard>
-          </View>
-        ) : (
-          <View style={{ paddingHorizontal: 24, gap: 12 }}>
-            {filtered.map((i, idx) => (
-              <ItemCard key={i.id} item={i} idx={idx} adjust={adjust} remove={removeItem} />
-            ))}
-          </View>
-        )}
-      </PageScaffold>
-    </Gate>
+        ) : null}
+        {sheet?.type === 'edit' && sheetItem ? (
+          <ItemForm
+            key={`edit-${sheetItem.id}`}
+            mode="edit"
+            initial={itemToInput(sheetItem)}
+            offline={inv.isOffline}
+            onSubmit={(input) => inv.update(sheetItem.id, input)}
+            onDone={() => {
+              setSheet({ type: 'detail', id: sheetItem.id });
+              showNotice(t('records.inventory.saved'));
+            }}
+            onCancel={() => setSheet({ type: 'detail', id: sheetItem.id })}
+          />
+        ) : null}
+        {sheet?.type === 'detail' && sheetItem ? (
+          <ItemDetail
+            key={sheetItem.id}
+            item={sheetItem}
+            inventory={inv}
+            onEdit={() => setSheet({ type: 'edit', id: sheetItem.id })}
+            onDeleted={closeSheet}
+            onNotice={showNotice}
+          />
+        ) : null}
+      </RecordSheet>
+    </View>
   );
 }
 
-function AccessDenied() {
+function Stat({ label, value }: { label: string; value: string }) {
+  const { spacing } = useTheme();
   return (
-    <EmptyState
-      icon={<AlertTriangle size={36} color="#f59e0b" />}
-      title="Haipatikani"
-      body="Pembejeo haipatikani kwa jukumu lako."
-    />
+    <View accessible accessibilityLabel={`${label}: ${value}`} style={{ flex: 1 }}>
+      <AppText variant="caption" tone="muted">
+        {label}
+      </AppText>
+      <AppText
+        variant="h3"
+        style={{ marginTop: spacing.xs }}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+      >
+        {value}
+      </AppText>
+    </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const s = StyleSheet.create({
-  addBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+function ItemRow({ item, onPress }: { item: Item; onPress: () => void }) {
+  const { t } = useT();
+  const { spacing } = useTheme();
+  const unit = unitLabel(t, item.unit);
+  const expiry = expiryStatus(item);
+  const qty = `${formatQuantity(item.quantity)} ${unit}`;
+  const category = t(`records.inventory.category.${item.category}` as const);
+  const badge = isOutOfStock(item)
+    ? { variant: 'error' as const, label: t('records.inventory.badge.out') }
+    : isLowStock(item)
+      ? { variant: 'warning' as const, label: t('records.inventory.badge.low') }
+      : expiry.state === 'expired'
+        ? { variant: 'error' as const, label: t('records.inventory.badge.expired') }
+        : expiry.state === 'soon'
+          ? { variant: 'warning' as const, label: t('records.inventory.badge.expiring') }
+          : null;
 
-  alertBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  alertIconRing: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#ef444420',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  alertTitle: { fontSize: 13, fontFamily: 'Inter_800ExtraBold' },
-  alertBody: { fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 2 },
-  alertCount: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  alertCountText: { fontSize: 12, fontFamily: 'Inter_800ExtraBold', color: '#fff' },
-
-  filterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  filterText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
-});
-
-const ic = StyleSheet.create({
-  card: { padding: 0, overflow: 'hidden' },
-  stripe: { height: 3 },
-  body: { padding: 16 },
-
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  iconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  nameBlock: { flex: 1 },
-  name: { fontSize: 15, fontFamily: 'InstrumentSerif_400Regular', letterSpacing: -0.2 },
-  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 7 },
-  badgeText: { fontSize: 12, fontFamily: 'Inter_800ExtraBold', letterSpacing: 0.8 },
-
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 22,
-    borderWidth: 1,
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-    gap: 2,
-  },
-  stepBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stepVal: {
-    fontSize: 14,
-    fontFamily: 'InstrumentSerif_400Regular',
-    minWidth: 42,
-    textAlign: 'center',
-  },
-
-  lowBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 10,
-    padding: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  lowText: { fontSize: 12, fontFamily: 'Inter_700Bold', color: '#ef4444', flex: 1 },
-
-  footRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  priceTag: { fontSize: 12, fontFamily: 'Inter_500Medium' },
-  totalTag: { fontSize: 13, fontFamily: 'InstrumentSerif_400Regular' },
-  expandChip: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  detail: {
-    marginTop: 10,
-    padding: 14,
-    borderRadius: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  deleteBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 12,
-    paddingVertical: 9,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#ef444440',
-    alignSelf: 'flex-start',
-  },
-});
-
-const mo = StyleSheet.create({
-  sheet: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 20,
-    paddingBottom: 32,
-    maxHeight: '92%',
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 16,
-  },
-  preview: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: { fontSize: 20, fontFamily: 'InstrumentSerif_400Regular' },
-  sub: { fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 1 },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  label: {
-    fontSize: 12,
-    fontFamily: 'Inter_800ExtraBold',
-    letterSpacing: 1.5,
-    marginTop: 18,
-    marginBottom: 8,
-  },
-  catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  catChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1.5,
-  },
-  catText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
-  inputWrap: {
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 4,
-    minHeight: 52,
-    justifyContent: 'center',
-  },
-  input: { fontSize: 15, fontFamily: 'Inter_500Medium', paddingVertical: 10 },
-  unitRow: { flexDirection: 'row', gap: 8 },
-  unitPill: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    alignItems: 'center',
-  },
-  unitText: { fontSize: 14, fontFamily: 'Inter_700Bold' },
-  saveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 24,
-    paddingVertical: 17,
-    borderRadius: 18,
-  },
-  saveBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontFamily: 'InstrumentSerif_400Regular',
-    letterSpacing: 0.3,
-  },
-});
+  return (
+    <Card
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={[item.name, category, qty, badge?.label].filter(Boolean).join('. ')}
+      style={{ marginBottom: spacing.md }}
+    >
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: spacing.md,
+        }}
+      >
+        <View style={{ flex: 1 }}>
+          <AppText variant="h3" numberOfLines={1}>
+            {item.name}
+          </AppText>
+          <AppText variant="caption" tone="muted" style={{ marginTop: 2 }}>
+            {[category, item.location].filter(Boolean).join(' · ')}
+          </AppText>
+        </View>
+        <View style={{ alignItems: 'flex-end', gap: spacing.xs }}>
+          <AppText variant="label">{qty}</AppText>
+          {badge ? <Badge variant={badge.variant} label={badge.label} /> : null}
+        </View>
+      </View>
+      {item.lowStockThreshold !== null ? (
+        <View style={{ marginTop: spacing.md }}>
+          <ProgressBar pct={stockFill(item) * 100} label={`${item.name}: ${qty}`} />
+        </View>
+      ) : null}
+    </Card>
+  );
+}
