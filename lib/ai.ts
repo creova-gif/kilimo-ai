@@ -6,16 +6,18 @@
  * JWT-verified (see supabase/config.toml) and enforces the Sankofa system
  * prompt server-side.
  *
- * Falls back to demo mode (see callers + lib/ai-demo.ts) when no Supabase
- * backend is configured — `aiConfigured()` reflects backend availability,
- * not the presence of any client-side secret.
+ * `aiConfigured()` reflects backend availability, not the presence of any
+ * client-side secret. When the server has no provider key the proxy answers
+ * 503 and callers receive AIError kind 'not_configured' — they must show an
+ * honest "unavailable" state, never a sample answer or diagnosis. Grounded
+ * text answers go through lib/rag.ts (rag-chat), which works without a key.
  *
  * SECURITY: do not reintroduce EXPO_PUBLIC_GEMINI_API_KEY /
  * EXPO_PUBLIC_OPENAI_API_KEY here — EXPO_PUBLIC_* vars are inlined into the
  * shipped JS bundle and are trivially extractable from the APK.
  */
 
-import { supabase } from './supabase';
+import { getSupabase } from './supabase';
 
 const AI_FN = 'openai-proxy';
 
@@ -29,7 +31,7 @@ export class AIError extends Error {
 }
 
 export function aiConfigured(): boolean {
-  return !!supabase;
+  return !!getSupabase();
 }
 
 export interface ChatMessage {
@@ -37,16 +39,37 @@ export interface ChatMessage {
   content: string;
 }
 
+/**
+ * Map a `supabase.functions.invoke` error to an AIError kind. Pure (exported
+ * for tests). FunctionsHttpError carries the Response in `context`: 503 means
+ * the provider key is not configured on the server, 401 means no real session.
+ */
+export function classifyInvokeError(error: any): AIError['kind'] {
+  const name = String(error?.name ?? '');
+  const status = Number(error?.context?.status ?? error?.status ?? 0);
+  if (name === 'FunctionsFetchError') return 'network';
+  if (status === 503) return 'not_configured';
+  if (status === 401 || status === 403) return 'unauthorized';
+  if (status === 400 || status === 413 || status === 422) return 'validation';
+  if (/network|fetch failed|failed to fetch|timeout/i.test(String(error?.message ?? '')))
+    return 'network';
+  return 'server';
+}
+
 /** Invoke the AI proxy edge function with an action discriminator. */
 async function invokeAI<T = any>(body: Record<string, unknown>): Promise<T> {
+  const supabase = getSupabase();
   if (!supabase) throw new AIError('AI backend not configured', 'not_configured');
   const { data, error } = await supabase.functions.invoke(AI_FN, { body });
   if (error) {
-    // Supabase wraps non-2xx responses in FunctionsHttpError.
-    throw new AIError(error.message ?? 'AI proxy error', 'server');
+    throw new AIError(error.message ?? 'AI proxy error', classifyInvokeError(error));
   }
   if (data && (data as any).error) {
-    throw new AIError(String((data as any).error), 'server');
+    const code = String((data as any).code ?? (data as any).error);
+    throw new AIError(
+      String((data as any).error),
+      code === 'ai_not_configured' ? 'not_configured' : 'server'
+    );
   }
   return data as T;
 }
@@ -154,6 +177,7 @@ HAKIKISHA JSON YAKO NI SAHIHI.`;
 
     return { ...parsed, severity, confidence, imageQuality, consultExpert, raw: content };
   } catch (err: any) {
+    if (err instanceof AIError) throw err;
     throw new AIError(err?.message ?? 'Vision Error', 'server');
   }
 }
