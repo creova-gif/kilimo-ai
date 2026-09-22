@@ -1,557 +1,330 @@
 /**
- * Digital Farm Twin — Scenario editor + results
+ * Digital Farm Twin — scenario editor (KIL-003).
  *
- * Full what-if simulator for a single scenario. Inputs drive the parametric
- * yield model in real-time (recalculated on every change). Results panel shows
- * yield, revenue, cost breakdown, risk breakdown, and Swahili advisory tips.
+ * A what-if simulator: the farmer sets the inputs and the deterministic model in
+ * lib/farmtwin/model.ts recomputes on every change. Every result is an ESTIMATE from those inputs
+ * only (no sensor, satellite or market data), and the screen says so. All copy is localised.
  */
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Lightbulb } from 'lucide-react-native';
+
 import {
-  Droplets,
-  Thermometer,
-  Sprout,
-  BarChart3,
-  TrendingUp,
-  AlertTriangle,
-  Lightbulb,
-  ChevronLeft,
-  Save,
-} from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
+  AlertCard,
+  AppText,
+  Button,
+  Card,
+  Chip,
+  EmptyState,
+  MIN_TOUCH_TARGET,
+  ScreenHeader,
+} from '../../components/ui';
 import { useTheme } from '../../constants/Theme';
-import PageScaffold, { GlassCard, SectionHeader } from '../../components/PageScaffold';
+import { runTwinModel } from '../../lib/farmtwin/model';
 import {
-  useDigitalFarmTwinStore,
-  TwinInputs,
-  Crop,
-  SoilType,
-} from '../../store/useDigitalFarmTwinStore';
-import { runTwinModel, CROPS, SOIL_TYPES } from '../../lib/farmtwin/model';
+  CROP_LABEL_KEY,
+  fmtTZS,
+  SOIL_LABEL_KEY,
+  TWIN_AREA_MAX,
+  TWIN_AREA_MIN,
+  TWIN_CROPS,
+  TWIN_SOIL_TYPES,
+  twinAdvice,
+} from '../../lib/farmTwinPlots';
+import { useT } from '../../lib/i18n';
+import { useDigitalFarmTwinStore, type TwinInputs } from '../../store/useDigitalFarmTwinStore';
 
-const fmtTZS = (n: number) =>
-  `TSh ${new Intl.NumberFormat('en-US').format(Math.round(Math.abs(n)))}`;
 const fmtN = (n: number) => new Intl.NumberFormat('en-US').format(Math.round(n));
+const round1 = (n: number) => Math.round(n * 10) / 10;
 
-// ── Stepper (replaces Slider for cross-platform reliability) ─────────────────
 function Stepper({
   label,
   value,
+  unit,
   min,
   max,
+  onChange,
   step,
-  unit,
-  onDec,
-  onInc,
 }: {
   label: string;
   value: number;
+  unit: string;
   min: number;
   max: number;
   step: number;
-  unit: string;
-  onDec: () => void;
-  onInc: () => void;
+  onChange: (v: number) => void;
 }) {
-  const { colors } = useTheme();
+  const { t } = useT();
+  const { colors, spacing } = useTheme();
+  const btn = (sign: -1 | 1) => {
+    const disabled = sign < 0 ? value <= min : value >= max;
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t(sign < 0 ? 'planning.twin.decrease' : 'planning.twin.increase', { label })}
+        accessibilityState={{ disabled }}
+        disabled={disabled}
+        onPress={() => onChange(Math.min(max, Math.max(min, round1(value + sign * step))))}
+        style={[
+          styles.stepBtn,
+          { borderColor: colors.border, backgroundColor: colors.card, opacity: disabled ? 0.4 : 1 },
+        ]}
+      >
+        <AppText variant="h3">{sign < 0 ? '−' : '+'}</AppText>
+      </Pressable>
+    );
+  };
   return (
-    <View style={st.row}>
-      <View style={{ flex: 1 }}>
-        <Text style={[st.label, { color: colors.textMute }]}>{label}</Text>
-        <Text style={[st.value, { color: colors.text }]}>
+    <View style={[styles.row, { paddingVertical: spacing.xs }]} accessible={false}>
+      <View style={styles.flex}>
+        <AppText variant="small" tone="muted">
+          {label}
+        </AppText>
+        <AppText variant="label" accessibilityLiveRegion="polite">
           {value} {unit}
-        </Text>
+        </AppText>
       </View>
-      <View style={st.controls}>
-        <TouchableOpacity
-          onPress={() => {
-            if (value > min) {
-              onDec();
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            }
-          }}
-          style={[
-            st.btn,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-              opacity: value <= min ? 0.4 : 1,
-            },
-          ]}
-        >
-          <Text style={[st.btnText, { color: colors.text }]}>−</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => {
-            if (value < max) {
-              onInc();
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            }
-          }}
-          style={[
-            st.btn,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-              opacity: value >= max ? 0.4 : 1,
-            },
-          ]}
-        >
-          <Text style={[st.btnText, { color: colors.text }]}>+</Text>
-        </TouchableOpacity>
+      <View style={[styles.row, { gap: spacing.sm }]}>
+        {btn(-1)}
+        {btn(1)}
       </View>
     </View>
   );
 }
-const st = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
-  label: { fontFamily: 'Inter_600SemiBold', fontSize: 11, letterSpacing: 0.3 },
-  value: { fontFamily: 'Inter_800ExtraBold', fontSize: 16, marginTop: 2 },
-  controls: { flexDirection: 'row', gap: 8 },
-  btn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  btnText: { fontFamily: 'Inter_800ExtraBold', fontSize: 20, lineHeight: 22 },
-});
-
-// ── Pill selector ─────────────────────────────────────────────────────────────
-function PillRow<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: readonly T[];
-  value: T;
-  onChange: (v: T) => void;
-}) {
-  const { colors } = useTheme();
-  return (
-    <ScrollView
-      showsVerticalScrollIndicator={false}
-      horizontal
-      showsHorizontalScrollIndicator={false}
-    >
-      <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 8 }}>
-        {options.map((o) => {
-          const active = o === value;
-          return (
-            <TouchableOpacity
-              key={o}
-              onPress={() => {
-                onChange(o);
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }}
-              style={[
-                pill.btn,
-                {
-                  backgroundColor: active ? colors.primary : colors.card,
-                  borderColor: active ? colors.primary : colors.border,
-                },
-              ]}
-            >
-              <Text style={[pill.text, { color: active ? '#000' : colors.text }]}>{o}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </ScrollView>
-  );
-}
-const pill = StyleSheet.create({
-  btn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  text: { fontFamily: 'Inter_700Bold', fontSize: 11 },
-});
-
-// ── Horizontal bar chart ──────────────────────────────────────────────────────
-function HorizBar({
-  label,
-  value,
-  max,
-  color,
-}: {
-  label: string;
-  value: number;
-  max: number;
-  color: string;
-}) {
-  const { colors } = useTheme();
-  const pct = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
-  return (
-    <View style={hb.row}>
-      <Text style={[hb.label, { color: colors.textMute }]} numberOfLines={1}>
-        {label}
-      </Text>
-      <View style={[hb.track, { backgroundColor: colors.card }]}>
-        <View style={[hb.fill, { width: `${pct * 100}%` as any, backgroundColor: color }]} />
-      </View>
-      <Text style={[hb.val, { color }]}>{fmtTZS(value)}</Text>
-    </View>
-  );
-}
-const hb = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 },
-  label: { fontFamily: 'Inter_600SemiBold', fontSize: 11, width: 72 },
-  track: { flex: 1, height: 10, borderRadius: 5, overflow: 'hidden' },
-  fill: { height: 10, borderRadius: 5 },
-  val: { fontFamily: 'Inter_700Bold', fontSize: 11, width: 88, textAlign: 'right' },
-});
-
-// ── Risk gauge ────────────────────────────────────────────────────────────────
-function RiskPill({ label, score }: { label: string; score: number }) {
-  const color =
-    score >= 70 ? '#ef4444' : score >= 45 ? '#f97316' : score >= 25 ? '#f59e0b' : '#22c55e';
-  return (
-    <View style={[rg.pill, { backgroundColor: `${color}22` }]}>
-      <Text style={[rg.label, { color }]}>{label}</Text>
-      <Text style={[rg.val, { color }]}>{score}</Text>
-    </View>
-  );
-}
-const rg = StyleSheet.create({
-  pill: { flex: 1, padding: 10, borderRadius: 12, alignItems: 'center', gap: 4 },
-  label: { fontFamily: 'Inter_600SemiBold', fontSize: 10 },
-  val: { fontFamily: 'InstrumentSerif_400Regular', fontSize: 22 },
-});
-
-// ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function ScenarioEditor() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { colors } = useTheme();
   const router = useRouter();
+  const { t } = useT();
+  const { colors, spacing } = useTheme();
   const scenario = useDigitalFarmTwinStore((s) => s.scenarios.find((sc) => sc.id === id));
   const updateInputs = useDigitalFarmTwinStore((s) => s.updateInputs);
+  const [inputs, setInputs] = useState<TwinInputs | null>(scenario?.inputs ?? null);
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace('/farm-twin' as any));
 
-  const [inputs, setInputs] = useState<TwinInputs>(
-    scenario?.inputs ?? {
-      crop: 'Mahindi',
-      areaHa: 2,
-      rainfallMm: 600,
-      fertilizerKgHa: 100,
-      irrigated: false,
-      soilHealth: 75,
-      plantingDensityPct: 100,
-      soilType: 'Tifutifu (Loam)',
-    }
-  );
+  if (!scenario || !inputs) {
+    return (
+      <SafeAreaView style={[styles.flex, { backgroundColor: colors.background }]}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ScreenHeader showBack onBack={goBack} backLabel={t('common.back')} title={t('planning.twin.title')} />
+        <EmptyState
+          title={t('planning.twin.notFound.title')}
+          description={t('planning.twin.notFound.body')}
+          actionLabel={t('common.back')}
+          onAction={goBack}
+        />
+      </SafeAreaView>
+    );
+  }
 
-  // Live model output — recomputed on every render (pure, fast)
   const output = runTwinModel(inputs);
+  const advice = twinAdvice(inputs, output);
+  const patch = (p: Partial<TwinInputs>) => setInputs((prev) => ({ ...(prev as TwinInputs), ...p }));
+  const dirty = JSON.stringify(inputs) !== JSON.stringify(scenario.inputs);
+  const src = scenario.source;
 
-  function patch(partial: Partial<TwinInputs>) {
-    setInputs((prev) => ({ ...prev, ...partial }));
-  }
-
-  function handleSave() {
-    if (!id) return;
-    updateInputs(id, inputs);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    if (router.canGoBack()) router.back();
-    else router.replace('/farm-twin');
-  }
-
-  if (!scenario) return null;
-
-  const maxCost = Math.max(
-    output.costBreakdown.seed,
-    output.costBreakdown.fertilizer,
-    output.costBreakdown.labor,
-    output.costBreakdown.irrigation,
-    output.costBreakdown.overhead,
-    1
-  );
-  const profit = output.netProfitTZS;
+  const save = () => {
+    updateInputs(scenario.id, inputs);
+    goBack();
+  };
 
   return (
-    <PageScaffold
-      title={scenario.name}
-      subtitle="Hali ya Shamba Dijiti"
-      badge="SIMULATOR"
-      headerRight={
-        <TouchableOpacity
-          onPress={handleSave}
-          style={[se.saveBtn, { backgroundColor: colors.primary }]}
-        >
-          <Save size={16} color="#000" />
-          <Text style={se.saveBtnText}>Hifadhi</Text>
-        </TouchableOpacity>
-      }
-    >
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 80 }}
-      >
-        {/* ── INPUTS ─────────────────────────────────────── */}
-        <SectionHeader title="INGIZO (WHAT-IF)" />
-        <GlassCard style={{ padding: 14, gap: 4 }}>
-          <Text style={[se.groupLabel, { color: colors.textMute }]}>ZAO</Text>
-          <PillRow options={CROPS} value={inputs.crop} onChange={(v) => patch({ crop: v })} />
+    <SafeAreaView style={[styles.flex, { backgroundColor: colors.background }]}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <ScreenHeader
+        showBack
+        onBack={goBack}
+        backLabel={t('common.back')}
+        title={scenario.name}
+        subtitle={t('planning.twin.editor.subtitle')}
+      />
+      <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 48, gap: spacing.md }}>
+        {!!src && (
+          <AlertCard
+            variant="info"
+            title={t('planning.twin.fromPlotName', { plot: src.plotName })}
+            body={[
+              t('planning.twin.source.copied'),
+              src.cropMatched === false ? t('planning.twin.source.cropUnmatched') : null,
+              src.areaMissing ? t('planning.twin.source.areaMissing') : null,
+              src.areaAdjusted
+                ? t('planning.twin.source.areaAdjusted', { min: TWIN_AREA_MIN, max: TWIN_AREA_MAX })
+                : null,
+            ]
+              .filter(Boolean)
+              .join('\n')}
+          />
+        )}
 
-          <Text style={[se.groupLabel, { color: colors.textMute, marginTop: 8 }]}>
-            AINA YA UDONGO
-          </Text>
-          <PillRow
-            options={SOIL_TYPES}
-            value={inputs.soilType}
-            onChange={(v) => patch({ soilType: v })}
-          />
+        <AppText variant="h3" accessibilityRole="header">
+          {t('planning.twin.inputs')}
+        </AppText>
+        <Card>
+          <AppText variant="label">{t('planning.twin.crop')}</AppText>
+          <View style={[styles.wrap, { gap: spacing.sm, marginTop: spacing.xs }]}>
+            {TWIN_CROPS.map((c) => (
+              <Chip key={c} label={t(CROP_LABEL_KEY[c])} selected={inputs.crop === c} onPress={() => patch({ crop: c })} />
+            ))}
+          </View>
+          <AppText variant="label" style={{ marginTop: spacing.md }}>
+            {t('planning.twin.soilType')}
+          </AppText>
+          <View style={[styles.wrap, { gap: spacing.sm, marginTop: spacing.xs }]}>
+            {TWIN_SOIL_TYPES.map((s) => (
+              <Chip
+                key={s}
+                label={t(SOIL_LABEL_KEY[s])}
+                selected={inputs.soilType === s}
+                onPress={() => patch({ soilType: s })}
+              />
+            ))}
+          </View>
 
-          <View style={se.divider} />
+          <View style={{ marginTop: spacing.md }}>
+            <Stepper
+              label={t('planning.twin.area')}
+              value={inputs.areaHa}
+              unit="ha"
+              min={TWIN_AREA_MIN}
+              max={TWIN_AREA_MAX}
+              step={0.5}
+              onChange={(v) => patch({ areaHa: v })}
+            />
+            <Stepper
+              label={t('planning.twin.rain')}
+              value={inputs.rainfallMm}
+              unit="mm"
+              min={100}
+              max={2000}
+              step={50}
+              onChange={(v) => patch({ rainfallMm: v })}
+            />
+            <Stepper
+              label={t('planning.twin.fert')}
+              value={inputs.fertilizerKgHa}
+              unit="kg/ha"
+              min={0}
+              max={400}
+              step={20}
+              onChange={(v) => patch({ fertilizerKgHa: v })}
+            />
+            <Stepper
+              label={t('planning.twin.density')}
+              value={inputs.plantingDensityPct}
+              unit="%"
+              min={50}
+              max={150}
+              step={10}
+              onChange={(v) => patch({ plantingDensityPct: v })}
+            />
+            <Stepper
+              label={t('planning.twin.soilHealth')}
+              value={inputs.soilHealth}
+              unit="/100"
+              min={10}
+              max={100}
+              step={5}
+              onChange={(v) => patch({ soilHealth: v })}
+            />
+            <AppText variant="caption" tone="muted">
+              {t('planning.twin.soilHealth.note')}
+            </AppText>
+          </View>
 
-          <Stepper
-            label="Eneo la Shamba"
-            value={inputs.areaHa}
-            min={0.5}
-            max={50}
-            step={0.5}
-            unit="ha"
-            onDec={() => patch({ areaHa: Math.max(0.5, +(inputs.areaHa - 0.5).toFixed(1)) })}
-            onInc={() => patch({ areaHa: Math.min(50, +(inputs.areaHa + 0.5).toFixed(1)) })}
-          />
-          <Stepper
-            label="Mvua ya Msimu"
-            value={inputs.rainfallMm}
-            min={100}
-            max={2000}
-            step={50}
-            unit="mm"
-            onDec={() => patch({ rainfallMm: Math.max(100, inputs.rainfallMm - 50) })}
-            onInc={() => patch({ rainfallMm: Math.min(2000, inputs.rainfallMm + 50) })}
-          />
-          <Stepper
-            label="Mbolea"
-            value={inputs.fertilizerKgHa}
-            min={0}
-            max={400}
-            step={20}
-            unit="kg/ha"
-            onDec={() => patch({ fertilizerKgHa: Math.max(0, inputs.fertilizerKgHa - 20) })}
-            onInc={() => patch({ fertilizerKgHa: Math.min(400, inputs.fertilizerKgHa + 20) })}
-          />
-          <Stepper
-            label="Msongamano wa Mimea"
-            value={inputs.plantingDensityPct}
-            min={50}
-            max={150}
-            step={10}
-            unit="%"
-            onDec={() =>
-              patch({ plantingDensityPct: Math.max(50, inputs.plantingDensityPct - 10) })
-            }
-            onInc={() =>
-              patch({ plantingDensityPct: Math.min(150, inputs.plantingDensityPct + 10) })
-            }
-          />
-          <Stepper
-            label="Afya ya Udongo"
-            value={inputs.soilHealth}
-            min={10}
-            max={100}
-            step={5}
-            unit="/100"
-            onDec={() => patch({ soilHealth: Math.max(10, inputs.soilHealth - 5) })}
-            onInc={() => patch({ soilHealth: Math.min(100, inputs.soilHealth + 5) })}
-          />
-
-          <View style={[se.switchRow, { borderTopColor: colors.border }]}>
-            <View>
-              <Text style={[se.switchLabel, { color: colors.text }]}>Umwagiliaji</Text>
-              <Text style={[se.switchSub, { color: colors.textMute }]}>
-                {inputs.irrigated
-                  ? 'Imewashwa — maji ya ziada yanashughulikiwa'
-                  : 'Imezimwa — mvua pekee'}
-              </Text>
+          <View style={[styles.row, { marginTop: spacing.md, minHeight: MIN_TOUCH_TARGET }]}>
+            <View style={styles.flex}>
+              <AppText variant="label">{t('planning.twin.irrigation')}</AppText>
+              <AppText variant="caption" tone="muted">
+                {t(inputs.irrigated ? 'planning.twin.irrigation.on' : 'planning.twin.irrigation.off')}
+              </AppText>
             </View>
             <Switch
               value={inputs.irrigated}
-              onValueChange={(v) => {
-                patch({ irrigated: v });
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }}
-              trackColor={{ true: colors.primary }}
+              onValueChange={(v) => patch({ irrigated: v })}
+              trackColor={{ true: colors.primary, false: colors.border }}
+              accessibilityLabel={t('planning.twin.irrigation')}
             />
           </View>
-        </GlassCard>
+        </Card>
 
-        {/* ── RESULTS ────────────────────────────────────── */}
-        <SectionHeader title="MATOKEO YA MFANO" />
-
-        {/* Hero stat */}
-        <GlassCard style={se.heroCard}>
-          <View style={se.heroRow}>
-            <View style={se.heroStat}>
-              <Text style={[se.heroLabel, { color: colors.textMute }]}>MAVUNO JUMLA</Text>
-              <Text style={[se.heroVal, { color: '#2E6F40' }]}>{output.totalYieldTonnes}t</Text>
-              <Text style={[se.heroSub, { color: colors.textMute }]}>
-                {output.yieldTonnesHa}t/ha
-              </Text>
-            </View>
-            <View style={se.heroDivider} />
-            <View style={se.heroStat}>
-              <Text style={[se.heroLabel, { color: colors.textMute }]}>FAIDA HALISI</Text>
-              <Text style={[se.heroVal, { color: profit >= 0 ? '#3b82f6' : '#ef4444' }]}>
-                {profit < 0 ? '-' : ''}
-                {fmtTZS(profit)}
-              </Text>
-              <Text style={[se.heroSub, { color: colors.textMute }]}>ROI {output.roi}%</Text>
-            </View>
-          </View>
-          <View style={[se.revRow, { borderTopColor: colors.border }]}>
-            <Text style={[se.revLabel, { color: colors.textMute }]}>Mapato ya mauzo</Text>
-            <Text style={[se.revVal, { color: colors.text }]}>{fmtTZS(output.revenuesTZS)}</Text>
-          </View>
+        <AppText variant="h3" accessibilityRole="header">
+          {t('planning.twin.results')}
+        </AppText>
+        <AlertCard variant="warning" title={t('planning.twin.estimate.title')} body={t('planning.twin.results.note')} />
+        <Card testID="twin-results">
+          <Stat label={t('planning.twin.res.yield')} value={t('planning.twin.tonnes', { value: output.totalYieldTonnes })} />
+          <Stat label={t('planning.twin.res.yieldHa')} value={t('planning.twin.tonnesHa', { value: output.yieldTonnesHa })} />
+          <Stat label={t('planning.twin.res.revenue')} value={fmtTZS(output.revenuesTZS)} />
+          <Stat label={t('planning.twin.res.cost')} value={fmtTZS(output.totalCostTZS)} />
+          <Stat label={t('planning.twin.res.profit')} value={fmtTZS(output.netProfitTZS)} tone={output.netProfitTZS < 0 ? 'error' : 'default'} />
+          <Stat label={t('planning.twin.res.roi')} value={`${output.roi}%`} />
           {inputs.irrigated && (
-            <View style={se.revRow}>
-              <Text style={[se.revLabel, { color: colors.textMute }]}>Maji yanayotumika</Text>
-              <Text style={[se.revVal, { color: '#38bdf8' }]}>{fmtN(output.waterUsageM3)} m³</Text>
-            </View>
+            <Stat label={t('planning.twin.res.water')} value={`${fmtN(output.waterUsageM3)} m³`} />
           )}
-        </GlassCard>
+        </Card>
 
-        {/* Cost breakdown */}
-        <SectionHeader title="MGAWANYO WA GHARAMA" />
-        <GlassCard style={{ padding: 14 }}>
-          <HorizBar label="Mbegu" value={output.costBreakdown.seed} max={maxCost} color="#f59e0b" />
-          <HorizBar
-            label="Mbolea"
-            value={output.costBreakdown.fertilizer}
-            max={maxCost}
-            color="#a78bfa"
-          />
-          <HorizBar label="Kazi" value={output.costBreakdown.labor} max={maxCost} color="#38bdf8" />
+        <Card>
+          <AppText variant="label">{t('planning.twin.costs')}</AppText>
+          <Stat label={t('planning.twin.cost.seed')} value={fmtTZS(output.costBreakdown.seed)} />
+          <Stat label={t('planning.twin.cost.fert')} value={fmtTZS(output.costBreakdown.fertilizer)} />
+          <Stat label={t('planning.twin.cost.labor')} value={fmtTZS(output.costBreakdown.labor)} />
           {output.costBreakdown.irrigation > 0 && (
-            <HorizBar
-              label="Maji"
-              value={output.costBreakdown.irrigation}
-              max={maxCost}
-              color="#34d399"
-            />
+            <Stat label={t('planning.twin.cost.water')} value={fmtTZS(output.costBreakdown.irrigation)} />
           )}
-          <HorizBar
-            label="Mengine"
-            value={output.costBreakdown.overhead}
-            max={maxCost}
-            color="#94a3b8"
-          />
-          <View style={[se.totalRow, { borderTopColor: colors.border }]}>
-            <Text style={[se.totalLabel, { color: colors.textMute }]}>JUMLA YA GHARAMA</Text>
-            <Text style={[se.totalVal, { color: colors.text }]}>{fmtTZS(output.totalCostTZS)}</Text>
-          </View>
-        </GlassCard>
+          <Stat label={t('planning.twin.cost.other')} value={fmtTZS(output.costBreakdown.overhead)} />
+        </Card>
 
-        {/* Risk breakdown */}
-        <SectionHeader title="TATHMINI YA HATARI" />
-        <GlassCard style={{ padding: 14 }}>
-          <View style={se.riskRow}>
-            <RiskPill label="Ukame" score={output.riskBreakdown.drought} />
-            <RiskPill label="Wadudu" score={output.riskBreakdown.pest} />
-            <RiskPill label="Soko" score={output.riskBreakdown.market} />
-          </View>
-          <View style={[se.overallRisk, { borderTopColor: colors.border }]}>
-            <Text style={[se.overallLabel, { color: colors.textMute }]}>HATARI YA JUMLA</Text>
-            <Text
-              style={[
-                se.overallVal,
-                {
-                  color:
-                    output.riskScore >= 70
-                      ? '#ef4444'
-                      : output.riskScore >= 45
-                        ? '#f97316'
-                        : output.riskScore >= 25
-                          ? '#f59e0b'
-                          : '#22c55e',
-                },
-              ]}
-            >
-              {output.riskScore}/100
-            </Text>
-          </View>
-        </GlassCard>
+        <Card>
+          <AppText variant="label">{t('planning.twin.risk')}</AppText>
+          <Stat label={t('planning.twin.risk.drought')} value={`${output.riskBreakdown.drought}/100`} />
+          <Stat label={t('planning.twin.risk.pest')} value={`${output.riskBreakdown.pest}/100`} />
+          <Stat label={t('planning.twin.risk.market')} value={`${output.riskBreakdown.market}/100`} />
+          <Stat label={t('planning.twin.risk.overall')} value={`${output.riskScore}/100`} />
+        </Card>
 
-        {/* Swahili advisory tips */}
-        <SectionHeader title="USHAURI WA SANKOFA AI" />
-        <GlassCard style={{ padding: 14, gap: 10 }}>
-          {output.advice.map((tip, i) => (
-            <View key={i} style={se.tipRow}>
-              <Lightbulb size={16} color="#f59e0b" style={{ marginTop: 2 }} />
-              <Text style={[se.tipText, { color: colors.text }]}>{tip}</Text>
+        <Card variant="tinted">
+          <AppText variant="label">{t('planning.twin.advice')}</AppText>
+          {advice.map((a) => (
+            <View key={a.key} style={[styles.row, { gap: spacing.sm, marginTop: spacing.sm, alignItems: 'flex-start' }]}>
+              <Lightbulb size={16} color={colors.primary} style={{ marginTop: 2 }} />
+              <AppText variant="small" style={styles.flex}>
+                {t(a.key, a.params)}
+              </AppText>
             </View>
           ))}
-        </GlassCard>
+        </Card>
+
+        <Button label={t('common.save')} disabled={!dirty} onPress={save} />
       </ScrollView>
-    </PageScaffold>
+    </SafeAreaView>
   );
 }
 
-const se = StyleSheet.create({
-  saveBtn: {
-    flexDirection: 'row',
+function Stat({ label, value, tone = 'default' }: { label: string; value: string; tone?: 'default' | 'error' }) {
+  return (
+    <View style={[styles.row, styles.stat]} accessible accessibilityLabel={`${label}: ${value}`}>
+      <AppText variant="small" tone="muted" style={styles.flex}>
+        {label}
+      </AppText>
+      <AppText variant="smallStrong" tone={tone}>
+        {value}
+      </AppText>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  row: { flexDirection: 'row', alignItems: 'center' },
+  wrap: { flexDirection: 'row', flexWrap: 'wrap' },
+  stat: { minHeight: 28, marginTop: 4 },
+  stepBtn: {
+    width: MIN_TOUCH_TARGET,
+    height: MIN_TOUCH_TARGET,
+    borderRadius: MIN_TOUCH_TARGET / 2,
+    borderWidth: 1,
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
+    justifyContent: 'center',
   },
-  saveBtnText: { fontFamily: 'Inter_800ExtraBold', fontSize: 12, color: '#000' },
-  groupLabel: { fontFamily: 'Inter_700Bold', fontSize: 10, letterSpacing: 1 },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: '#ffffff18', marginVertical: 6 },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    marginTop: 6,
-  },
-  switchLabel: { fontFamily: 'Inter_700Bold', fontSize: 13 },
-  switchSub: { fontFamily: 'Inter_500Medium', fontSize: 11, marginTop: 2 },
-  heroCard: { padding: 16 },
-  heroRow: { flexDirection: 'row', gap: 0 },
-  heroStat: { flex: 1, alignItems: 'center', gap: 4 },
-  heroLabel: { fontFamily: 'Inter_700Bold', fontSize: 9, letterSpacing: 1 },
-  heroVal: { fontFamily: 'InstrumentSerif_400Regular', fontSize: 26 },
-  heroSub: { fontFamily: 'Inter_500Medium', fontSize: 11 },
-  heroDivider: { width: StyleSheet.hairlineWidth, backgroundColor: '#ffffff22' },
-  revRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: 10,
-    marginTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  revLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 12 },
-  revVal: { fontFamily: 'Inter_800ExtraBold', fontSize: 12 },
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: 10,
-    marginTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  totalLabel: { fontFamily: 'Inter_700Bold', fontSize: 10, letterSpacing: 0.5 },
-  totalVal: { fontFamily: 'InstrumentSerif_400Regular', fontSize: 14 },
-  riskRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  overallRisk: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  overallLabel: { fontFamily: 'Inter_700Bold', fontSize: 10, letterSpacing: 0.5 },
-  overallVal: { fontFamily: 'InstrumentSerif_400Regular', fontSize: 22 },
-  tipRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  tipText: { flex: 1, fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 20 },
 });

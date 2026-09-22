@@ -1,387 +1,272 @@
+/**
+ * Input application planner for ONE real plot (KIL-003). Route: `/vra-setup?plotId=<plot uuid>`.
+ *
+ * Replaces a screen that looked up a hard-coded ZONES entry by `zoneId` and painted a "prescription
+ * map" of Math.random() colours. A real variable-rate prescription needs per-zone measurements the
+ * app does not have, so this plans an honest uniform rate: the farmer's chosen rate × the plot's
+ * recorded area. The plot's drawn boundary (if any) is shown as-is. Nothing is sent to equipment —
+ * no equipment integration exists — and the screen says so.
+ */
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, Droplets, Target, Combine, Check, ShieldAlert } from 'lucide-react-native';
+import { Platform, SafeAreaView, ScrollView, StyleSheet, View } from 'react-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Droplets, ShieldAlert, Target } from 'lucide-react-native';
+
+import MapView, { Polygon } from '../components/MapViewWrapper';
+import { FarmDataState } from '../components/farmtools/FarmDataState';
+import { PlotPicker, plotSubtitle } from '../components/farmtools/PlotPicker';
+import {
+  AlertCard,
+  AppText,
+  Button,
+  Card,
+  Chip,
+  OfflineBanner,
+  ScreenHeader,
+  TextField,
+} from '../components/ui';
 import { useTheme } from '../constants/Theme';
-import { useKilimoStore } from '../store/useKilimoStore';
-import { ZONES } from '../constants/FarmData';
-import MapView, { Polygon, PROVIDER_GOOGLE } from '../components/MapViewWrapper';
-import * as Haptics from 'expo-haptics';
-import Animated from 'react-native-reanimated';
-import Slider from '@react-native-community/slider';
+import { useFarms } from '../hooks/useFarms';
+import { useTasks } from '../hooks/useTasks';
+import { regionForBoundaries, toMapCoords } from '../lib/farmGeo';
+import { formatHa } from '../lib/farms';
+import { translate, useT, type TranslationKey } from '../lib/i18n';
+import { applicationPlan, INPUT_KINDS, parseRate, RATE_UNIT, type InputKind } from '../lib/vraCalc';
 
-const { width: SW } = Dimensions.get('window');
-
-// No connection to real farm equipment (ISOBUS/ISO-XML export, a
-// spreader/sprayer controller API, or any equipment vendor integration)
-// exists anywhere in this codebase. Before this fix, handlePush() faked a
-// 2-second "sending" delay and then claimed "Synced Successfully" —
-// nothing was ever sent anywhere. Real equipment integration is a genuine
-// hardware/business decision (which controllers to support, what export
-// format, dealer partnerships) — flagged, not invented here.
-const VRA_EQUIPMENT_SYNC_LIVE = false;
-
-const INPUT_TYPES = [
-  { id: 'fertilizer', labelEn: 'Fertilizer', labelSw: 'Mbolea', icon: Target },
-  { id: 'water', labelEn: 'Irrigation', labelSw: 'Maji', icon: Droplets },
-  { id: 'pesticide', labelEn: 'Pesticide', labelSw: 'Dawa', icon: ShieldAlert },
-];
+const KIND_LABEL: Record<InputKind, TranslationKey> = {
+  fertilizer: 'planning.vra.kind.fertilizer',
+  water: 'planning.vra.kind.water',
+  pesticide: 'planning.vra.kind.pesticide',
+};
+const KIND_TASK: Record<InputKind, TranslationKey> = {
+  fertilizer: 'planning.vra.task.fertilizer',
+  water: 'planning.vra.task.water',
+  pesticide: 'planning.vra.task.pesticide',
+};
+const KIND_ICON: Record<InputKind, any> = {
+  fertilizer: Target,
+  water: Droplets,
+  pesticide: ShieldAlert,
+};
 
 export default function VRASetupScreen() {
-  const { zoneId } = useLocalSearchParams();
+  const params = useLocalSearchParams<{ plotId?: string }>();
+  const paramId = typeof params.plotId === 'string' && params.plotId ? params.plotId : null;
   const router = useRouter();
-  const { colors, isDark } = useTheme();
-  const language = useKilimoStore((s) => s.language);
-  const addNotification = useKilimoStore((s) => s.addNotification);
+  const { t, lang } = useT();
+  const { colors, spacing } = useTheme();
+  const data = useFarms();
+  const { farms, plots, loaded, isOffline } = data;
+  const { createTask } = useTasks();
 
-  const [activeInput, setActiveInput] = useState('fertilizer');
-  const [baseRate, setBaseRate] = useState(150); // kg/ha or L/ha
-  const [isPushing, setIsPushing] = useState(false);
+  const [chosenId, setChosenId] = useState<string | null>(paramId);
+  const [kind, setKind] = useState<InputKind>('fertilizer');
+  const [rateText, setRateText] = useState('');
+  const [added, setAdded] = useState(false);
 
-  const zone = ZONES.find((z) => z.id === Number(zoneId));
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace('/'));
+  const plot = chosenId ? (plots.find((p) => p.id === chosenId) ?? null) : null;
+  const unknown = loaded && !!chosenId && !plot;
+  const farm = plot ? farms.find((f) => f.id === plot.farmId) : null;
 
-  if (!zone) {
-    return (
-      <View
-        style={[
-          styles.container,
-          { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' },
-        ]}
-      >
-        <Text
-          style={{ color: colors.text, fontFamily: 'InstrumentSerif_400Regular', fontSize: 24 }}
-        >
-          Zone Not Found
-        </Text>
-        <TouchableOpacity
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-          style={{ marginTop: 20 }}
-        >
-          <Text style={{ color: colors.primary, fontFamily: 'Inter_700Bold' }}>Go Back</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
+  const rate = parseRate(rateText, kind);
+  const rateInvalid = Number.isNaN(rate);
+  const plan = plot ? applicationPlan(rateText, kind, plot.areaHa) : null;
+  const unit = RATE_UNIT[kind];
+  const unitLabel = t(unit === 'kg' ? 'planning.vra.unit.kgHa' : 'planning.vra.unit.lHa');
 
-  const minLat = Math.min(...zone.coordinates.map((c) => c.latitude));
-  const maxLat = Math.max(...zone.coordinates.map((c) => c.latitude));
-  const minLng = Math.min(...zone.coordinates.map((c) => c.longitude));
-  const maxLng = Math.max(...zone.coordinates.map((c) => c.longitude));
-
-  const handlePush = () => {
-    if (!VRA_EQUIPMENT_SYNC_LIVE) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      addNotification({
-        title: language === 'sw' ? 'Bado Haipatikani' : 'Coming Soon',
-        body:
-          language === 'sw'
-            ? 'Kuunganisha moja kwa moja na mtambo bado hakujawezeshwa. Ramani hii ni onyesho tu.'
-            : 'Direct equipment sync is not live yet. This map is a preview only.',
-        type: 'warning',
-      });
-      return;
-    }
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setIsPushing(true);
-    setTimeout(() => {
-      setIsPushing(false);
-      if (router.canGoBack()) router.back();
-      else router.replace('/');
-    }, 2000);
+  const addTask = () => {
+    if (!plot || !plan) return;
+    const p = {
+      plot: plot.name,
+      rate: plan.ratePerHa,
+      unit,
+      total: plan.total === null ? '—' : plan.total,
+    };
+    createTask({
+      title: translate('en', KIND_TASK[kind], p),
+      titleSw: translate('sw', KIND_TASK[kind], p),
+      description: translate(lang, 'planning.vra.task.desc', p),
+      category: kind === 'water' ? 'irrigation' : 'general',
+      priority: 'medium',
+      status: 'pending',
+      xpReward: 10,
+      farmBlock: plot.name,
+    });
+    setAdded(true);
   };
 
-  // Generate grid cells for VRA map visualization
-  const gridCells = [];
-  const gridRows = 4;
-  const gridCols = 4;
-  for (let r = 0; r < gridRows; r++) {
-    for (let c = 0; c < gridCols; c++) {
-      const latStep = (maxLat - minLat) / gridRows;
-      const lngStep = (maxLng - minLng) / gridCols;
-
-      const cellMinLat = minLat + r * latStep;
-      const cellMaxLat = cellMinLat + latStep;
-      const cellMinLng = minLng + c * lngStep;
-      const cellMaxLng = cellMinLng + lngStep;
-
-      // Randomize intensity based on active input
-      const intensity = Math.random();
-      let color: string;
-
-      if (activeInput === 'fertilizer') {
-        color = intensity > 0.6 ? '#D97706' : intensity > 0.3 ? '#10B981' : colors.primary;
-      } else if (activeInput === 'water') {
-        color = intensity > 0.6 ? '#3B82F6' : '#93C5FD';
-      } else {
-        color = intensity > 0.5 ? '#EF4444' : '#FCA5A5';
-      }
-
-      gridCells.push({
-        id: `${r}-${c}`,
-        color: color + '80', // Add 50% opacity
-        coordinates: [
-          { latitude: cellMinLat, longitude: cellMinLng },
-          { latitude: cellMaxLat, longitude: cellMinLng },
-          { latitude: cellMaxLat, longitude: cellMaxLng },
-          { latitude: cellMinLat, longitude: cellMaxLng },
-        ],
-      });
-    }
-  }
+  const blocking = (
+    <FarmDataState data={data} onAddPlot={() => router.push('/(tabs)/fields' as any)} />
+  );
+  const blocked = !(loaded && plots.length > 0);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Custom Header */}
-      <View
-        style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}
+    <SafeAreaView style={[styles.flex, { backgroundColor: colors.background }]}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <ScreenHeader
+        showBack
+        onBack={goBack}
+        backLabel={t('common.back')}
+        title={t('planning.vra.title')}
+        subtitle={plot?.name}
+      />
+      {isOffline && <OfflineBanner message={t('state.offline.banner')} />}
+      <ScrollView
+        contentContainerStyle={{ padding: spacing.lg, paddingBottom: 48, gap: spacing.md }}
+        keyboardShouldPersistTaps="handled"
       >
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-          style={styles.backBtn}
-        >
-          <ArrowLeft color={colors.text} size={24} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>VRA Setup</Text>
-        <View style={{ width: 44 }} />
-      </View>
-
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <Animated.View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Select Input Type</Text>
-          <View style={styles.segmentedControl}>
-            {INPUT_TYPES.map((input) => {
-              const Icon = input.icon;
-              const isActive = activeInput === input.id;
-              return (
-                <TouchableOpacity
-                  key={input.id}
-                  style={[styles.segmentBtn, isActive && { backgroundColor: colors.primary }]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setActiveInput(input.id);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Icon color={isActive ? '#FFF' : colors.text + '80'} size={20} />
-                  <Text
-                    style={[
-                      styles.segmentText,
-                      isActive ? { color: '#FFF' } : { color: colors.text + '80' },
-                    ]}
-                  >
-                    {language === 'sw' ? input.labelSw : input.labelEn}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </Animated.View>
-
-        <Animated.View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Prescription Map</Text>
-          <Text style={[styles.sectionSubtitle, { color: colors.text + '70' }]}>
-            {language === 'sw'
-              ? 'Onyesho la mfano — si data ya vihisi vya udongo au setilaiti ya moja kwa moja.'
-              : 'Illustrative preview — not derived from live soil sensor or satellite data.'}
-          </Text>
-          <View style={styles.mapWrapper}>
-            <MapView
-              provider={PROVIDER_GOOGLE}
-              style={StyleSheet.absoluteFillObject}
-              initialRegion={{
-                latitude: zone.centerLat,
-                longitude: zone.centerLng,
-                latitudeDelta: (maxLat - minLat) * 2.5 || 0.005,
-                longitudeDelta: (maxLng - minLng) * 2.5 || 0.005,
+        {blocked ? (
+          blocking
+        ) : !plot ? (
+          <>
+            {unknown && (
+              <AlertCard
+                variant="danger"
+                title={t('planning.vra.notFound.title')}
+                body={t('planning.vra.notFound.body')}
+                announce
+              />
+            )}
+            <PlotPicker
+              plots={plots}
+              farms={farms}
+              title={t('planning.vra.pick')}
+              selectedId={chosenId}
+              onSelect={(p) => {
+                setChosenId(p.id);
+                setAdded(false);
               }}
-              scrollEnabled={false}
-              zoomEnabled={false}
-              pitchEnabled={false}
-              mapType="satellite"
-            >
-              {gridCells.map((cell) => (
-                <Polygon
-                  key={cell.id}
-                  coordinates={cell.coordinates}
-                  fillColor={cell.color}
-                  strokeColor="rgba(255,255,255,0.2)"
-                  strokeWidth={1}
-                />
-              ))}
-            </MapView>
-          </View>
-        </Animated.View>
-
-        <Animated.View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Application Rate</Text>
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.sliderHeader}>
-              <Text style={[styles.sliderLabel, { color: colors.text }]}>Base Rate</Text>
-              <Text style={[styles.sliderValue, { color: colors.primary }]}>
-                {baseRate} {activeInput === 'water' ? 'L/ha' : 'kg/ha'}
-              </Text>
-            </View>
-            <Slider
-              style={styles.slider}
-              minimumValue={50}
-              maximumValue={500}
-              step={10}
-              value={baseRate}
-              onValueChange={(val) => {
-                Haptics.selectionAsync();
-                setBaseRate(val);
-              }}
-              minimumTrackTintColor={colors.primary}
-              maximumTrackTintColor={colors.border}
-              thumbTintColor={colors.primary}
             />
-          </View>
-        </Animated.View>
+          </>
+        ) : (
+          <>
+            <Card>
+              <AppText variant="h3">{plot.name}</AppText>
+              <AppText variant="small" tone="muted" style={{ marginTop: 2 }}>
+                {plotSubtitle(t, lang, plot, farm)}
+              </AppText>
+              <Button
+                label={t('planning.vra.change')}
+                variant="link"
+                fullWidth={false}
+                style={{ alignSelf: 'flex-start', marginTop: spacing.xs }}
+                onPress={() => {
+                  setChosenId(null);
+                  setAdded(false);
+                }}
+              />
+            </Card>
 
-        <View style={{ height: 100 }} />
+            {Platform.OS !== 'web' && plot.boundary && (
+              <View style={styles.mapBox}>
+                <MapView
+                  style={StyleSheet.absoluteFillObject}
+                  initialRegion={regionForBoundaries([plot.boundary]) as any}
+                  mapType="hybrid"
+                  scrollEnabled={false}
+                  zoomEnabled={false}
+                  pitchEnabled={false}
+                  accessibilityLabel={t('planning.vra.mapA11y', { name: plot.name })}
+                >
+                  <Polygon
+                    coordinates={toMapCoords(plot.boundary)}
+                    strokeColor="#FFFFFF"
+                    strokeWidth={2}
+                    fillColor="rgba(46,111,64,0.35)"
+                  />
+                </MapView>
+              </View>
+            )}
+
+            <AlertCard variant="info" title={t('planning.vra.uniform.title')} body={t('planning.vra.uniform.body')} />
+
+            <AppText variant="label">{t('planning.vra.kind')}</AppText>
+            <View style={[styles.row, { gap: spacing.sm, flexWrap: 'wrap' }]}>
+              {INPUT_KINDS.map((k) => {
+                const Icon = KIND_ICON[k];
+                return (
+                  <Chip
+                    key={k}
+                    label={t(KIND_LABEL[k])}
+                    selected={kind === k}
+                    leading={<Icon size={16} color={kind === k ? '#fff' : colors.text} />}
+                    onPress={() => {
+                      setKind(k);
+                      setAdded(false);
+                    }}
+                  />
+                );
+              })}
+            </View>
+
+            <TextField
+              label={t('planning.vra.rate', { unit: unitLabel })}
+              value={rateText}
+              onChangeText={(v) => {
+                setRateText(v);
+                setAdded(false);
+              }}
+              keyboardType="decimal-pad"
+              placeholder={t('planning.vra.rate.placeholder')}
+              error={rateInvalid ? t('planning.vra.rate.invalid') : undefined}
+              hint={t('planning.vra.rate.hint')}
+            />
+
+            {plan && (
+              <Card testID="vra-plan">
+                <AppText variant="label">{t('planning.vra.result')}</AppText>
+                {plan.total !== null ? (
+                  <AppText variant="h2" style={{ marginTop: spacing.xs }}>
+                    {t('planning.vra.total', { total: plan.total, unit })}
+                  </AppText>
+                ) : (
+                  <AppText variant="small" tone="muted" style={{ marginTop: spacing.xs }}>
+                    {t('planning.vra.noArea')}
+                  </AppText>
+                )}
+                <AppText variant="caption" tone="muted" style={{ marginTop: spacing.xs }}>
+                  {plot.areaHa !== null
+                    ? t('planning.vra.basis', {
+                        rate: plan.ratePerHa,
+                        unit: unitLabel,
+                        area: formatHa(plot.areaHa) ?? '—',
+                      })
+                    : t('planning.vra.basisNoArea')}
+                </AppText>
+                {plot.areaHa === null && (
+                  <Button
+                    label={t('planning.vra.setArea')}
+                    variant="link"
+                    fullWidth={false}
+                    style={{ alignSelf: 'flex-start' }}
+                    onPress={() => router.push(`/field/${plot.id}` as any)}
+                  />
+                )}
+                <Button
+                  label={t(added ? 'planning.vra.taskAdded' : 'planning.vra.addTask')}
+                  style={{ marginTop: spacing.md }}
+                  disabled={added}
+                  onPress={addTask}
+                />
+                {added && (
+                  <AppText variant="caption" tone="muted" style={{ marginTop: spacing.xs }} accessibilityLiveRegion="polite">
+                    {t(isOffline ? 'planning.task.queuedOffline' : 'planning.task.queued')}
+                  </AppText>
+                )}
+              </Card>
+            )}
+
+            <AlertCard variant="warning" title={t('planning.vra.noEquipment')} />
+          </>
+        )}
       </ScrollView>
-
-      {/* Action Footer */}
-      <View
-        style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border }]}
-      >
-        <TouchableOpacity
-          style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
-          activeOpacity={0.8}
-          onPress={handlePush}
-          disabled={isPushing}
-        >
-          {isPushing ? <Check color="#FFF" size={24} /> : <Combine color="#FFF" size={24} />}
-          <Text style={styles.primaryBtnText}>
-            {isPushing
-              ? language === 'sw'
-                ? 'Imetumwa'
-                : 'Synced Successfully'
-              : language === 'sw'
-                ? 'Tuma Kwenye Mtambo'
-                : 'Sync to Equipment'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 60,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontFamily: 'InstrumentSerif_400Regular',
-    fontSize: 22,
-  },
-  scrollContent: {
-    padding: 20,
-  },
-  section: {
-    marginBottom: 32,
-  },
-  sectionTitle: {
-    fontFamily: 'InstrumentSerif_400Regular',
-    fontSize: 24,
-    marginBottom: 16,
-  },
-  sectionSubtitle: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11.5,
-    marginTop: -12,
-    marginBottom: 12,
-  },
-  segmentedControl: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    borderRadius: 16,
-    padding: 4,
-  },
-  segmentBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 12,
-    gap: 8,
-  },
-  segmentText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-  },
-  mapWrapper: {
-    height: 300,
-    borderRadius: 24,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
-  },
-  card: {
-    padding: 20,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  sliderHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  sliderLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 14,
-  },
-  sliderValue: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 18,
-  },
-  slider: {
-    width: '100%',
-    height: 40,
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 20,
-    paddingBottom: 40,
-    borderTopWidth: 1,
-  },
-  primaryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 18,
-    borderRadius: 30,
-    gap: 12,
-    shadowColor: '#2E6F40',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  primaryBtnText: {
-    color: '#FFF',
-    fontFamily: 'Inter_700Bold',
-    fontSize: 16,
-  },
+  flex: { flex: 1 },
+  row: { flexDirection: 'row', alignItems: 'center' },
+  mapBox: { height: 220, borderRadius: 16, overflow: 'hidden' },
 });
