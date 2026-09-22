@@ -1,5 +1,9 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import {
+  InputAccessoryView,
+  Keyboard,
+  Platform,
+  Pressable,
   TextInput,
   View,
   Text,
@@ -9,6 +13,10 @@ import {
   ViewStyle,
 } from 'react-native';
 import { useTheme } from '../../constants/Theme';
+import { useT } from '../../lib/i18n';
+
+/** iOS numeric keypads have no return key; these get a "Done" bar so the keyboard can close. */
+const NUMERIC_KEYBOARDS = new Set(['number-pad', 'decimal-pad', 'numeric', 'phone-pad']);
 
 export interface TextFieldProps extends TextInputProps {
   /** Field label rendered above the input (Figma: 14 SemiBold). Pass translated copy. */
@@ -59,6 +67,13 @@ export const TextField = React.forwardRef<TextInput, TextFieldProps>(function Te
 ) {
   const [isFocused, setIsFocused] = useState(false);
   const { colors, radius, typography, borderWidth } = useTheme();
+  const { t } = useT();
+  const accessoryId = `tf-done-${useId().replace(/:/g, '')}`;
+  const needsDoneBar =
+    Platform.OS === 'ios' &&
+    !multiline &&
+    !rest.inputAccessoryViewID &&
+    NUMERIC_KEYBOARDS.has(String(rest.keyboardType ?? ''));
 
   const isDisabled = Boolean(disabled) || editable === false;
   const hasError = Boolean(error);
@@ -105,6 +120,7 @@ export const TextField = React.forwardRef<TextInput, TextFieldProps>(function Te
           accessibilityLabel={accessibilityLabel ?? label ?? rest.placeholder}
           accessibilityHint={accessibilityHint ?? helper}
           accessibilityState={{ disabled: isDisabled }}
+          inputAccessoryViewID={needsDoneBar ? accessoryId : undefined}
           onFocus={(e) => {
             setIsFocused(true);
             onFocus?.(e);
@@ -117,6 +133,26 @@ export const TextField = React.forwardRef<TextInput, TextFieldProps>(function Te
         />
         {rightIcon ? <View style={styles.iconRight}>{rightIcon}</View> : null}
       </View>
+      {needsDoneBar ? (
+        <InputAccessoryView nativeID={accessoryId}>
+          <View
+            style={[
+              styles.doneBar,
+              { backgroundColor: colors.surfaceMuted, borderTopColor: colors.border },
+            ]}
+          >
+            <Pressable
+              onPress={() => Keyboard.dismiss()}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.done')}
+              hitSlop={8}
+              style={styles.doneButton}
+            >
+              <Text style={[typography.label, { color: colors.primary }]}>{t('common.done')}</Text>
+            </Pressable>
+          </View>
+        </InputAccessoryView>
+      ) : null}
       {helper ? (
         <Text
           accessibilityRole={hasError ? 'alert' : undefined}
@@ -135,6 +171,13 @@ export const TextField = React.forwardRef<TextInput, TextFieldProps>(function Te
 });
 
 const styles = StyleSheet.create({
+  doneBar: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+  },
+  doneButton: { minHeight: 44, minWidth: 64, alignItems: 'center', justifyContent: 'center' },
   root: { marginBottom: 16, width: '100%' },
   label: { marginBottom: 8 },
   container: {

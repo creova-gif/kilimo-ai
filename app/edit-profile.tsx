@@ -49,6 +49,7 @@ import * as Haptics from 'expo-haptics';
 import { useKilimoStore, FarmProfile, AppLanguage, ThemePreference } from '../store/useKilimoStore';
 import { allRoles, roleLabel, CanonicalRole, normalizeRole } from '../lib/access';
 import { useTheme } from '../constants/Theme';
+import { TextField } from '../components/ui';
 import { getSupabase } from '../lib/supabase';
 import { translate, type TranslationKey } from '../lib/i18n';
 
@@ -550,22 +551,14 @@ export default function EditProfileScreen() {
 
             {/* Farm size */}
             <Section label={t.size} />
-            <BlurView
-              intensity={20}
-              tint={isDark ? 'dark' : 'light'}
-              style={[s.inputWrap, { borderColor: colors.border }]}
-            >
-              <TextInput
-                value={acres}
-                onChangeText={setAcres}
-                keyboardType="decimal-pad"
-                placeholder="2.5"
-                placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'}
-                style={[s.input, { color: colors.text }]}
-                accessibilityLabel={t.size}
-                accessibilityHint={tr('profile.edit.sizeHint')}
-              />
-            </BlurView>
+            <TextField
+              value={acres}
+              onChangeText={setAcres}
+              keyboardType="decimal-pad"
+              placeholder="2.5"
+              accessibilityLabel={t.size}
+              accessibilityHint={tr('profile.edit.sizeHint')}
+            />
 
             {/* Activity */}
             <Section label={t.activity} />

@@ -1,0 +1,26 @@
+# Add a farm through the Shamba tab (KIL-003) and confirm the server accepted it.
+# Requires a signed-in session and the local backend (scripts/local-backend.sh up), app language Swahili.
+# Also exercises the numeric-keypad Done bar (components/ui/TextField.tsx).
+appId: com.jaymafie.kilimoai
+---
+- launchApp:
+    stopApp: true
+- tapOn: "Shamba.*tab.*"
+- tapOn: "Ongeza shamba langu la kwanza"
+- tapOn:
+    id: "farm-name"
+- inputText: "Majaribio E2E"
+- tapOn: "Jina la shamba"
+- tapOn: "Arusha"
+- scrollUntilVisible:
+    element:
+      id: "farm-area"
+    direction: DOWN
+- tapOn:
+    id: "farm-area"
+- inputText: "2"
+- tapOn: "Imekamilika"
+- tapOn:
+    id: "farm-save"
+- waitForAnimationToEnd
+- assertVisible: "Shamba limehifadhiwa."
