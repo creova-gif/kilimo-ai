@@ -92,7 +92,7 @@ describe('theme tokens', () => {
     expect(RADIUS.full).toBeGreaterThanOrEqual(100);
     for (const [name, role] of Object.entries(TYPE)) {
       expect(role.lineHeight).toBeGreaterThanOrEqual(role.fontSize);
-      expect(role.fontFamily).toMatch(/^Inter_/);
+      expect(role.fontFamily).toMatch(/^InstrumentSans_/); // KIL-012: the brand font under its own name
       expect(name.length).toBeGreaterThan(0);
     }
   });

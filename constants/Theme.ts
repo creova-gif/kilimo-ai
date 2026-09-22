@@ -73,12 +73,13 @@ export const COLORS = {
 // writing that map points these keys at Instrument Sans, while Figma is Inter — see
 // DESIGN_TOKENS.md "Open inconsistencies". Tokens are family-agnostic on purpose.
 export const FONT = {
-  regular: 'Inter_400Regular',
-  medium: 'Inter_500Medium',
-  semibold: 'Inter_600SemiBold',
-  bold: 'Inter_700Bold',
-  extrabold: 'Inter_800ExtraBold',
-  black: 'Inter_900Black',
+  // Instrument Sans ships 400–700; heavier roles use Bold (the brand has no 800/900 cut).
+  regular: 'InstrumentSans_400Regular',
+  medium: 'InstrumentSans_500Medium',
+  semibold: 'InstrumentSans_600SemiBold',
+  bold: 'InstrumentSans_700Bold',
+  extrabold: 'InstrumentSans_700Bold',
+  black: 'InstrumentSans_700Bold',
 } as const;
 
 export interface TypeRole {

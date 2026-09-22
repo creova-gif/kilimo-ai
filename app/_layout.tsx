@@ -192,6 +192,12 @@ function RootLayout() {
   }
 
   const [loaded, error] = useFonts({
+    // Brand typeface, registered under its own names (constants/Theme.ts FONT uses these).
+    InstrumentSans_400Regular,
+    InstrumentSans_500Medium,
+    InstrumentSans_600SemiBold,
+    InstrumentSans_700Bold,
+    // Legacy aliases: older screens still name `Inter_*` directly; they render Instrument Sans.
     Inter_400Regular: InstrumentSans_400Regular,
     Inter_500Medium: InstrumentSans_500Medium,
     Inter_600SemiBold: InstrumentSans_600SemiBold,
