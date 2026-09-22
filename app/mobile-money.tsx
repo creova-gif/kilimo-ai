@@ -1,619 +1,321 @@
 /**
- * M-Pesa / Airtel Money — Mobile Money Hub
- * Send, receive, pay bills, buy airtime via integrated wallet
+ * Payment records — an honest note-keeping screen, NOT a wallet.
+ *
+ * No payment provider (M-Pesa, Tigo Pesa, Airtel Money, HaloPesa, a bank) is integrated in KILIMO AI,
+ * so nothing here sends, receives or pays money. The user can keep notes about payments they made or
+ * received outside the app, or about a request they intend to make later. A permanent notice at the top
+ * says so; no action on this screen ever reports that money moved. Rows live in `public.payment_records`
+ * (owner-only RLS); the seeded transactions, the wallet balance and the fake "sent" alert are gone.
  */
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  TextInput,
-  Alert,
-  Dimensions,
-} from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, SafeAreaView, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { WifiOff, Wallet } from 'lucide-react-native';
+
+import { PaymentFormSheet, useNetworkLabel } from '../components/finance/PaymentFormSheet';
 import {
-  ChevronLeft,
-  ArrowUpRight,
-  ArrowDownLeft,
-  Smartphone,
-  Receipt,
-  RefreshCw,
-  Eye,
-  EyeOff,
-  Sparkles,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-  ChevronRight,
-  Wallet,
-} from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
-import { SafeAreaView } from 'react-native-safe-area-context';
+  AlertCard,
+  AppText,
+  Button,
+  Badge,
+  Card,
+  EmptyState,
+  ErrorState,
+  OfflineBanner,
+  ScreenHeader,
+  SkeletonBlock,
+  SkeletonGroup,
+} from '../components/ui';
 import { useTheme } from '../constants/Theme';
-import { useKilimoStore } from '../store/useKilimoStore';
+import { usePaymentRecords } from '../hooks/useFinance';
+import { useT, type TranslationKey } from '../lib/i18n';
+import { formatTzs } from '../lib/finance';
+import type { PaymentDirection, PaymentInput, PaymentRecord } from '../lib/paymentRecords';
 
-const { width: SW } = Dimensions.get('window');
-
-type Provider = 'mpesa' | 'airtel';
-
-type Txn = {
-  id: string;
-  label: string;
-  amount: number;
-  direction: 'in' | 'out';
-  ts: number;
-  status: 'done' | 'pending' | 'failed';
-  provider: Provider;
-};
-
-const SAMPLE_TXNS: Txn[] = [
-  {
-    id: 't1',
-    label: 'Uza Mahindi — Mwanzo Coop',
-    amount: 84000,
-    direction: 'in',
-    ts: Date.now() - 3600000,
-    status: 'done',
-    provider: 'mpesa',
-  },
-  {
-    id: 't2',
-    label: 'Mbolea — Yara Tanzania',
-    amount: 42500,
-    direction: 'out',
-    ts: Date.now() - 7200000,
-    status: 'done',
-    provider: 'mpesa',
-  },
-  {
-    id: 't3',
-    label: 'Ada ya Kilimo — TARI',
-    amount: 5000,
-    direction: 'out',
-    ts: Date.now() - 86400000,
-    status: 'done',
-    provider: 'airtel',
-  },
-  {
-    id: 't4',
-    label: 'Pato la Mahindi — Sehemu 2',
-    amount: 56000,
-    direction: 'in',
-    ts: Date.now() - 172800000,
-    status: 'done',
-    provider: 'mpesa',
-  },
-  {
-    id: 't5',
-    label: 'Airtime — Vodacom',
-    amount: 3000,
-    direction: 'out',
-    ts: Date.now() - 259200000,
-    status: 'done',
-    provider: 'airtel',
-  },
-  {
-    id: 't6',
-    label: 'Usafirishaji wa Mazao',
-    amount: 12000,
-    direction: 'out',
-    ts: Date.now() - 345600000,
-    status: 'pending',
-    provider: 'mpesa',
-  },
-];
-
-const QUICK_ACTIONS = [
-  { id: 'send', icon: ArrowUpRight, label: 'Tuma Pesa', labelEn: 'Send', color: '#ef4444' },
-  { id: 'receive', icon: ArrowDownLeft, label: 'Pokea Pesa', labelEn: 'Receive', color: '#2E6F40' },
-  { id: 'airtime', icon: Smartphone, label: 'Nunua Airtime', labelEn: 'Airtime', color: '#8b5cf6' },
-  { id: 'bills', icon: Receipt, label: 'Lipa Bili', labelEn: 'Pay Bills', color: '#f59e0b' },
-];
-
-function fmtTZS(n: number) {
-  return `TSh ${new Intl.NumberFormat('en-US').format(n)}`;
-}
-function fmtAge(ts: number) {
-  const d = Date.now() - ts;
-  if (d < 3600000) return `${Math.floor(d / 60000)}m`;
-  if (d < 86400000) return `${Math.floor(d / 3600000)}h`;
-  return `${Math.floor(d / 86400000)}d`;
-}
-
-function ProviderTag({ p }: { p: Provider }) {
-  return (
-    <View style={[pt.tag, { backgroundColor: p === 'mpesa' ? '#00a54f18' : '#ef444418' }]}>
-      <Text style={[pt.txt, { color: p === 'mpesa' ? '#00a54f' : '#ef4444' }]}>
-        {p === 'mpesa' ? 'M-PESA' : 'AIRTEL'}
-      </Text>
-    </View>
-  );
-}
-const pt = StyleSheet.create({
-  tag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  txt: { fontFamily: 'Inter_800ExtraBold', fontSize: 8 },
-});
+const ACTIONS: PaymentDirection[] = ['sent', 'received', 'request'];
 
 export default function MobileMoneyScreen() {
   const router = useRouter();
-  const { colors, isDark } = useTheme();
-  const language = useKilimoStore((s) => s.language);
-  const wallet = useKilimoStore((s) => s.wallet);
-  const [provider, setProvider] = useState<Provider>('mpesa');
-  const [hideBalance, setHideBalance] = useState(false);
-  const [activeAction, setActiveAction] = useState<string | null>(null);
-  const [amount, setAmount] = useState('');
-  const [phone, setPhone] = useState('');
+  const { t } = useT();
+  const { colors, spacing } = useTheme();
+  const networkLabel = useNetworkLabel();
+  const { records, loading, loaded, error, isOffline, busy, add, cancel, remove, refresh } =
+    usePaymentRecords();
 
-  const balance = wallet.balanceTZS;
+  const [sheet, setSheet] = useState<{ open: boolean; direction: PaymentDirection }>({
+    open: false,
+    direction: 'sent',
+  });
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const handleAction = (id: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setActiveAction((prev) => (prev === id ? null : id));
-    setAmount('');
-    setPhone('');
-  };
+  useEffect(() => {
+    if (!notice) return;
+    const id = setTimeout(() => setNotice(null), 5000);
+    return () => clearTimeout(id);
+  }, [notice]);
 
-  const handleSubmit = () => {
-    const n = parseInt(amount.replace(/,/g, ''), 10);
-    if (!phone || !n || n <= 0) {
-      Alert.alert(language === 'sw' ? 'Tafadhali jaza fomu' : 'Please complete the form');
-      return;
+  const canWrite = !isOffline && error !== 'not_configured' && error !== 'signed_out';
+
+  const submit = async (input: PaymentInput) => {
+    const r = await add(input);
+    if (r.ok) {
+      setSheet((s) => ({ ...s, open: false }));
+      // Truthful by construction: a record was saved, nothing was sent or received.
+      setNotice(t(input.direction === 'request' ? 'money.pay.saved.request' : 'money.pay.saved.record'));
     }
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert(
-      language === 'sw' ? 'Imekamilika' : 'Success',
-      language === 'sw' ? `${fmtTZS(n)} imetumwa kwa ${phone}` : `${fmtTZS(n)} sent to ${phone}`
-    );
-    setActiveAction(null);
+    return r;
   };
+
+  const cancelRequest = async (id: string) => {
+    const r = await cancel(id);
+    if (r.ok) setNotice(t('money.pay.cancelled'));
+    else Alert.alert(t('money.pay.actionFailed'));
+  };
+
+  const confirmDelete = (id: string) => {
+    Alert.alert(t('money.pay.delete.title'), t('money.pay.delete.body'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('money.pay.delete'),
+        style: 'destructive',
+        onPress: async () => {
+          const r = await remove(id);
+          if (r.ok) setNotice(t('money.pay.deleted'));
+          else Alert.alert(t('money.pay.actionFailed'));
+        },
+      },
+    ]);
+  };
+
+  /* ── list area (below the permanent notice) ──────────────────────────────────────────── */
+  let body: React.ReactElement;
+  if (error === 'not_configured') {
+    body = (
+      <EmptyState
+        style={styles.state}
+        title={t('money.notConfigured.title')}
+        description={t('money.notConfigured.body')}
+        icon={<Wallet size={48} color={colors.primary} />}
+      />
+    );
+  } else if (error === 'signed_out') {
+    body = (
+      <EmptyState
+        style={styles.state}
+        title={t('money.signedOut.title')}
+        description={t('money.signedOut.body')}
+        icon={<Wallet size={48} color={colors.primary} />}
+      />
+    );
+  } else if (!loaded && isOffline) {
+    body = (
+      <EmptyState
+        style={styles.state}
+        title={t('money.offline.empty.title')}
+        description={t('money.offline.empty.body')}
+        icon={<WifiOff size={48} color={colors.primary} />}
+      />
+    );
+  } else if (!loaded && loading) {
+    body = (
+      <SkeletonGroup label={t('state.loading')}>
+        <SkeletonBlock height={88} radius={16} />
+        <SkeletonBlock height={88} radius={16} />
+      </SkeletonGroup>
+    );
+  } else if (!loaded && error === 'error') {
+    body = (
+      <ErrorState
+        style={styles.state}
+        title={t('money.pay.error.title')}
+        description={t('state.error.body')}
+        retryLabel={t('common.retry')}
+        onRetry={refresh}
+      />
+    );
+  } else if (records.length === 0) {
+    body = (
+      <EmptyState
+        style={styles.state}
+        title={t('money.pay.empty.title')}
+        description={t('money.pay.empty.body')}
+        icon={<Wallet size={48} color={colors.primary} />}
+      />
+    );
+  } else {
+    body = (
+      <View>
+        <AppText variant="label" accessibilityRole="header" style={{ marginBottom: spacing.sm }}>
+          {t('money.pay.list.title')}
+        </AppText>
+        {records.map((r) => (
+          <RecordCard
+            key={r.id}
+            record={r}
+            networkText={networkLabel(r.network)}
+            canWrite={canWrite}
+            onCancel={() => cancelRequest(r.id)}
+            onDelete={() => confirmDelete(r.id)}
+          />
+        ))}
+      </View>
+    );
+  }
 
   return (
-    <View style={[s.root, { backgroundColor: colors.background }]}>
-      <LinearGradient
-        colors={
-          isDark
-            ? ['#060a04', '#080e05', colors.background]
-            : ['#f0fdf4', '#f8fafc', colors.background]
-        }
-        style={StyleSheet.absoluteFill}
-        locations={[0, 0.3, 1]}
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScreenHeader
+        title={t('money.pay.title')}
+        showBack
+        onBack={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+        backLabel={t('common.back')}
       />
-      <SafeAreaView style={{ flex: 1 }}>
-        {/* Header */}
-        <View style={s.header}>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-            style={[s.backBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-          >
-            <ChevronLeft size={20} color={colors.text} />
-          </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={[s.title, { color: colors.text }]}>
-              {language === 'sw' ? 'Pesa za Simu' : 'Mobile Money'}
-            </Text>
-          </View>
-          <View style={s.providerRow}>
-            {(['mpesa', 'airtel'] as Provider[]).map((p) => (
-              <TouchableOpacity
-                key={p}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setProvider(p);
-                }}
-                style={[
-                  s.provBtn,
-                  {
-                    backgroundColor:
-                      provider === p ? (p === 'mpesa' ? '#00a54f' : '#ef4444') : colors.card,
-                    borderColor: provider === p ? 'transparent' : colors.border,
-                  },
-                ]}
-              >
-                <Text style={[s.provTxt, { color: provider === p ? '#fff' : colors.textMute }]}>
-                  {p === 'mpesa' ? 'M-Pesa' : 'Airtel'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+      <OfflineBanner visible={isOffline} message={t('money.offline.banner')} />
+      <ScrollView
+        contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.huge }}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Permanent: never dismissible, never conditional on loading or data. */}
+        <AlertCard
+          variant="warning"
+          title={t('money.pay.notice.title')}
+          body={t('money.pay.notice.body')}
+          testID="payments-notice"
+          style={{ marginBottom: spacing.lg }}
+        />
+
+        {notice ? (
+          <AlertCard variant="success" title={notice} announce style={{ marginBottom: spacing.lg }} />
+        ) : null}
+        {error && loaded ? (
+          <AlertCard
+            variant="warning"
+            title={t('money.pay.error.title')}
+            actionLabel={t('common.retry')}
+            onAction={refresh}
+            style={{ marginBottom: spacing.lg }}
+          />
+        ) : null}
+
+        <View style={{ gap: spacing.sm, marginBottom: spacing.lg }}>
+          {ACTIONS.map((d) => (
+            <Button
+              key={d}
+              label={t(`money.pay.action.${d}` as TranslationKey)}
+              variant={d === 'sent' ? 'primary' : 'secondary'}
+              size="md"
+              shape="rounded"
+              disabled={!canWrite}
+              accessibilityHint={isOffline ? t('money.offline.needsConnection') : undefined}
+              onPress={() => setSheet({ open: true, direction: d })}
+              testID={`pay-action-${d}`}
+            />
+          ))}
         </View>
 
-        <ScrollView
-          contentContainerStyle={{ paddingBottom: 40 }}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Balance Card */}
-          <Animated.View entering={FadeInUp.springify()} style={{ paddingHorizontal: 16 }}>
-            <LinearGradient
-              colors={provider === 'mpesa' ? ['#00a54f', '#007a3a'] : ['#ef4444', '#c92020']}
-              style={[s.balCard, { shadowColor: provider === 'mpesa' ? '#00a54f' : '#ef4444' }]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <View style={s.balCardTop}>
-                <View>
-                  <Text style={s.balLabel}>
-                    {language === 'sw' ? 'Salio Lako' : 'Your Balance'}
-                  </Text>
-                  <Text style={s.balProvider}>
-                    {provider === 'mpesa' ? 'M-PESA' : 'AIRTEL MONEY'}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  accessibilityRole="button"
-                  accessibilityLabel="Toggle balance visibility"
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setHideBalance((v) => !v);
-                  }}
-                  style={s.eyeBtn}
-                >
-                  {hideBalance ? (
-                    <EyeOff size={18} color="rgba(255,255,255,0.7)" />
-                  ) : (
-                    <Eye size={18} color="rgba(255,255,255,0.7)" />
-                  )}
-                </TouchableOpacity>
-              </View>
-              <Text style={s.balAmount}>{hideBalance ? '••••••' : fmtTZS(balance)}</Text>
-              <View style={s.balFooter}>
-                <View style={[s.balBadge, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
-                  <CheckCircle2 size={11} color="rgba(255,255,255,0.9)" />
-                  <Text style={s.balBadgeTxt}>
-                    {language === 'sw' ? 'Akaunti Hai' : 'Active Account'}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                  }}
-                  style={[s.balBadge, { backgroundColor: 'rgba(255,255,255,0.15)' }]}
-                >
-                  <RefreshCw size={11} color="rgba(255,255,255,0.9)" />
-                  <Text style={s.balBadgeTxt}>{language === 'sw' ? 'Sasisha' : 'Refresh'}</Text>
-                </TouchableOpacity>
-              </View>
-            </LinearGradient>
-          </Animated.View>
+        {body}
+      </ScrollView>
 
-          {/* Quick Actions */}
-          <View style={s.section}>
-            <Text style={[s.sectionTitle, { color: colors.textMute }]}>
-              {language === 'sw' ? 'VITENDO VYA HARAKA' : 'QUICK ACTIONS'}
-            </Text>
-            <View style={s.actionsGrid}>
-              {QUICK_ACTIONS.map((a, i) => (
-                <Animated.View
-                  key={a.id}
-                  entering={FadeInDown.delay(i * 60).springify()}
-                  style={{ flex: 1 }}
-                >
-                  <TouchableOpacity
-                    onPress={() => handleAction(a.id)}
-                    style={[
-                      s.actionCard,
-                      {
-                        backgroundColor: activeAction === a.id ? a.color : colors.card,
-                        borderColor: activeAction === a.id ? a.color : colors.border,
-                      },
-                    ]}
-                  >
-                    <View
-                      style={[
-                        s.actionIcon,
-                        {
-                          backgroundColor:
-                            activeAction === a.id ? 'rgba(255,255,255,0.2)' : a.color + '18',
-                        },
-                      ]}
-                    >
-                      <a.icon size={20} color={activeAction === a.id ? '#fff' : a.color} />
-                    </View>
-                    <Text
-                      style={[
-                        s.actionLabel,
-                        { color: activeAction === a.id ? '#fff' : colors.text },
-                      ]}
-                    >
-                      {language === 'sw' ? a.label : a.labelEn}
-                    </Text>
-                  </TouchableOpacity>
-                </Animated.View>
-              ))}
-            </View>
-          </View>
-
-          {/* Send / Receive form */}
-          {activeAction && activeAction !== 'airtime' && (
-            <Animated.View
-              entering={FadeInDown.springify()}
-              style={{ paddingHorizontal: 16, marginBottom: 8 }}
-            >
-              <View
-                style={[s.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-              >
-                <Text style={[s.formTitle, { color: colors.text }]}>
-                  {activeAction === 'send'
-                    ? language === 'sw'
-                      ? 'Tuma Pesa'
-                      : 'Send Money'
-                    : activeAction === 'receive'
-                      ? language === 'sw'
-                        ? 'Omba Pesa'
-                        : 'Request Money'
-                      : language === 'sw'
-                        ? 'Lipa Bili'
-                        : 'Pay Bill'}
-                </Text>
-                <TextInput
-                  style={[
-                    s.input,
-                    {
-                      backgroundColor: colors.background,
-                      borderColor: colors.border,
-                      color: colors.text,
-                    },
-                  ]}
-                  placeholder={
-                    language === 'sw'
-                      ? 'Nambari ya simu (e.g. 0712...)'
-                      : 'Phone number (e.g. 0712...)'
-                  }
-                  placeholderTextColor={colors.textMute}
-                  keyboardType="phone-pad"
-                  value={phone}
-                  onChangeText={setPhone}
-                />
-                <TextInput
-                  style={[
-                    s.input,
-                    {
-                      backgroundColor: colors.background,
-                      borderColor: colors.border,
-                      color: colors.text,
-                    },
-                  ]}
-                  placeholder={language === 'sw' ? 'Kiasi (TZS)' : 'Amount (TZS)'}
-                  placeholderTextColor={colors.textMute}
-                  keyboardType="numeric"
-                  value={amount}
-                  onChangeText={setAmount}
-                />
-                <TouchableOpacity
-                  onPress={handleSubmit}
-                  style={[
-                    s.submitBtn,
-                    { backgroundColor: provider === 'mpesa' ? '#00a54f' : '#ef4444' },
-                  ]}
-                >
-                  <Text style={s.submitTxt}>{language === 'sw' ? 'Thibitisha' : 'Confirm'}</Text>
-                </TouchableOpacity>
-              </View>
-            </Animated.View>
-          )}
-
-          {/* Transactions */}
-          <View style={s.section}>
-            <View style={s.sectionRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={[s.sectionTitle, { color: colors.textMute }]}>
-                  {language === 'sw' ? 'MIAMALA YA HIVI KARIBUNI' : 'RECENT TRANSACTIONS'}
-                </Text>
-                {/* No transaction backend exists yet (WalletState only tracks
-                    balanceTZS/mpesaPhone/lastTransaction, no ledger) — SAMPLE_TXNS
-                    below is illustrative only and must never be mistaken for the
-                    user's real M-Pesa/Airtel history. */}
-                <View
-                  style={{
-                    paddingHorizontal: 6,
-                    paddingVertical: 2,
-                    borderRadius: 6,
-                    backgroundColor: '#f59e0b22',
-                  }}
-                >
-                  <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: '#b45309' }}>
-                    {language === 'sw' ? 'MFANO' : 'SAMPLE'}
-                  </Text>
-                </View>
-              </View>
-              <TouchableOpacity onPress={() => router.push('/wallet-admin/transactions' as any)}>
-                <Text style={[s.seeAll, { color: colors.primary }]}>
-                  {language === 'sw' ? 'Zote →' : 'See all →'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <View style={{ paddingHorizontal: 16, gap: 8 }}>
-              {SAMPLE_TXNS.map((t, i) => (
-                <Animated.View key={t.id} entering={FadeInDown.delay(i * 40).springify()}>
-                  <View
-                    style={[s.txnRow, { backgroundColor: colors.card, borderColor: colors.border }]}
-                  >
-                    <View
-                      style={[
-                        s.txnDot,
-                        { backgroundColor: t.direction === 'in' ? '#2E6F4022' : '#ef444422' },
-                      ]}
-                    >
-                      {t.direction === 'in' ? (
-                        <ArrowDownLeft size={16} color="#2E6F40" />
-                      ) : (
-                        <ArrowUpRight size={16} color="#ef4444" />
-                      )}
-                    </View>
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <Text style={[s.txnLabel, { color: colors.text }]} numberOfLines={1}>
-                        {t.label}
-                      </Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <ProviderTag p={t.provider} />
-                        <Clock size={10} color={colors.textMute} />
-                        <Text style={[s.txnMeta, { color: colors.textMute }]}>
-                          {fmtAge(t.ts)} {language === 'sw' ? 'iliyopita' : 'ago'}
-                        </Text>
-                        {t.status === 'pending' && <AlertCircle size={10} color="#f59e0b" />}
-                      </View>
-                    </View>
-                    <Text
-                      style={[s.txnAmount, { color: t.direction === 'in' ? '#2E6F40' : '#ef4444' }]}
-                    >
-                      {t.direction === 'in' ? '+' : '-'}
-                      {fmtTZS(t.amount)}
-                    </Text>
-                  </View>
-                </Animated.View>
-              ))}
-            </View>
-          </View>
-
-          {/* Link to full wallet */}
-          <Animated.View
-            entering={FadeInDown.delay(300).springify()}
-            style={{ paddingHorizontal: 16 }}
-          >
-            <TouchableOpacity
-              onPress={() => router.push('/wallet-admin' as any)}
-              style={[s.walletLink, { backgroundColor: colors.card, borderColor: colors.border }]}
-            >
-              <Wallet size={18} color={colors.primary} />
-              <Text style={[s.walletLinkTxt, { color: colors.text }]}>
-                {language === 'sw' ? 'Fungua Pochi Kamili' : 'Open Full Wallet'}
-              </Text>
-              <ChevronRight size={16} color={colors.textMute} />
-            </TouchableOpacity>
-          </Animated.View>
-        </ScrollView>
-      </SafeAreaView>
-    </View>
+      <PaymentFormSheet
+        visible={sheet.open}
+        direction={sheet.direction}
+        busy={busy}
+        offline={isOffline}
+        onSubmit={submit}
+        onClose={() => setSheet((s) => ({ ...s, open: false }))}
+      />
+    </SafeAreaView>
   );
 }
 
-const s = StyleSheet.create({
-  root: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 10,
-  },
-  backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: { fontFamily: 'Inter_700Bold', fontSize: 18 },
-  providerRow: { flexDirection: 'row', gap: 6 },
-  provBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
-  provTxt: { fontFamily: 'Inter_700Bold', fontSize: 11 },
-  balCard: {
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 8,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  balCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  balLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 12, color: 'rgba(255,255,255,0.75)' },
-  balProvider: {
-    fontFamily: 'Inter_800ExtraBold',
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.5)',
-    letterSpacing: 1,
-    marginTop: 2,
-  },
-  eyeBtn: { padding: 4 },
-  balAmount: {
-    fontFamily: 'InstrumentSerif_400Regular',
-    fontSize: 36,
-    color: '#fff',
-    marginVertical: 12,
-  },
-  balFooter: { flexDirection: 'row', gap: 8 },
-  balBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-  },
-  balBadgeTxt: { fontFamily: 'Inter_600SemiBold', fontSize: 11, color: 'rgba(255,255,255,0.9)' },
-  section: { paddingTop: 16 },
-  sectionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 10,
-  },
-  sectionTitle: {
-    fontFamily: 'Inter_800ExtraBold',
-    fontSize: 10,
-    letterSpacing: 0.8,
-    paddingHorizontal: 16,
-    marginBottom: 10,
-  },
-  seeAll: { fontFamily: 'Inter_700Bold', fontSize: 12 },
-  actionsGrid: { flexDirection: 'row', paddingHorizontal: 16, gap: 8 },
-  actionCard: { alignItems: 'center', padding: 14, borderRadius: 16, borderWidth: 1, gap: 8 },
-  actionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 11, textAlign: 'center' },
-  formCard: { padding: 16, borderRadius: 16, borderWidth: 1, gap: 12 },
-  formTitle: { fontFamily: 'Inter_700Bold', fontSize: 15 },
-  input: {
-    height: 48,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 14,
-  },
-  submitBtn: { height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  submitTxt: { fontFamily: 'Inter_700Bold', fontSize: 15, color: '#fff' },
-  txnRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    gap: 12,
-  },
-  txnDot: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  txnLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 13 },
-  txnMeta: { fontFamily: 'Inter_500Medium', fontSize: 10 },
-  txnAmount: { fontFamily: 'Inter_700Bold', fontSize: 13 },
-  walletLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginTop: 8,
-  },
-  walletLinkTxt: { flex: 1, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+function RecordCard({
+  record,
+  networkText,
+  canWrite,
+  onCancel,
+  onDelete,
+}: {
+  record: PaymentRecord;
+  networkText: string;
+  canWrite: boolean;
+  onCancel: () => void;
+  onDelete: () => void;
+}) {
+  const { t } = useT();
+  const { spacing } = useTheme();
+  const directionText = t(`money.pay.direction.${record.direction}` as TranslationKey);
+  const statusText = t(`money.pay.status.${record.status}` as TranslationKey);
+  const cancelled = record.status === 'cancelled';
+  const meta = [networkText, record.phone, record.reference].filter(Boolean).join(' · ');
+
+  return (
+    <Card style={{ marginBottom: spacing.sm }} testID={`payment-${record.id}`}>
+      <View
+        accessible
+        accessibilityLabel={t('money.pay.row.a11y', {
+          direction: directionText,
+          who: record.counterparty,
+          amount: formatTzs(record.amountTzs),
+          network: networkText,
+          status: statusText,
+        })}
+      >
+        <View style={styles.rowTop}>
+          <View style={{ flex: 1, paddingRight: spacing.md }}>
+            <AppText variant="h3" numberOfLines={1}>
+              {record.counterparty}
+            </AppText>
+            <AppText variant="caption" tone="muted" style={{ marginTop: 2 }}>
+              {meta}
+            </AppText>
+          </View>
+          <AppText
+            variant="h3"
+            style={cancelled ? { textDecorationLine: 'line-through' } : undefined}
+          >
+            {formatTzs(record.amountTzs)}
+          </AppText>
+        </View>
+        <View style={[styles.badges, { marginTop: spacing.sm }]}>
+          <Badge label={directionText} variant="neutral" />
+          <Badge
+            label={statusText}
+            variant={record.status === 'pending_provider' ? 'warning' : 'neutral'}
+          />
+        </View>
+        {record.note ? (
+          <AppText variant="small" tone="muted" style={{ marginTop: spacing.sm }}>
+            {record.note}
+          </AppText>
+        ) : null}
+      </View>
+      <View style={[styles.actions, { marginTop: spacing.xs }]}>
+        {record.status === 'pending_provider' ? (
+          <Button
+            label={t('money.pay.cancel')}
+            variant="link"
+            size="sm"
+            fullWidth={false}
+            disabled={!canWrite}
+            onPress={onCancel}
+          />
+        ) : null}
+        <Button
+          label={t('money.pay.delete')}
+          variant="link"
+          size="sm"
+          fullWidth={false}
+          disabled={!canWrite}
+          onPress={onDelete}
+        />
+      </View>
+    </Card>
+  );
+}
+
+const styles = StyleSheet.create({
+  state: { flex: 0, paddingVertical: 24 },
+  rowTop: { flexDirection: 'row', alignItems: 'flex-start' },
+  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 4 },
 });
