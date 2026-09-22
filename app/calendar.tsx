@@ -1,1676 +1,474 @@
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+/**
+ * Farm calendar — rebuilt on the design system, replacing the legacy 1,676-line screen.
+ *
+ * Shows ONLY real, dated records:
+ *   - tasks by due date (hooks/useTasks → `tasks` table, offline outbox for writes)
+ *   - plot planting and expected-harvest dates the farmer entered (hooks/useFarms → `plots`)
+ * Nothing is generated or suggested. Removed from the legacy screen: the "Sankofa AI" assistant
+ * panel, whose offline replies were canned text presented as an AI answer and whose "move all"
+ * command rewrote tasks by cancelling and re-creating them; and the "AI" filter.
+ */
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
-  Text,
-  StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Modal,
-  ActivityIndicator,
-  Dimensions,
-  Platform,
-  StatusBar,
-  KeyboardAvoidingView,
+  RefreshControl,
+  SafeAreaView,
+  Pressable,
+  StyleSheet,
+  Alert,
 } from 'react-native';
-import Animated, {
-  FadeInDown,
-  FadeIn,
-  FadeInUp,
-  SlideInUp,
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withSpring,
-  withSequence,
-} from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
-import {
-  ChevronLeft,
-  ChevronRight,
-  Plus,
-  X,
-  Check,
-  Sparkles,
-  BrainCircuit,
-  Droplets,
-  Leaf,
-  Target,
-  BarChart3,
-  Microscope,
-  ArrowRight,
-  Send,
-  CheckCircle2,
-  Calendar,
-  Flag,
-  Clock,
-  Trash2,
-  LayoutGrid,
-  MessageSquare,
-  AlertCircle,
-  RefreshCw,
-} from 'lucide-react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ChevronLeft, ChevronRight, Plus, Sprout, Wheat, CalendarDays } from 'lucide-react-native';
+
 import { useTheme } from '../constants/Theme';
 import { useKilimoStore } from '../store/useKilimoStore';
-import { useTasks, Task, TaskPriority, TaskCategory } from '../hooks/useTasks';
-import { chat, aiConfigured } from '../lib/ai';
+import { useTasks, type Task } from '../hooks/useTasks';
+import { useFarms } from '../hooks/useFarms';
+import { useT } from '../lib/i18n';
+import {
+  AlertCard,
+  AppText,
+  Button,
+  Card,
+  EmptyState,
+  ListRow,
+  OfflineBanner,
+  ScreenHeader,
+  SkeletonBlock,
+  SkeletonGroup,
+} from '../components/ui';
+import { TaskFormSheet, type NewTaskInput } from '../components/schedule/TaskFormSheet';
+import { TaskRow } from '../components/schedule/TaskRow';
+import {
+  dayKey,
+  formatDayMonth,
+  monthName,
+  parseLocalIsoDate,
+  pickLocalized,
+  taskSyncStates,
+  weekdayShort,
+} from '../lib/scheduleFormat';
+import { cropNames } from '../constants/onboardingOptions';
 
-const { width: SW } = Dimensions.get('window');
+type PlotEvent = { id: string; kind: 'planting' | 'harvest'; plot: string; crop: string | null };
 
-// ── Locale data ────────────────────────────────────────────────────────────────
-const MONTHS_SW = [
-  'Januari',
-  'Februari',
-  'Machi',
-  'Aprili',
-  'Mei',
-  'Juni',
-  'Julai',
-  'Agosti',
-  'Septemba',
-  'Oktoba',
-  'Novemba',
-  'Desemba',
-];
-const MONTHS_EN = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
-const DAYS_SW = ['J', 'A', 'J', 'A', 'A', 'I', 'J'];
-const DAYS_EN = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const sameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
-const PRIORITY_COLOR: Record<string, string> = {
-  critical: '#ef4444',
-  high: '#f59e0b',
-  medium: '#2E6F40',
-  low: '#94a3b8',
-};
-const PRIORITY_LABEL_SW: Record<string, string> = {
-  critical: 'DHARURA',
-  high: 'JUU',
-  medium: 'KATI',
-  low: 'CHINI',
-};
-const PRIORITY_LABEL_EN: Record<string, string> = {
-  critical: 'CRITICAL',
-  high: 'HIGH',
-  medium: 'MEDIUM',
-  low: 'LOW',
-};
-const CATEGORIES: { id: TaskCategory; labelSw: string; labelEn: string }[] = [
-  { id: 'irrigation', labelSw: 'Umwagiliaji', labelEn: 'Irrigation' },
-  { id: 'planting', labelSw: 'Upandaji', labelEn: 'Planting' },
-  { id: 'harvest', labelSw: 'Mavuno', labelEn: 'Harvest' },
-  { id: 'scouting', labelSw: 'Ukaguzi', labelEn: 'Scouting' },
-  { id: 'finance', labelSw: 'Fedha', labelEn: 'Finance' },
-  { id: 'general', labelSw: 'Mengineyo', labelEn: 'General' },
-];
-
-// ── Date utilities ─────────────────────────────────────────────────────────────
-const daysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
-const firstDay = (y: number, m: number) => new Date(y, m, 1).getDay();
-const toDateKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-const isSameDay = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() &&
-  a.getMonth() === b.getMonth() &&
-  a.getDate() === b.getDate();
-
-const generateGrid = (y: number, m: number): (number | null)[] => {
-  const grid: (number | null)[] = Array(firstDay(y, m)).fill(null);
-  for (let d = 1; d <= daysInMonth(y, m); d++) grid.push(d);
-  while (grid.length % 7 !== 0) grid.push(null);
-  return grid;
-};
-
-// ── Offline NLP parser ─────────────────────────────────────────────────────────
-const PRIORITY_WORDS: Record<string, TaskPriority> = {
-  dharura: 'critical',
-  urgent: 'critical',
-  critical: 'critical',
-  haraka: 'high',
-  high: 'high',
-  juu: 'high',
-  kawaida: 'medium',
-  normal: 'medium',
-  medium: 'medium',
-  baadaye: 'low',
-  low: 'low',
-  chini: 'low',
-};
-const DAY_MAP: Record<string, number> = {
-  sunday: 0,
-  jumapili: 0,
-  monday: 1,
-  jumatatu: 1,
-  tuesday: 2,
-  jumanne: 2,
-  wednesday: 3,
-  jumatano: 3,
-  thursday: 4,
-  alhamisi: 4,
-  friday: 5,
-  ijumaa: 5,
-  saturday: 6,
-  jumamosi: 6,
-};
-
-interface ParsedTask {
-  title: string;
-  date: Date;
-  priority: TaskPriority;
-  category: TaskCategory;
+function monthGrid(year: number, month: number): (number | null)[] {
+  const cells: (number | null)[] = Array(new Date(year, month, 1).getDay()).fill(null);
+  const days = new Date(year, month + 1, 0).getDate();
+  for (let d = 1; d <= days; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+  return cells;
 }
-
-function parseNLTask(input: string): ParsedTask | null {
-  const lower = input.toLowerCase();
-  const now = new Date();
-  let date = new Date();
-  let priority: TaskPriority = 'medium';
-
-  // Priority detection
-  for (const [word, p] of Object.entries(PRIORITY_WORDS)) {
-    if (lower.includes(word)) {
-      priority = p;
-      break;
-    }
-  }
-
-  // Date detection
-  if (lower.includes('leo') || lower.includes('today')) {
-    date = new Date();
-  } else if (lower.includes('kesho') || lower.includes('tomorrow')) {
-    date = new Date(now.getTime() + 86400000);
-  } else if (lower.includes('wiki ijayo') || lower.includes('next week')) {
-    date = new Date(now.getTime() + 7 * 86400000);
-  } else if (lower.includes('wiki hii') || lower.includes('this week')) {
-    date = new Date(now.getTime() + 2 * 86400000);
-  } else {
-    for (const [name, num] of Object.entries(DAY_MAP)) {
-      if (lower.includes(name)) {
-        const diff = (num - now.getDay() + 7) % 7 || 7;
-        date = new Date(now.getTime() + diff * 86400000);
-        break;
-      }
-    }
-  }
-
-  // Category detection
-  let category: TaskCategory = 'general';
-  if (/mwagili|irrigat|water/i.test(lower)) category = 'irrigation';
-  else if (/pand|plant|mbegu|seed/i.test(lower)) category = 'planting';
-  else if (/vun|harvest/i.test(lower)) category = 'harvest';
-  else if (/kagua|scout|wadudu|pest/i.test(lower)) category = 'scouting';
-  else if (/lipa|payment|fedha|financ/i.test(lower)) category = 'finance';
-
-  // Clean title
-  let title = input
-    .replace(/^(add|ongeza|schedule|weka|set|remind me to|niuk?umbusha)\s*/i, '')
-    .replace(/\b(today|leo|tomorrow|kesho|next week|wiki ijayo|this week|wiki hii)\b/gi, '')
-    .replace(new RegExp(Object.keys(DAY_MAP).join('|'), 'gi'), '')
-    .replace(new RegExp(Object.keys(PRIORITY_WORDS).join('|'), 'gi'), '')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-
-  if (!title) return null;
-  return { title, date, priority, category };
-}
-
-// ── Category icon helper ───────────────────────────────────────────────────────
-const CatIcon = ({ cat, size, color }: { cat: string; size: number; color: string }) => {
-  switch (cat) {
-    case 'irrigation':
-      return <Droplets size={size} color={color} />;
-    case 'planting':
-      return <Leaf size={size} color={color} />;
-    case 'harvest':
-      return <Sparkles size={size} color={color} />;
-    case 'scouting':
-      return <Microscope size={size} color={color} />;
-    case 'finance':
-      return <BarChart3 size={size} color={color} />;
-    default:
-      return <Target size={size} color={color} />;
-  }
-};
-
-// ── Completion checkmark animation ────────────────────────────────────────────
-const CompletionBurst = ({ onDone }: { onDone: () => void }) => {
-  const scale = useSharedValue(0);
-  const opacity = useSharedValue(1);
-  useEffect(() => {
-    scale.value = withSequence(withSpring(1.4, { damping: 8 }), withTiming(1, { duration: 150 }));
-    opacity.value = withSequence(
-      withTiming(1, { duration: 300 }),
-      withTiming(0, { duration: 400 })
-    );
-    const t = setTimeout(onDone, 700);
-    return () => clearTimeout(t);
-  }, []);
-  const style = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
-  }));
-  return (
-    <Animated.View
-      style={[
-        StyleSheet.absoluteFill,
-        { alignItems: 'center', justifyContent: 'center', zIndex: 99 },
-        style,
-      ]}
-    >
-      <View style={{ backgroundColor: '#2E6F40', borderRadius: 20, padding: 10 }}>
-        <Check size={20} color="#000" strokeWidth={3} />
-      </View>
-    </Animated.View>
-  );
-};
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// MAIN SCREEN
-// ═══════════════════════════════════════════════════════════════════════════════
-type FilterType = 'all' | 'tasks' | 'deadlines' | 'ai';
 
 export default function CalendarScreen() {
   const router = useRouter();
-  const { colors, isDark } = useTheme();
-  const language = useKilimoStore((s) => s.language);
-  const addNotification = useKilimoStore((s) => s.addNotification);
+  const { colors, spacing, radius } = useTheme();
+  const { t, lang } = useT();
 
-  const { tasks, createTask, completeTask, cancelTask } = useTasks();
+  const isOffline = useKilimoStore((s) => s.isOffline);
+  const syncQueue = useKilimoStore((s) => s.syncQueue);
+  const tasks = useTasks();
+  const farms = useFarms();
 
   const today = useMemo(() => new Date(), []);
-  const [curYear, setCurYear] = useState(today.getFullYear());
-  const [curMonth, setCurMonth] = useState(today.getMonth());
+  const [year, setYear] = useState(today.getFullYear());
+  const [month, setMonth] = useState(today.getMonth());
   const [selected, setSelected] = useState<Date>(today);
-  const [filter, setFilter] = useState<FilterType>('all');
+  const [showCreate, setShowCreate] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Add task modal
-  const [showAdd, setShowAdd] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const [newPriority, setNewPriority] = useState<TaskPriority>('medium');
-  const [newCategory, setNewCategory] = useState<TaskCategory>('general');
-  const [newDate, setNewDate] = useState<Date>(today);
-  const [saving, setSaving] = useState(false);
+  const syncStates = useMemo(() => taskSyncStates(syncQueue), [syncQueue]);
 
-  // AI panel
-  const [showAI, setShowAI] = useState(false);
-  const [aiInput, setAIInput] = useState('');
-  const [aiLoading, setAILoading] = useState(false);
-  const [aiHistory, setAIHistory] = useState<{ role: string; text: string }[]>([
-    {
-      role: 'ai',
-      text:
-        language === 'sw'
-          ? 'Habari! Mimi ni Sankofa AI. Ninaweza kukusaidia kuongeza kazi, kupanga ratiba, au kukufundisha jinsi ya kutumia kalenda. Sema tu!'
-          : "Hi! I'm Sankofa AI. I can help you add tasks, plan your schedule, or guide you through the calendar. Just ask!",
-    },
-  ]);
-  const aiScrollRef = useRef<ScrollView>(null);
-
-  // Completing animation
-  const [completingId, setCompletingId] = useState<string | null>(null);
-
-  // ── Computed ─────────────────────────────────────────────────────────────────
-  const calGrid = useMemo(() => generateGrid(curYear, curMonth), [curYear, curMonth]);
-
-  const tasksByKey = useMemo(() => {
+  const tasksByDay = useMemo(() => {
     const map: Record<string, Task[]> = {};
-    tasks.forEach((t) => {
-      if (!t.dueDate) return;
-      const d = new Date(t.dueDate);
-      const key = toDateKey(d);
-      if (!map[key]) map[key] = [];
-      map[key].push(t);
-    });
+    for (const task of tasks.tasks) {
+      if (task.status === 'cancelled' || !task.dueDate) continue;
+      const d = new Date(task.dueDate);
+      if (Number.isNaN(d.getTime())) continue;
+      (map[dayKey(d)] ??= []).push(task);
+    }
     return map;
-  }, [tasks]);
+  }, [tasks.tasks]);
 
-  const dayTasks = useMemo(() => {
-    const all = tasksByKey[toDateKey(selected)] || [];
-    if (filter === 'all') return all;
-    if (filter === 'tasks') return all.filter((t) => t.status !== 'done');
-    if (filter === 'deadlines')
-      return all.filter((t) => t.priority === 'critical' || t.priority === 'high');
-    if (filter === 'ai') return all.filter((t) => t.coopId === 'ai-suggested');
-    return all;
-  }, [tasksByKey, selected, filter]);
+  const eventsByDay = useMemo(() => {
+    const map: Record<string, PlotEvent[]> = {};
+    for (const p of farms.plots) {
+      const crop = p.crop ? pickLocalized(lang, cropNames(p.crop)) : null;
+      const planting = parseLocalIsoDate(p.plantingDate);
+      const harvest = parseLocalIsoDate(p.expectedHarvest);
+      if (planting)
+        (map[dayKey(planting)] ??= []).push({
+          id: `${p.id}-plant`,
+          kind: 'planting',
+          plot: p.name,
+          crop,
+        });
+      if (harvest)
+        (map[dayKey(harvest)] ??= []).push({
+          id: `${p.id}-harvest`,
+          kind: 'harvest',
+          plot: p.name,
+          crop,
+        });
+    }
+    return map;
+  }, [farms.plots, lang]);
 
-  const pendingCount = useMemo(
-    () => tasks.filter((t) => t.status === 'pending' || t.status === 'in_progress').length,
+  const grid = useMemo(() => monthGrid(year, month), [year, month]);
+  const monthHasItems = useMemo(
+    () =>
+      grid.some((d) => {
+        if (!d) return false;
+        const k = dayKey(new Date(year, month, d));
+        return (tasksByDay[k]?.length ?? 0) + (eventsByDay[k]?.length ?? 0) > 0;
+      }),
+    [grid, year, month, tasksByDay, eventsByDay]
+  );
+
+  const selKey = dayKey(selected);
+  const dayTasks = tasksByDay[selKey] ?? [];
+  const dayEvents = eventsByDay[selKey] ?? [];
+
+  const shiftMonth = (delta: number) => {
+    const d = new Date(year, month + delta, 1);
+    setYear(d.getFullYear());
+    setMonth(d.getMonth());
+  };
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([tasks.refresh(), farms.refresh()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [tasks, farms]);
+
+  const handleCreate = useCallback(
+    (input: NewTaskInput) => {
+      tasks.createTask(input);
+      setShowCreate(false);
+    },
     [tasks]
   );
 
-  // ── Month navigation ─────────────────────────────────────────────────────────
-  const prevMonth = () => {
-    Haptics.selectionAsync();
-    if (curMonth === 0) {
-      setCurYear((y) => y - 1);
-      setCurMonth(11);
-    } else setCurMonth((m) => m - 1);
-  };
-  const nextMonth = () => {
-    Haptics.selectionAsync();
-    if (curMonth === 11) {
-      setCurYear((y) => y + 1);
-      setCurMonth(0);
-    } else setCurMonth((m) => m + 1);
-  };
-
-  // ── Tap on calendar cell ─────────────────────────────────────────────────────
-  const onDayPress = (day: number) => {
-    Haptics.selectionAsync();
-    setSelected(new Date(curYear, curMonth, day));
-  };
-
-  // ── Save new task ────────────────────────────────────────────────────────────
-  const handleSaveTask = useCallback(async () => {
-    if (!newTitle.trim()) return;
-    setSaving(true);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await createTask({
-      title: newTitle.trim(),
-      category: newCategory,
-      priority: newPriority,
-      status: 'pending',
-      dueDate: newDate.toISOString(),
-      xpReward: newPriority === 'critical' ? 40 : newPriority === 'high' ? 25 : 15,
-    });
-    addNotification({
-      type: 'info',
-      title: language === 'sw' ? 'Kazi Mpya Imeongezwa' : 'Task Added',
-      body: newTitle.trim(),
-    });
-    setNewTitle('');
-    setNewPriority('medium');
-    setNewCategory('general');
-    setSaving(false);
-    setShowAdd(false);
-  }, [newTitle, newPriority, newCategory, newDate, createTask, addNotification, language]);
-
-  // ── Complete task with animation ─────────────────────────────────────────────
-  const handleComplete = useCallback(
+  const handleCancel = useCallback(
     (task: Task) => {
-      if (task.status === 'done') return;
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setCompletingId(task.id);
-      setTimeout(() => {
-        completeTask(task.id);
-        setCompletingId(null);
-        addNotification({
-          type: 'success',
-          title: language === 'sw' ? '✓ Kazi Imekamilika!' : '✓ Task Completed!',
-          body: language === 'sw' ? task.titleSw || task.title : task.title,
-        });
-      }, 700);
+      Alert.alert(t('schedule.tasks.cancel.title'), t('schedule.tasks.cancel.body'), [
+        { text: t('schedule.tasks.cancel.keep'), style: 'cancel' },
+        {
+          text: t('schedule.tasks.cancel.confirm'),
+          style: 'destructive',
+          onPress: () => tasks.cancelTask(task.id),
+        },
+      ]);
     },
-    [completeTask, addNotification, language]
+    [tasks, t]
   );
 
-  // ── AI handler ───────────────────────────────────────────────────────────────
-  const handleAI = useCallback(
-    async (queryOverride?: string) => {
-      const query = (queryOverride || aiInput).trim();
-      if (!query) return;
-      setAILoading(true);
-      setAIInput('');
-      const userMsg = { role: 'user', text: query };
-      setAIHistory((h) => [...h, userMsg]);
-      setTimeout(() => aiScrollRef.current?.scrollToEnd({ animated: true }), 100);
+  const styles = useMemo(() => makeStyles(spacing), [spacing]);
+  const initialLoading =
+    (tasks.loading && !tasks.loaded && tasks.tasks.length === 0) ||
+    (farms.loading && !farms.loaded && farms.plots.length === 0);
 
-      try {
-        // Detect if it's a task creation request
-        const isCreate = /ongeza|add|weka|schedule|remind|niuk?umbusha/i.test(query);
-        const isBulk = /songa.*zote|move.*all|reschedule.*all|hamisha.*kazi/i.test(query);
-        const isGuide = /jinsi|how|nifundishe|teach|help|saidia.*kutumia/i.test(query);
-
-        let replyText = '';
-
-        if (isBulk) {
-          // Bulk reschedule: move all today's pending to tomorrow
-          const todayKey = toDateKey(today);
-          const todayPending = tasks.filter(
-            (t) =>
-              t.dueDate &&
-              toDateKey(new Date(t.dueDate)) === todayKey &&
-              (t.status === 'pending' || t.status === 'in_progress')
-          );
-          for (const t of todayPending) {
-            const { id, createdAt, syncedOffline, ...rest } = t;
-            await cancelTask(t.id);
-            await createTask({
-              ...rest,
-              status: 'pending',
-              dueDate: new Date(today.getTime() + 86400000).toISOString(),
-            });
-          }
-          replyText =
-            language === 'sw'
-              ? `Nimesonga kazi ${todayPending.length} kutoka leo hadi kesho. ✓`
-              : `Moved ${todayPending.length} task(s) from today to tomorrow. ✓`;
-        } else if (isCreate) {
-          const parsed = parseNLTask(query);
-          if (parsed) {
-            await createTask({
-              title: parsed.title,
-              category: parsed.category,
-              priority: parsed.priority,
-              status: 'pending',
-              dueDate: parsed.date.toISOString(),
-              xpReward: 20,
-            });
-            setSelected(parsed.date);
-            setCurYear(parsed.date.getFullYear());
-            setCurMonth(parsed.date.getMonth());
-            const months = language === 'sw' ? MONTHS_SW : MONTHS_EN;
-            replyText =
-              language === 'sw'
-                ? `Nimeweka kazi "${parsed.title}" kwa tarehe ${parsed.date.getDate()} ${months[parsed.date.getMonth()]}. ✓`
-                : `Added "${parsed.title}" for ${months[parsed.date.getMonth()]} ${parsed.date.getDate()}. ✓`;
-          } else {
-            replyText =
-              language === 'sw'
-                ? 'Samahani, sijapata kichwa cha kazi. Jaribu mfano: "Ongeza kupanda mbegu Ijumaa"'
-                : 'Sorry, I could not parse a task title. Try: "Add irrigate Block B on Friday"';
-          }
-        } else if (isGuide) {
-          replyText =
-            language === 'sw'
-              ? 'Ili kuongeza kazi:\n1. Bonyeza kitufe cha "+" chini ya skrini\n2. Au bonyeza tarehe yoyote kwenye kalenda\n3. Au niambie hapa: "Ongeza [kazi] [tarehe]"\n\nKukamilisha kazi: Bonyeza ✓ kwenye kazi yoyote kwenye orodha.'
-              : 'To add a task:\n1. Tap the "+" button at the bottom\n2. Or tap any date on the calendar\n3. Or tell me here: "Add [task] [date]"\n\nTo complete a task: Tap ✓ on any task in the day list.';
-        } else if (aiConfigured()) {
-          // Use real AI
-          const monthName = (language === 'sw' ? MONTHS_SW : MONTHS_EN)[curMonth];
-          const pendingForDay = dayTasks.filter((t) => t.status !== 'done').length;
-          const prompt = `You are Sankofa AI, an agricultural calendar assistant for Kilimo AI.
-Current calendar view: ${monthName} ${curYear}.
-Selected date: ${selected.getDate()} ${monthName}.
-Pending tasks on selected date: ${pendingForDay}.
-Total pending tasks: ${pendingCount}.
-User language: ${language === 'sw' ? 'Kiswahili' : 'English'}.
-User message: "${query}"
-
-Respond helpfully and concisely about the calendar or farming schedule.
-If suggesting task changes, be specific. Max 3 sentences.`;
-          replyText = await chat([{ role: 'user', content: prompt }]);
-        } else {
-          // Offline fallback
-          const overloaded = Object.entries(tasksByKey).filter(
-            ([, ts]) => ts.filter((t) => t.status !== 'done').length > 2
-          ).length;
-          replyText =
-            language === 'sw'
-              ? overloaded > 0
-                ? `Una siku ${overloaded} zenye kazi nyingi wiki hii. Ningependa kukusaidia kuzisambaza vizuri. Niambie "Songa kazi zote leo kesho" ili nihamisha kazi za siku moja.`
-                : `Ratiba yako inaonekana nzuri! Una kazi ${pendingCount} zinazongoja. Bonyeza tarehe yoyote kuongeza kazi mpya, au niambie: "Ongeza [kazi] [tarehe]".`
-              : overloaded > 0
-                ? `You have ${overloaded} overloaded days this week. Tell me "Move all today's tasks to tomorrow" and I will reschedule them for you.`
-                : `Your schedule looks good! You have ${pendingCount} pending tasks. Tap any date to add a task, or tell me: "Add [task] [date]".`;
-        }
-
-        setAIHistory((h) => [...h, { role: 'ai', text: replyText }]);
-      } catch {
-        setAIHistory((h) => [
-          ...h,
-          {
-            role: 'ai',
-            text:
-              language === 'sw' ? 'Kuna tatizo. Jaribu tena.' : 'Something went wrong. Try again.',
-          },
-        ]);
-      } finally {
-        setAILoading(false);
-        setTimeout(() => aiScrollRef.current?.scrollToEnd({ animated: true }), 150);
-      }
-    },
-    [
-      aiInput,
-      tasks,
-      dayTasks,
-      tasksByKey,
-      pendingCount,
-      curMonth,
-      curYear,
-      selected,
-      today,
-      language,
-      createTask,
-      cancelTask,
-    ]
-  );
-
-  // ── Open add modal pre-filled for selected date ──────────────────────────────
-  const openAdd = (date?: Date) => {
-    setNewDate(date || selected);
-    setNewTitle('');
-    setNewPriority('medium');
-    setNewCategory('general');
-    setShowAdd(true);
-  };
-
-  // ── Render: calendar grid ─────────────────────────────────────────────────────
-  const renderGrid = () => {
-    const months = language === 'sw' ? MONTHS_SW : MONTHS_EN;
-    const days = language === 'sw' ? DAYS_SW : DAYS_EN;
-    const CELL = (SW - 48) / 7;
-
-    return (
-      <View
-        style={[
-          styles.gridCard,
-          {
-            backgroundColor: isDark ? 'rgba(6,14,8,0.98)' : colors.card,
-            borderColor: isDark ? 'rgba(255,255,255,0.06)' : colors.border,
-          },
-        ]}
-      >
-        <LinearGradient
-          colors={[colors.primary + '12', 'transparent']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
-
-        {/* Month nav */}
-        <View style={styles.monthNav}>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Previous month"
-            onPress={prevMonth}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <ChevronLeft size={20} color={colors.text} />
-          </TouchableOpacity>
-          <View style={{ alignItems: 'center' }}>
-            <Text style={[styles.monthTitle, { color: isDark ? '#fff' : colors.text }]}>
-              {months[curMonth]}
-            </Text>
-            <Text style={[styles.yearLabel, { color: colors.textMute }]}>{curYear}</Text>
-          </View>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Next month"
-            onPress={nextMonth}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <ChevronRight size={20} color={colors.text} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Day labels */}
-        <View style={styles.dayLabels}>
-          {days.map((d, i) => (
-            <View key={i} style={{ width: CELL, alignItems: 'center' }}>
-              <Text style={[styles.dayLabel, { color: colors.textMute }]}>{d}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Calendar cells */}
-        <View style={styles.gridWrap}>
-          {calGrid.map((day, i) => {
-            if (!day) return <View key={i} style={{ width: CELL, height: CELL + 10 }} />;
-            const cellDate = new Date(curYear, curMonth, day);
-            const isToday = isSameDay(cellDate, today);
-            const isSel = isSameDay(cellDate, selected);
-            const isPast = cellDate < today && !isToday;
-            const key = toDateKey(cellDate);
-            const cellTasks = tasksByKey[key] || [];
-            const pending = cellTasks.filter((t) => t.status !== 'done');
-            const dots = pending.slice(0, 3);
-
-            return (
-              <TouchableOpacity
-                key={i}
-                onPress={() => onDayPress(day)}
-                activeOpacity={0.75}
-                style={[
-                  styles.cell,
-                  { width: CELL, height: CELL + 10 },
-                  isSel && styles.cellSelected,
-                  isToday && !isSel && styles.cellToday,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.cellNum,
-                    {
-                      color: isSel
-                        ? '#000'
-                        : isToday
-                          ? colors.primary
-                          : isPast
-                            ? colors.textMute + '60'
-                            : isDark
-                              ? '#fff'
-                              : colors.text,
-                    },
-                    isSel && { fontFamily: 'Inter_700Bold' },
-                  ]}
-                >
-                  {day}
-                </Text>
-                {dots.length > 0 && (
-                  <View style={styles.dotRow}>
-                    {dots.map((t, di) => (
-                      <View
-                        key={di}
-                        style={[
-                          styles.taskDot,
-                          { backgroundColor: PRIORITY_COLOR[t.priority] || colors.primary },
-                        ]}
-                      />
-                    ))}
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-    );
-  };
-
-  // ── Render: filter pills ──────────────────────────────────────────────────────
-  const renderFilters = () => {
-    const filters: { id: FilterType; sw: string; en: string }[] = [
-      { id: 'all', sw: 'Zote', en: 'All' },
-      { id: 'tasks', sw: 'Kazi', en: 'Tasks' },
-      { id: 'deadlines', sw: 'Mwisho', en: 'Deadlines' },
-      { id: 'ai', sw: 'AI', en: 'AI' },
-    ];
-    return (
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterRow}
-      >
-        {filters.map((f) => (
-          <TouchableOpacity
-            key={f.id}
-            onPress={() => {
-              Haptics.selectionAsync();
-              setFilter(f.id);
-            }}
-            style={[
-              styles.filterPill,
-              filter === f.id && { backgroundColor: colors.primary, borderColor: colors.primary },
-              filter !== f.id && {
-                backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
-                borderColor: isDark ? 'rgba(255,255,255,0.08)' : colors.border,
-              },
-            ]}
-          >
-            <Text
-              style={[styles.filterText, { color: filter === f.id ? '#000' : colors.textMute }]}
-            >
-              {language === 'sw' ? f.sw : f.en}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    );
-  };
-
-  // ── Render: day task list ─────────────────────────────────────────────────────
-  const renderDayList = () => {
-    const months = language === 'sw' ? MONTHS_SW : MONTHS_EN;
-    const isToday = isSameDay(selected, today);
-    const dateLabel = `${selected.getDate()} ${months[selected.getMonth()]}${isToday ? (language === 'sw' ? ' · Leo' : ' · Today') : ''}`;
-
-    return (
-      <View style={{ flex: 1 }}>
-        {/* Day header */}
-        <View style={styles.dayHeader}>
-          <View>
-            <Text style={[styles.dayHeaderTitle, { color: isDark ? '#fff' : colors.text }]}>
-              {dateLabel}
-            </Text>
-            <Text style={[styles.dayHeaderSub, { color: colors.textMute }]}>
-              {dayTasks.length} {language === 'sw' ? 'kazi' : 'tasks'} ·{' '}
-              {dayTasks.filter((t) => t.status === 'done').length}{' '}
-              {language === 'sw' ? 'zilizokamilika' : 'done'}
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => openAdd()}
-            style={[
-              styles.addDayBtn,
-              { backgroundColor: colors.primary + '1F', borderColor: colors.primary + '40' },
-            ]}
-          >
-            <Plus size={14} color={colors.primary} />
-            <Text style={styles.addDayBtnText}>{language === 'sw' ? 'Ongeza' : 'Add'}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Task rows */}
-        {dayTasks.length === 0 ? (
-          <Animated.View entering={FadeIn} style={styles.emptyDay}>
-            <Calendar size={28} color={colors.textMute + '60'} />
-            <Text style={[styles.emptyDayText, { color: colors.textMute }]}>
-              {language === 'sw' ? 'Hakuna kazi kwa tarehe hii' : 'No tasks for this date'}
-            </Text>
-            <TouchableOpacity
-              onPress={() => openAdd()}
-              style={[styles.emptyDayBtn, { backgroundColor: colors.primary }]}
-            >
-              <Plus size={13} color="#000" />
-              <Text style={styles.emptyDayBtnText}>
-                {language === 'sw' ? 'Ongeza Kazi' : 'Add a Task'}
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
-        ) : (
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ gap: 8, paddingBottom: 120 }}
-          >
-            {dayTasks.map((task, idx) => {
-              const pc = PRIORITY_COLOR[task.priority] || colors.primary;
-              const isDone = task.status === 'done';
-              const isCompleting = completingId === task.id;
-
-              return (
-                <Animated.View key={task.id} entering={FadeInDown.delay(idx * 40).springify()}>
-                  <View
-                    style={[
-                      styles.taskRow,
-                      {
-                        backgroundColor: isDark
-                          ? isDone
-                            ? 'rgba(255,255,255,0.02)'
-                            : 'rgba(255,255,255,0.04)'
-                          : isDone
-                            ? 'rgba(0,0,0,0.02)'
-                            : colors.card,
-                        borderColor: isDone
-                          ? 'transparent'
-                          : isDark
-                            ? 'rgba(255,255,255,0.07)'
-                            : colors.border,
-                        opacity: isDone ? 0.55 : 1,
-                      },
-                    ]}
-                  >
-                    {isCompleting && <CompletionBurst onDone={() => {}} />}
-
-                    {/* Left: icon */}
-                    <View style={[styles.taskIcon, { backgroundColor: pc + '18' }]}>
-                      <CatIcon cat={task.category} size={15} color={pc} />
-                    </View>
-
-                    {/* Middle: title + badges */}
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={[
-                          styles.taskTitle,
-                          {
-                            color: isDone ? colors.textMute : isDark ? '#fff' : colors.text,
-                            textDecorationLine: isDone ? 'line-through' : 'none',
-                          },
-                        ]}
-                        numberOfLines={2}
-                      >
-                        {language === 'sw' && task.titleSw ? task.titleSw : task.title}
-                      </Text>
-                      <View
-                        style={{ flexDirection: 'row', gap: 6, marginTop: 4, alignItems: 'center' }}
-                      >
-                        <View
-                          style={[
-                            styles.priBadge,
-                            { backgroundColor: pc + '18', borderColor: pc + '35' },
-                          ]}
-                        >
-                          <Text style={[styles.priBadgeText, { color: pc }]}>
-                            {language === 'sw'
-                              ? PRIORITY_LABEL_SW[task.priority]
-                              : PRIORITY_LABEL_EN[task.priority]}
-                          </Text>
-                        </View>
-                        {task.farmBlock && (
-                          <Text style={[styles.taskBlock, { color: colors.textMute }]}>
-                            {task.farmBlock}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-
-                    {/* Right: actions */}
-                    <View style={{ gap: 6 }}>
-                      {!isDone && (
-                        <TouchableOpacity
-                          onPress={() => handleComplete(task)}
-                          style={[
-                            styles.completeBtn,
-                            {
-                              backgroundColor: colors.primary + '1F',
-                              borderColor: colors.primary + '40',
-                            },
-                          ]}
-                        >
-                          <Check size={13} color={colors.primary} strokeWidth={2.5} />
-                        </TouchableOpacity>
-                      )}
-                      <TouchableOpacity
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          cancelTask(task.id);
-                        }}
-                        style={[
-                          styles.deleteBtn,
-                          {
-                            backgroundColor: 'rgba(239,68,68,0.08)',
-                            borderColor: 'rgba(239,68,68,0.2)',
-                          },
-                        ]}
-                      >
-                        <Trash2 size={11} color="#ef4444" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </Animated.View>
-              );
-            })}
-          </ScrollView>
-        )}
-      </View>
-    );
-  };
-
-  // ── Render: add task modal ────────────────────────────────────────────────────
-  const renderAddModal = () => (
-    <Modal
-      visible={showAdd}
-      transparent
-      animationType="slide"
-      onRequestClose={() => setShowAdd(false)}
+  const addButton = (
+    <Pressable
+      onPress={() => setShowCreate(true)}
+      accessibilityRole="button"
+      accessibilityLabel={t('schedule.calendar.addForDay')}
+      style={[styles.iconBtn, { backgroundColor: colors.primarySoft, borderRadius: radius.md }]}
+      testID="calendar-add"
     >
-      <View style={styles.modalOverlay}>
-        <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setShowAdd(false)} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <Animated.View
-            entering={SlideInUp.springify()}
-            style={[
-              styles.modalSheet,
-              {
-                backgroundColor: isDark ? '#0a130b' : colors.card,
-                borderColor: isDark ? 'rgba(255,255,255,0.08)' : colors.border,
-              },
-            ]}
-          >
-            <LinearGradient
-              colors={[colors.primary + '14', 'transparent']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-              pointerEvents="none"
-            />
-
-            {/* Modal header */}
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={[styles.modalTitle, { color: isDark ? '#fff' : colors.text }]}>
-                  {language === 'sw' ? 'Ongeza Kazi' : 'Add Task'}
-                </Text>
-                <Text style={[styles.modalSub, { color: colors.textMute }]}>
-                  {newDate.getDate()}{' '}
-                  {(language === 'sw' ? MONTHS_SW : MONTHS_EN)[newDate.getMonth()]}{' '}
-                  {newDate.getFullYear()}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setShowAdd(false)}
-                style={[
-                  styles.closeBtn,
-                  { borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border },
-                ]}
-              >
-                <X size={18} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Title input */}
-            <View
-              style={[
-                styles.inputWrap,
-                {
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : colors.background,
-                  borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border,
-                },
-              ]}
-            >
-              <TextInput
-                style={[styles.taskInput, { color: isDark ? '#fff' : colors.text }]}
-                placeholder={language === 'sw' ? 'Jina la kazi...' : 'Task title...'}
-                placeholderTextColor={colors.textMute}
-                value={newTitle}
-                onChangeText={setNewTitle}
-                autoFocus
-              />
-            </View>
-
-            {/* Priority row */}
-            <Text style={[styles.fieldLabel, { color: colors.textMute }]}>
-              {language === 'sw' ? 'KIPAUMBELE' : 'PRIORITY'}
-            </Text>
-            <View style={styles.priorityRow}>
-              {(['low', 'medium', 'high', 'critical'] as TaskPriority[]).map((p) => (
-                <TouchableOpacity
-                  key={p}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setNewPriority(p);
-                  }}
-                  style={[
-                    styles.priBtn,
-                    {
-                      backgroundColor: newPriority === p ? PRIORITY_COLOR[p] : 'transparent',
-                      borderColor: PRIORITY_COLOR[p],
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.priBtnText,
-                      { color: newPriority === p ? '#000' : PRIORITY_COLOR[p] },
-                    ]}
-                  >
-                    {language === 'sw' ? PRIORITY_LABEL_SW[p] : PRIORITY_LABEL_EN[p]}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Category row */}
-            <Text style={[styles.fieldLabel, { color: colors.textMute }]}>
-              {language === 'sw' ? 'AINA' : 'CATEGORY'}
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={{ marginBottom: 16 }}
-            >
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                {CATEGORIES.map((c) => (
-                  <TouchableOpacity
-                    key={c.id}
-                    onPress={() => {
-                      Haptics.selectionAsync();
-                      setNewCategory(c.id);
-                    }}
-                    style={[
-                      styles.catBtn,
-                      {
-                        backgroundColor:
-                          newCategory === c.id ? colors.primary + '26' : 'transparent',
-                        borderColor:
-                          newCategory === c.id
-                            ? colors.primary
-                            : isDark
-                              ? 'rgba(255,255,255,0.1)'
-                              : colors.border,
-                      },
-                    ]}
-                  >
-                    <CatIcon
-                      cat={c.id}
-                      size={14}
-                      color={newCategory === c.id ? colors.primary : colors.textMute}
-                    />
-                    <Text
-                      style={[
-                        styles.catBtnText,
-                        { color: newCategory === c.id ? colors.primary : colors.textMute },
-                      ]}
-                    >
-                      {language === 'sw' ? c.labelSw : c.labelEn}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-
-            {/* AI quick-add hint */}
-            <TouchableOpacity
-              onPress={() => {
-                setShowAdd(false);
-                setShowAI(true);
-              }}
-              style={[
-                styles.aiHint,
-                { backgroundColor: colors.primary + '12', borderColor: colors.primary + '33' },
-              ]}
-            >
-              <BrainCircuit size={13} color={colors.primary} />
-              <Text style={[styles.aiHintText, { color: colors.primary }]}>
-                {language === 'sw'
-                  ? 'Tumia Sankofa AI kuongeza kazi kwa lugha ya kawaida →'
-                  : 'Use Sankofa AI to add tasks in plain language →'}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Action buttons */}
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                onPress={() => setShowAdd(false)}
-                style={[
-                  styles.cancelBtn,
-                  { borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border },
-                ]}
-              >
-                <Text style={[styles.cancelBtnText, { color: colors.textMute }]}>
-                  {language === 'sw' ? 'Futa' : 'Cancel'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleSaveTask}
-                disabled={!newTitle.trim() || saving}
-                style={[
-                  styles.saveBtn,
-                  { backgroundColor: newTitle.trim() ? colors.primary : colors.textMute + '40' },
-                ]}
-              >
-                {saving ? (
-                  <ActivityIndicator size="small" color="#000" />
-                ) : (
-                  <>
-                    <Check size={14} color="#000" strokeWidth={3} />
-                    <Text style={styles.saveBtnText}>{language === 'sw' ? 'Hifadhi' : 'Save'}</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
+      <Plus size={22} color={colors.primary} />
+    </Pressable>
   );
 
-  // ── Render: Sankofa AI panel ──────────────────────────────────────────────────
-  const QUICK_PROMPTS =
-    language === 'sw'
-      ? [
-          'Ongeza kazi leo',
-          'Songa kazi zote leo kesho',
-          'Nionyeshe kazi nyingi',
-          'Jinsi ya kutumia kalenda?',
-        ]
-      : [
-          'Add task for today',
-          "Move all today's tasks to tomorrow",
-          'Which days are overloaded?',
-          'How do I use the calendar?',
-        ];
-
-  const renderAIPanel = () => (
-    <Modal
-      visible={showAI}
-      transparent
-      animationType="slide"
-      onRequestClose={() => setShowAI(false)}
-    >
-      <View style={styles.aiOverlay}>
-        <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowAI(false)} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <Animated.View
-            entering={SlideInUp.springify()}
-            style={[
-              styles.aiSheet,
-              {
-                backgroundColor: isDark ? '#08110a' : colors.card,
-                borderColor: isDark ? 'rgba(255,255,255,0.08)' : colors.border,
-              },
-            ]}
-          >
-            <LinearGradient
-              colors={[colors.primary + '1A', colors.primary + '08', 'transparent']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-              pointerEvents="none"
-            />
-
-            {/* AI header */}
-            <View style={styles.aiHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <View style={styles.aiAvatar}>
-                  <BrainCircuit size={18} color={colors.primary} />
-                </View>
-                <View>
-                  <Text style={[styles.aiTitle, { color: isDark ? '#fff' : colors.text }]}>
-                    Sankofa AI
-                  </Text>
-                  <Text style={[styles.aiSub, { color: colors.textMute }]}>
-                    {language === 'sw' ? 'Msaidizi wa Kalenda' : 'Calendar Assistant'}
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.aiLiveDot,
-                    { backgroundColor: colors.primary + '26', borderColor: colors.primary + '4D' },
-                  ]}
-                >
-                  <View
-                    style={{
-                      width: 5,
-                      height: 5,
-                      borderRadius: 3,
-                      backgroundColor: colors.primary,
-                    }}
-                  />
-                  <Text style={{ fontSize: 8, fontFamily: 'Inter_700Bold', color: colors.primary }}>
-                    LIVE
-                  </Text>
-                </View>
-              </View>
-              <TouchableOpacity
-                onPress={() => setShowAI(false)}
-                style={[
-                  styles.closeBtn,
-                  { borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border },
-                ]}
-              >
-                <X size={18} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Quick prompts */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.quickPrompts}
-            >
-              {QUICK_PROMPTS.map((p, i) => (
-                <TouchableOpacity
-                  key={i}
-                  onPress={() => handleAI(p)}
-                  style={[
-                    styles.quickPill,
-                    {
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
-                      borderColor: isDark ? 'rgba(255,255,255,0.08)' : colors.border,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.quickPillText, { color: colors.textMute }]}>{p}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            {/* Chat history */}
-            <ScrollView
-              ref={aiScrollRef}
-              style={styles.chatHistory}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ gap: 10, paddingBottom: 8 }}
-            >
-              {aiHistory.map((msg, i) => (
-                <Animated.View
-                  key={i}
-                  entering={FadeInDown.delay(i === aiHistory.length - 1 ? 0 : 0).springify()}
-                >
-                  <View
-                    style={[
-                      styles.chatBubble,
-                      msg.role === 'user'
-                        ? [styles.chatUser, { backgroundColor: colors.primary }]
-                        : [
-                            styles.chatAI,
-                            {
-                              backgroundColor: isDark
-                                ? 'rgba(255,255,255,0.06)'
-                                : 'rgba(0,0,0,0.05)',
-                            },
-                          ],
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.chatText,
-                        { color: msg.role === 'user' ? '#000' : isDark ? '#fff' : colors.text },
-                      ]}
-                    >
-                      {msg.text}
-                    </Text>
-                  </View>
-                </Animated.View>
-              ))}
-              {aiLoading && (
-                <View
-                  style={[
-                    styles.chatAI,
-                    styles.chatBubble,
-                    { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' },
-                  ]}
-                >
-                  <ActivityIndicator size="small" color={colors.primary} />
-                </View>
-              )}
-            </ScrollView>
-
-            {/* Input row */}
-            <View
-              style={[
-                styles.aiInputRow,
-                {
-                  borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border,
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : colors.background,
-                },
-              ]}
-            >
-              <TextInput
-                style={[styles.aiInput, { color: isDark ? '#fff' : colors.text }]}
-                placeholder={language === 'sw' ? 'Uliza au ongeza kazi...' : 'Ask or add a task...'}
-                placeholderTextColor={colors.textMute}
-                value={aiInput}
-                onChangeText={setAIInput}
-                onSubmitEditing={() => handleAI()}
-                returnKeyType="send"
-              />
-              <TouchableOpacity
-                onPress={() => handleAI()}
-                disabled={!aiInput.trim() || aiLoading}
-                style={[
-                  styles.aiSendBtn,
-                  { backgroundColor: aiInput.trim() ? colors.primary : 'transparent' },
-                ]}
-              >
-                {aiLoading ? (
-                  <ActivityIndicator size="small" color={colors.primary} />
-                ) : (
-                  <Send size={16} color={aiInput.trim() ? '#000' : colors.textMute} />
-                )}
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
-  );
-
-  // ── Main render ───────────────────────────────────────────────────────────────
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle="light-content" />
-      <SafeAreaView style={{ flex: 1 }}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            onPress={() => router.back()}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <ChevronLeft size={24} color={isDark ? '#fff' : colors.text} />
-          </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.headerTitle, { color: isDark ? '#fff' : colors.text }]}>
-              {language === 'sw' ? 'Kalenda ya Shamba' : 'Farm Calendar'}
-            </Text>
-            <Text style={[styles.headerSub, { color: colors.textMute }]}>
-              {pendingCount} {language === 'sw' ? 'kazi zingooja' : 'tasks pending'}
-            </Text>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+      <ScreenHeader
+        title={t('schedule.calendar.title')}
+        showBack
+        onBack={() => (router.canGoBack?.() ? router.back() : router.replace('/' as any))}
+        backLabel={t('common.back')}
+        trailing={addButton}
+      />
+      <OfflineBanner visible={isOffline} message={t('offline.banner')} />
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {tasks.error ? (
+          <AlertCard
+            variant="warning"
+            title={t('schedule.calendar.errorTitle')}
+            body={t('schedule.calendar.tasksError')}
+            actionLabel={t('common.retry')}
+            onAction={() => tasks.refresh()}
+            style={styles.block}
+            testID="calendar-tasks-error"
+          />
+        ) : null}
+        {farms.error === 'error' ? (
+          <AlertCard
+            variant="warning"
+            title={t('schedule.calendar.errorTitle')}
+            body={t('schedule.calendar.plotsError')}
+            actionLabel={t('common.retry')}
+            onAction={() => farms.refresh()}
+            style={styles.block}
+            testID="calendar-plots-error"
+          />
+        ) : null}
+
+        {/* Month grid */}
+        <Card style={styles.block} padding={spacing.md}>
+          <View style={styles.monthNav}>
+            <Pressable
+              onPress={() => shiftMonth(-1)}
+              accessibilityRole="button"
+              accessibilityLabel={t('schedule.calendar.prev')}
+              style={styles.iconBtn}
+              testID="calendar-prev"
+            >
+              <ChevronLeft size={22} color={colors.text} />
+            </Pressable>
+            <AppText variant="h3" accessibilityRole="header" testID="calendar-month">
+              {t('schedule.monthYear', { month: monthName(t, month), year })}
+            </AppText>
+            <Pressable
+              onPress={() => shiftMonth(1)}
+              accessibilityRole="button"
+              accessibilityLabel={t('schedule.calendar.next')}
+              style={styles.iconBtn}
+              testID="calendar-next"
+            >
+              <ChevronRight size={22} color={colors.text} />
+            </Pressable>
           </View>
-          <TouchableOpacity
-            onPress={() => setShowAI(true)}
-            style={[
-              styles.aiHeaderBtn,
-              { backgroundColor: colors.primary + '1F', borderColor: colors.primary + '40' },
-            ]}
-          >
-            <BrainCircuit size={16} color={colors.primary} />
-            <Text style={styles.aiHeaderBtnText}>AI</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => openAdd()}
-            style={[styles.addHeaderBtn, { backgroundColor: colors.primary }]}
-          >
-            <Plus size={16} color="#000" strokeWidth={2.5} />
-          </TouchableOpacity>
+
+          <View style={styles.week}>
+            {[0, 1, 2, 3, 4, 5, 6].map((d) => (
+              <AppText
+                key={d}
+                variant="micro"
+                tone="muted"
+                style={styles.weekday}
+                importantForAccessibility="no"
+              >
+                {weekdayShort(t, d)}
+              </AppText>
+            ))}
+          </View>
+
+          {initialLoading ? (
+            <SkeletonGroup label={t('state.loading')}>
+              <SkeletonBlock height={220} />
+            </SkeletonGroup>
+          ) : (
+            <View style={styles.grid}>
+              {grid.map((day, i) => {
+                if (!day) return <View key={`e${i}`} style={styles.cell} />;
+                const date = new Date(year, month, day);
+                const k = dayKey(date);
+                const nTasks = (tasksByDay[k] ?? []).filter((x) => x.status !== 'done').length;
+                const evs = eventsByDay[k] ?? [];
+                const count = (tasksByDay[k]?.length ?? 0) + evs.length;
+                const isSel = sameDay(date, selected);
+                const isToday = sameDay(date, today);
+                const label = formatDayMonth(t, date);
+                return (
+                  <Pressable
+                    key={k}
+                    onPress={() => setSelected(date)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSel }}
+                    accessibilityLabel={
+                      count > 0
+                        ? t('schedule.calendar.cell', { date: label, count })
+                        : t('schedule.calendar.cellEmpty', { date: label })
+                    }
+                    style={styles.cell}
+                    testID={`calendar-day-${day}`}
+                  >
+                    <View
+                      style={[
+                        styles.dayCircle,
+                        isToday && { borderColor: colors.primary, borderWidth: 1.5 },
+                        isSel && { backgroundColor: colors.primary },
+                      ]}
+                    >
+                      <AppText
+                        variant="label"
+                        tone={isSel ? 'onPrimary' : isToday ? 'primary' : 'default'}
+                      >
+                        {String(day)}
+                      </AppText>
+                    </View>
+                    <View style={styles.dots}>
+                      {nTasks > 0 ? (
+                        <View style={[styles.dot, { backgroundColor: colors.primary }]} />
+                      ) : null}
+                      {evs.some((e) => e.kind === 'planting') ? (
+                        <View style={[styles.dot, { backgroundColor: colors.success }]} />
+                      ) : null}
+                      {evs.some((e) => e.kind === 'harvest') ? (
+                        <View style={[styles.dot, { backgroundColor: colors.warning }]} />
+                      ) : null}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+
+          <View style={styles.legend}>
+            {(
+              [
+                ['schedule.calendar.legend.task', colors.primary],
+                ['schedule.calendar.legend.planting', colors.success],
+                ['schedule.calendar.legend.harvest', colors.warning],
+              ] as const
+            ).map(([key, c]) => (
+              <View key={key} style={styles.legendItem}>
+                <View style={[styles.dot, { backgroundColor: c }]} />
+                <AppText variant="caption" tone="muted">
+                  {t(key)}
+                </AppText>
+              </View>
+            ))}
+          </View>
+          {!initialLoading && !monthHasItems ? (
+            <AppText variant="caption" tone="muted" style={{ marginTop: spacing.sm }}>
+              {t('schedule.calendar.monthEmpty')}
+            </AppText>
+          ) : null}
+        </Card>
+
+        {/* Selected day agenda */}
+        <View style={[styles.rowBetween, styles.blockSm]}>
+          <View style={{ flex: 1 }}>
+            <AppText variant="h3" accessibilityRole="header" testID="calendar-selected">
+              {formatDayMonth(t, selected)}
+              {sameDay(selected, today) ? ` · ${t('schedule.calendar.today')}` : ''}
+            </AppText>
+            <AppText variant="caption" tone="muted">
+              {t('schedule.calendar.dayCount', {
+                tasks: dayTasks.length,
+                events: dayEvents.length,
+              })}
+            </AppText>
+          </View>
         </View>
 
-        {/* Filter pills */}
-        {renderFilters()}
+        {dayTasks.length === 0 && dayEvents.length === 0 ? (
+          <Card style={styles.block}>
+            <EmptyState
+              icon={<CalendarDays size={48} color={colors.primary} />}
+              title={t('schedule.calendar.day.empty.title')}
+              description={t('schedule.calendar.day.empty.body')}
+              actionLabel={t('schedule.calendar.addForDay')}
+              onAction={() => setShowCreate(true)}
+              style={{ paddingVertical: spacing.md }}
+            />
+          </Card>
+        ) : (
+          <>
+            {dayEvents.length > 0 ? (
+              <Card padding={0} style={styles.block}>
+                {dayEvents.map((e, i) => (
+                  <ListRow
+                    key={e.id}
+                    title={t(
+                      e.kind === 'planting'
+                        ? 'schedule.calendar.planting'
+                        : 'schedule.calendar.harvest',
+                      { plot: e.plot }
+                    )}
+                    subtitle={
+                      e.crop
+                        ? t('schedule.calendar.plotSource', { crop: e.crop })
+                        : t('schedule.calendar.plotSourceNoCrop')
+                    }
+                    leading={
+                      e.kind === 'planting' ? (
+                        <Sprout size={20} color={colors.successText} />
+                      ) : (
+                        <Wheat size={20} color={colors.warningText} />
+                      )
+                    }
+                    divider={i < dayEvents.length - 1}
+                  />
+                ))}
+              </Card>
+            ) : null}
+            {dayTasks.length > 0 ? (
+              <Card padding={0} style={styles.block}>
+                {dayTasks.map((task, i) => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    syncState={syncStates[task.id]}
+                    onComplete={(x) => tasks.completeTask(x.id)}
+                    onCancel={handleCancel}
+                    divider={i < dayTasks.length - 1}
+                  />
+                ))}
+              </Card>
+            ) : null}
+            <Button
+              label={t('schedule.calendar.addForDay')}
+              variant="outline"
+              icon={<Plus size={18} color={colors.text} />}
+              onPress={() => setShowCreate(true)}
+              style={styles.block}
+            />
+          </>
+        )}
+      </ScrollView>
 
-        {/* Calendar grid */}
-        <View style={{ paddingHorizontal: 16 }}>{renderGrid()}</View>
-
-        {/* Day view */}
-        <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 8 }}>{renderDayList()}</View>
-      </SafeAreaView>
-
-      {/* FAB */}
-      <TouchableOpacity
-        onPress={() => openAdd()}
-        style={[styles.fab, { backgroundColor: colors.primary }]}
-        activeOpacity={0.85}
-      >
-        <Plus size={24} color="#000" strokeWidth={2.5} />
-      </TouchableOpacity>
-
-      {/* Modals */}
-      {renderAddModal()}
-      {renderAIPanel()}
-    </View>
+      <TaskFormSheet
+        visible={showCreate}
+        onClose={() => setShowCreate(false)}
+        onSubmit={handleCreate}
+        fixedDate={selected}
+        isOffline={isOffline}
+      />
+    </SafeAreaView>
   );
 }
 
-// ── Styles ─────────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  root: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 16 : 4,
-    paddingBottom: 10,
-    gap: 10,
-  },
-  headerTitle: { fontSize: 18, fontFamily: 'InstrumentSerif_400Regular', lineHeight: 22 },
-  headerSub: { fontSize: 10, fontFamily: 'Inter_500Medium' },
-  aiHeaderBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  aiHeaderBtnText: { fontSize: 11, fontFamily: 'Inter_700Bold', color: '#2E6F40' },
-  addHeaderBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  filterRow: { paddingHorizontal: 16, paddingBottom: 10, gap: 8 },
-  filterPill: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
-  filterText: { fontSize: 11, fontFamily: 'Inter_700Bold' },
-
-  gridCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    overflow: 'hidden',
-    padding: 14,
-    marginBottom: 10,
-  },
-  monthNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  monthTitle: { fontSize: 20, fontFamily: 'InstrumentSerif_400Regular' },
-  yearLabel: { fontSize: 10, fontFamily: 'Inter_500Medium' },
-  dayLabels: { flexDirection: 'row', marginBottom: 4 },
-  dayLabel: { fontSize: 10, fontFamily: 'Inter_700Bold', textAlign: 'center' },
-  gridWrap: { flexDirection: 'row', flexWrap: 'wrap' },
-  cell: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 4,
-    borderRadius: 10,
-  },
-  cellSelected: { backgroundColor: '#2E6F40' },
-  cellToday: { borderWidth: 1.5, borderColor: '#2E6F40', borderRadius: 10 },
-  cellNum: { fontSize: 13, fontFamily: 'InstrumentSerif_400Regular' },
-  dotRow: { flexDirection: 'row', gap: 2, marginTop: 2 },
-  taskDot: { width: 4, height: 4, borderRadius: 2 },
-
-  dayHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  dayHeaderTitle: { fontSize: 16, fontFamily: 'InstrumentSerif_400Regular' },
-  dayHeaderSub: { fontSize: 10, fontFamily: 'Inter_500Medium', marginTop: 1 },
-  addDayBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  addDayBtnText: { fontSize: 11, fontFamily: 'Inter_700Bold', color: '#2E6F40' },
-
-  emptyDay: { alignItems: 'center', paddingTop: 32, gap: 10 },
-  emptyDayText: { fontSize: 13, fontFamily: 'Inter_500Medium', textAlign: 'center' },
-  emptyDayBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 14,
-  },
-  emptyDayBtnText: { fontSize: 12, fontFamily: 'Inter_700Bold', color: '#000' },
-
-  taskRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  taskIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  taskTitle: { fontSize: 13, fontFamily: 'Inter_600SemiBold', lineHeight: 18 },
-  taskBlock: { fontSize: 9, fontFamily: 'Inter_500Medium' },
-  priBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5, borderWidth: 1 },
-  priBadgeText: { fontSize: 7, fontFamily: 'Inter_700Bold' },
-  completeBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  deleteBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-
-  fab: {
-    position: 'absolute',
-    bottom: 28,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#2E6F40',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-
-  // ── Add modal ──────────────────────────────────────────────────────────────
-  modalOverlay: { flex: 1, justifyContent: 'flex-end' },
-  modalSheet: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    borderTopWidth: 1,
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    padding: 20,
-    overflow: 'hidden',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  modalTitle: { fontSize: 20, fontFamily: 'InstrumentSerif_400Regular' },
-  modalSub: { fontSize: 11, fontFamily: 'Inter_500Medium', marginTop: 2 },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  inputWrap: {
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 16,
-  },
-  taskInput: { fontSize: 15, fontFamily: 'Inter_500Medium', minHeight: 40 },
-  fieldLabel: { fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 0.8, marginBottom: 8 },
-  priorityRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  priBtn: { flex: 1, paddingVertical: 7, borderRadius: 10, borderWidth: 1.5, alignItems: 'center' },
-  priBtnText: { fontSize: 9, fontFamily: 'Inter_700Bold' },
-  catBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  catBtnText: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
-  aiHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 16,
-  },
-  aiHintText: { fontSize: 11, fontFamily: 'Inter_600SemiBold', flex: 1 },
-  modalActions: { flexDirection: 'row', gap: 10 },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  cancelBtnText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
-  saveBtn: {
-    flex: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 13,
-    borderRadius: 14,
-  },
-  saveBtnText: { fontSize: 13, fontFamily: 'Inter_700Bold', color: '#000' },
-
-  // ── AI panel ──────────────────────────────────────────────────────────────
-  aiOverlay: { flex: 1, justifyContent: 'flex-end' },
-  aiSheet: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    borderTopWidth: 1,
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    overflow: 'hidden',
-    maxHeight: '85%',
-  },
-  aiHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    paddingBottom: 10,
-  },
-  aiAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(46, 111, 64,0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.3)',
-  },
-  aiTitle: { fontSize: 15, fontFamily: 'InstrumentSerif_400Regular' },
-  aiSub: { fontSize: 10, fontFamily: 'Inter_500Medium' },
-  aiLiveDot: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginLeft: 8,
-  },
-  quickPrompts: { paddingHorizontal: 16, paddingBottom: 8, gap: 8 },
-  quickPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  quickPillText: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
-  chatHistory: { maxHeight: 260, paddingHorizontal: 16 },
-  chatBubble: { borderRadius: 16, padding: 12, maxWidth: '85%' },
-  chatUser: { alignSelf: 'flex-end', borderBottomRightRadius: 4 },
-  chatAI: { alignSelf: 'flex-start', borderBottomLeftRadius: 4 },
-  chatText: { fontSize: 13, fontFamily: 'Inter_500Medium', lineHeight: 19 },
-  aiInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-    margin: 12,
-    marginTop: 8,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  aiInput: { flex: 1, fontSize: 13, fontFamily: 'Inter_500Medium', minHeight: 36 },
-  aiSendBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+const makeStyles = (spacing: any) =>
+  StyleSheet.create({
+    safe: { flex: 1 },
+    content: { padding: spacing.lg, paddingBottom: 120 },
+    block: { marginBottom: spacing.lg },
+    blockSm: { marginBottom: spacing.md },
+    rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    iconBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+    monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    week: { flexDirection: 'row', marginTop: spacing.sm },
+    weekday: { width: `${100 / 7}%` as any, textAlign: 'center' },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: spacing.xs },
+    cell: {
+      width: `${100 / 7}%` as any,
+      minHeight: 48,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 2,
+    },
+    dayCircle: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    dots: { flexDirection: 'row', gap: 3, height: 6, marginTop: 2 },
+    dot: { width: 6, height: 6, borderRadius: 3 },
+    legend: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginTop: spacing.md },
+    legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  });

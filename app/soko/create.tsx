@@ -18,6 +18,7 @@ import { CROPS, REGIONS, cropNames } from '../../constants/onboardingOptions';
 import { useTheme } from '../../constants/Theme';
 import { useMyUserId } from '../../hooks/useListings';
 import { useT } from '../../lib/i18n';
+import { pickLocalized } from '../../lib/scheduleFormat';
 import {
   createListing,
   hasErrors,
@@ -103,7 +104,7 @@ export default function CreateListing() {
               return (
                 <Chip
                   key={c}
-                  label={lang === 'sw' ? n.sw : n.en}
+                  label={pickLocalized(lang, n)}
                   selected={crop === c}
                   onPress={() => setCrop(c)}
                 />

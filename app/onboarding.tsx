@@ -226,21 +226,15 @@ export default function OnboardingScreen() {
       });
       if (!saved.ok && saved.reason !== 'not_configured') {
         addNotification({
-          title: lang === 'sw' ? 'Wasifu haujasawazishwa' : 'Profile not synced',
-          body:
-            lang === 'sw'
-              ? 'Wasifu wa shamba umehifadhiwa kwenye kifaa chako lakini haujasawazishwa mtandaoni.'
-              : 'Your farm profile is saved on this device but could not sync online yet.',
+          title: t('schedule.onboarding.notSynced.title'),
+          body: t('schedule.onboarding.notSynced.body'),
           type: 'warning',
         });
       }
       if (!minted.serverMinted) {
         addNotification({
-          title: lang === 'sw' ? 'Agro ID ya muda' : 'Provisional Agro ID',
-          body:
-            lang === 'sw'
-              ? 'Agro ID yako ni ya muda hadi itakapothibitishwa mtandaoni.'
-              : 'Your Agro ID is provisional until it is confirmed online.',
+          title: t('schedule.onboarding.provisional.title'),
+          body: t('schedule.onboarding.provisional.body'),
           type: 'warning',
         });
       }

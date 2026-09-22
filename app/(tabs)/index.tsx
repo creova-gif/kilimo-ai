@@ -36,6 +36,7 @@ import { useKilimoStore } from '../../store/useKilimoStore';
 import { useTasks, type Task } from '../../hooks/useTasks';
 import { useWeather } from '../../hooks/useWeather';
 import { useT, type TranslationKey } from '../../lib/i18n';
+import { taskTitle } from '../../lib/scheduleFormat';
 import {
   AppText,
   Card,
@@ -82,7 +83,7 @@ export default function HomeScreen() {
   const firstName = (agroId?.name ?? '').trim().split(/\s+/)[0] ?? '';
   const dateLabel = useMemo(
     () =>
-      new Date().toLocaleDateString(lang === 'sw' ? 'sw-TZ' : 'en-GB', {
+      new Date().toLocaleDateString(t('schedule.dateLocale'), {
         weekday: 'long',
         day: 'numeric',
         month: 'long',
@@ -233,7 +234,7 @@ export default function HomeScreen() {
           ) : (
             <ListGroup style={styles.gap}>
               {todayTasks.map((task, i) => {
-                const title = lang === 'sw' && task.titleSw ? task.titleSw : task.title;
+                const title = taskTitle(task, lang);
                 return (
                   <ListRow
                     key={task.id}

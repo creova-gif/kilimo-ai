@@ -46,6 +46,7 @@ import {
   tasksForPlot,
 } from '../../lib/farms';
 import { useT, type TranslationKey } from '../../lib/i18n';
+import { taskTitle } from '../../lib/scheduleFormat';
 import { useKilimoStore } from '../../store/useKilimoStore';
 
 const TASK_BADGE: Record<Task['status'], 'success' | 'info' | 'neutral'> = {
@@ -343,12 +344,12 @@ export default function PlotDetailScreen() {
               {linked.map((task) => (
                 <ListRow
                   key={task.id}
-                  title={lang === 'sw' && task.titleSw ? task.titleSw : task.title}
+                  title={taskTitle(task, lang)}
                   subtitle={
                     task.dueDate
                       ? t('farms.task.due', {
                           date: new Date(task.dueDate).toLocaleDateString(
-                            lang === 'sw' ? 'sw-TZ' : 'en-GB',
+                            t('schedule.dateLocale'),
                             { day: 'numeric', month: 'short', year: 'numeric' }
                           ),
                         })

@@ -27,6 +27,7 @@ import { CROPS, cropNames } from '../../constants/onboardingOptions';
 import { useTheme } from '../../constants/Theme';
 import { useListings } from '../../hooks/useListings';
 import { useT } from '../../lib/i18n';
+import { pickLocalized } from '../../lib/scheduleFormat';
 
 export default function SokoScreen() {
   const router = useRouter();
@@ -83,7 +84,7 @@ export default function SokoScreen() {
         {crops.map((c) => (
           <Chip
             key={c.en}
-            label={lang === 'sw' ? c.sw : c.en}
+            label={pickLocalized(lang, c)}
             selected={crop === c.en}
             onPress={() => setCrop(crop === c.en ? null : c.en)}
             style={styles.chip}
