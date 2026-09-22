@@ -17,8 +17,8 @@ P1 high, P2 medium, P3 low. Status starts as `Open`.
 | KIL-009 | P2 | RAG is deployed but unused | `supabase/functions/rag-chat`; `public.knowledge_base` | Code + DB query | AI assistant grounded in `knowledge_base` | Client never calls `rag-chat`; 8 rows, **0 embeddings** | **Fixed** `ad4c5de`: AI tab calls `rag-chat`; full-text retrieval without a key, vector search once `scripts/embed-knowledge.ts` fills embeddings. Generated answers need `OPENAI_API_KEY`. |
 | KIL-010 | P2 | `lib/session.ts` `signOutEverywhere` not wired | `lib/session.ts` | Grep | Profile sign-out uses offline-safe sign-out | New file, no importer | **Fixed** `9472783`: profile sign-out uses `signOutCurrentUser`. |
 | KIL-011 | P2 | Duplicate legal routes | `privacy`, `terms`, `legal/*` | Route list | One copy each | Legacy duplication | **Fixed** `d51ed21`: `/privacy` and `/terms` redirect to `/legal/*`. |
-| KIL-012 | P3 | Fonts are aliased | `app/_layout.tsx:219-227` | Code read | Instrument Sans/Serif loaded as themselves | `Inter_*` names aliased | Open |
-| KIL-013 | P2 | Simulator baseline not yet confirmed equal to HEAD | `IOS_SIMULATOR_SOURCE_AUDIT.md` | Timestamp evidence only | Bundle matches `d8c5d70` | Not compared | Open |
+| KIL-012 | P3 | Fonts are aliased | `app/_layout.tsx:219-227` | Code read | Instrument Sans/Serif loaded as themselves | `Inter_*` names aliased | **Fixed** `49c28e2`: Instrument Sans registered under its own names; `Inter_*` kept as documented aliases. |
+| KIL-013 | P2 | Simulator baseline not yet confirmed equal to HEAD | `IOS_SIMULATOR_SOURCE_AUDIT.md` | Timestamp evidence only | Bundle matches `d8c5d70` | Not compared | **Resolved** 2026-09-22: superseded — the simulator now runs a Release build made from the committed branch head. |
 
 Fix and verification columns (root cause confirmed, fix, regression test) are filled when an issue is worked.
 
@@ -31,3 +31,4 @@ Fix and verification columns (root cause confirmed, fix, regression test) are fi
 - `tsc --noEmit` clean; Jest 658/658; `expo export --platform ios` succeeds.
 - 2026-09-22: Wave 2 migrations (soil_tests, knowledge_search, agro_ledger_summary over finance_entries) applied after dump
   `~/kilimo-backups/kilimo_pre_wave2_20260922-110811.dump`. `scripts/rls-smoke.py` 90/90. `tsc` clean; Jest 795/795.
+- 2026-09-22: Release build from the branch head installed on the simulator; `.maestro/06_add_farm.yaml` passes and the row is confirmed in Postgres. Final checks in `MIGRATION_REPORT.md`.
