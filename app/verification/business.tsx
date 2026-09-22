@@ -1,85 +1,118 @@
+/**
+ * Verification step 2 — optional business details, then submit to the submit-verification edge
+ * function. Only on the server's success does the local status become 'pending'. On any failure
+ * the person sees why and nothing is marked as submitted.
+ */
 import React, { useState } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { useRouter } from 'expo-router';
-import PageScaffold from '../../components/PageScaffold';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
-import { Badge } from '../../components/ui/Badge';
+import { useTheme } from '../../constants/Theme';
+import { useT } from '../../lib/i18n';
 import { useKilimoStore } from '../../store/useKilimoStore';
 import { getSupabase } from '../../lib/supabase';
-import { useTheme } from '../../constants/Theme';
+import { AlertCard, Button, TextField } from '../../components/ui';
+import { ProfileScreenFrame } from '../../components/profile/ProfileScreenFrame';
+import {
+  SUBMIT_ERROR_KEYS,
+  clearDraft,
+  getDraft,
+  isValidNationalId,
+  isValidTin,
+  submitVerification,
+} from '../../components/profile/verification';
 
 export default function BusinessVerification() {
-  const router = useRouter();
   const { colors } = useTheme();
+  const { t } = useT();
+  const router = useRouter();
+  const isOnline = useKilimoStore((s) => s.isOnline);
   const updateAgroId = useKilimoStore((s) => s.updateAgroId);
-  const agroId = useKilimoStore((s) => s.agroId);
-  const [tin, setTin] = useState('');
-  const [regNumber, setRegNumber] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const initial = getDraft();
+  const [businessName, setBusinessName] = useState(initial.businessName);
+  const [tin, setTin] = useState(initial.tin);
+  const [regNumber, setRegNumber] = useState(initial.regNumber);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<{ key: string; detail?: string } | null>(null);
 
-  const handleSubmit = async () => {
-    setIsLoading(true);
-    try {
-      const supabase = getSupabase();
-      if (!supabase) throw new Error('Could not initialize Supabase client');
+  const hasId = isValidNationalId(initial.nationalId);
+  const tinValid = isValidTin(tin);
 
-      const { data, error } = await supabase.functions.invoke('submit-verification', {
-        body: {
-          agroId: agroId,
-          tin,
-          regNumber,
-          verificationType: 'business',
-        },
-      });
-
-      if (error) throw error;
-
+  const submit = async () => {
+    setError(null);
+    setSubmitting(true);
+    const res = await submitVerification(
+      getSupabase(),
+      { ...getDraft(), businessName, tin, regNumber },
+      isOnline
+    );
+    setSubmitting(false);
+    if (res.ok === true) {
+      clearDraft();
       updateAgroId({ verificationStatus: 'pending' });
-      router.replace('/verification/pending');
-    } catch (error: any) {
-      console.warn('Failed to submit verification to Edge Function:', error);
-      // Fallback: still update state to pending so user can proceed if offline or missing edge function
-      updateAgroId({ verificationStatus: 'pending' });
-      router.replace('/verification/pending');
-    } finally {
-      setIsLoading(false);
+      router.replace('/verification/pending' as any);
+      return;
     }
+    const fail = res as { reason: string; detail?: string };
+    setError({ key: SUBMIT_ERROR_KEYS[fail.reason] ?? SUBMIT_ERROR_KEYS.server, detail: fail.detail });
   };
 
   return (
-    <PageScaffold title="Business Details" subtitle="Step 2 of 2">
-      <View style={styles.content}>
-        <View style={styles.badgeWrap}>
-          <Badge label="Optional for Smallholders" variant="info" />
-        </View>
-
-        <Input
-          label="TIN Number (Optional)"
-          placeholder="123-456-789"
-          value={tin}
-          onChangeText={setTin}
-          keyboardType="number-pad"
+    <ProfileScreenFrame
+      title={t('profile.verify.business.title')}
+      subtitle={t('profile.verify.step', { step: 2, total: 2 })}
+      fallbackRoute="/verification/personal"
+    >
+      {!hasId ? (
+        <AlertCard
+          variant="warning"
+          title={t('profile.verify.business.missingId')}
+          actionLabel={t('profile.verify.business.goBack')}
+          onAction={() => router.replace('/verification/personal' as any)}
         />
-        <Input
-          label="Business Registration (BRELA) (Optional)"
-          placeholder="123456"
-          value={regNumber}
-          onChangeText={setRegNumber}
+      ) : null}
+      <Text style={[styles.lead, { color: colors.textMute }]}>
+        {t('profile.verify.business.body')}
+      </Text>
+      <TextField
+        label={t('profile.verify.business.nameLabel')}
+        value={businessName}
+        onChangeText={setBusinessName}
+        accessibilityLabel={t('profile.verify.business.nameLabel')}
+      />
+      <TextField
+        label={t('profile.verify.business.tinLabel')}
+        hint={t('profile.verify.business.tinHint')}
+        error={!tinValid ? t('profile.verify.business.tinError') : undefined}
+        value={tin}
+        onChangeText={setTin}
+        keyboardType="number-pad"
+        accessibilityLabel={t('profile.verify.business.tinLabel')}
+      />
+      <TextField
+        label={t('profile.verify.business.regLabel')}
+        value={regNumber}
+        onChangeText={setRegNumber}
+        autoCapitalize="characters"
+        accessibilityLabel={t('profile.verify.business.regLabel')}
+      />
+      {error ? (
+        <AlertCard
+          variant="danger"
+          title={t(error.key as any)}
+          body={error.detail || undefined}
+          announce
         />
-
-        <Button
-          label={isLoading ? 'Submitting...' : 'Submit Application'}
-          onPress={handleSubmit}
-          loading={isLoading}
-          style={{ marginTop: 24 }}
-        />
-      </View>
-    </PageScaffold>
+      ) : null}
+      <Button
+        label={submitting ? t('profile.verify.business.submitting') : t('profile.verify.business.submit')}
+        onPress={submit}
+        loading={submitting}
+        disabled={!hasId || !tinValid || submitting}
+      />
+    </ProfileScreenFrame>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 24 },
-  badgeWrap: { marginBottom: 24 },
+  lead: { fontSize: 14, fontFamily: 'Inter_400Regular', lineHeight: 21 },
 });

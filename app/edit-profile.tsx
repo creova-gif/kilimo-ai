@@ -50,6 +50,7 @@ import { useKilimoStore, FarmProfile, AppLanguage, ThemePreference } from '../st
 import { allRoles, roleLabel, CanonicalRole, normalizeRole } from '../lib/access';
 import { useTheme } from '../constants/Theme';
 import { getSupabase } from '../lib/supabase';
+import { translate, type TranslationKey } from '../lib/i18n';
 
 const REGIONS = [
   'Arusha',
@@ -126,9 +127,9 @@ export default function EditProfileScreen() {
   // ── Local editable state ────────────────────────────────────────────────────
   const [name, setName] = useState(agroId?.name ?? '');
   const [role, setRole] = useState<CanonicalRole>(normalizeRole(agroId?.role));
-  const [region, setRegion] = useState(farmProfile?.region ?? 'Arusha');
+  const [region, setRegion] = useState(farmProfile?.region ?? '');
   const [crops, setCrops] = useState<string[]>(farmProfile?.primaryCrops ?? []);
-  const [acres, setAcres] = useState(String(farmProfile?.farmSizeAcres ?? '2'));
+  const [acres, setAcres] = useState(farmProfile?.farmSizeAcres != null ? String(farmProfile.farmSizeAcres) : '');
   const [activity, setActivity] = useState<FarmProfile['mainActivity']>(
     farmProfile?.mainActivity ?? 'mazao'
   );
@@ -138,13 +139,17 @@ export default function EditProfileScreen() {
   const [themePref, setThemePref] = useState<ThemePreference>(themePreference ?? 'system');
   const [saved, setSaved] = useState(false);
 
+  const tr = (key: TranslationKey, params?: Record<string, string | number>) =>
+    translate(lang, key, params);
+
   // ── Dirty tracking ──────────────────────────────────────────────────────────
   const isDirty = useMemo(() => {
     if (name !== (agroId?.name ?? '')) return true;
     if (role !== normalizeRole(agroId?.role)) return true;
-    if (region !== (farmProfile?.region ?? 'Arusha')) return true;
+    if (region !== (farmProfile?.region ?? '')) return true;
     if (JSON.stringify(crops) !== JSON.stringify(farmProfile?.primaryCrops ?? [])) return true;
-    if (acres !== String(farmProfile?.farmSizeAcres ?? '2')) return true;
+    if (acres !== (farmProfile?.farmSizeAcres != null ? String(farmProfile.farmSizeAcres) : ''))
+      return true;
     if (activity !== (farmProfile?.mainActivity ?? 'mazao')) return true;
     if (hasLivestock !== (farmProfile?.hasLivestock ?? false)) return true;
     if (hasIrrigation !== (farmProfile?.hasIrrigation ?? false)) return true;
@@ -171,7 +176,8 @@ export default function EditProfileScreen() {
   // ── Validation ──────────────────────────────────────────────────────────────
   const nameValid = name.trim().length >= 2;
   const cropsValid = crops.length > 0;
-  const canSave = nameValid && cropsValid;
+  const regionValid = region.trim().length > 0;
+  const canSave = nameValid && cropsValid && regionValid;
 
   // ── Back-button guard ───────────────────────────────────────────────────────
   function handleBack() {
@@ -184,12 +190,12 @@ export default function EditProfileScreen() {
       return;
     }
     showSafeAlert(
-      lang === 'sw' ? 'Toka bila Kuhifadhi?' : 'Discard changes?',
-      lang === 'sw' ? 'Mabadiliko yako hayatahifadhiwa.' : 'Your unsaved changes will be lost.',
+      tr('profile.edit.discard.title'),
+      tr('profile.edit.discard.body'),
       [
-        { text: lang === 'sw' ? 'Endelea Kuhariri' : 'Keep Editing', style: 'cancel' },
+        { text: tr('profile.edit.discard.keep'), style: 'cancel' },
         {
-          text: lang === 'sw' ? 'Toka' : 'Discard',
+          text: tr('profile.edit.discard.confirm'),
           style: 'destructive',
           onPress: () => {
             if (router.canGoBack()) {
@@ -237,11 +243,8 @@ export default function EditProfileScreen() {
     if (!result.ok && result.reason !== 'not_configured') {
       console.warn('[EditProfile] backend sync failed:', result.message ?? result.reason);
       addNotification({
-        title: lang === 'sw' ? 'Usawazishaji Umeshindikana' : 'Sync Failed',
-        body:
-          lang === 'sw'
-            ? 'Wasifu umehifadhiwa kwenye kifaa chako lakini haujasawazishwa mtandaoni.'
-            : 'Profile saved on this device but could not sync online.',
+        title: tr('profile.edit.syncFailed.title'),
+        body: tr('profile.edit.syncFailed.body'),
         type: 'warning',
       });
     }
@@ -277,11 +280,8 @@ export default function EditProfileScreen() {
       language: lang,
     });
     addNotification({
-      title: lang === 'sw' ? 'Wasifu Umehifadhiwa' : 'Profile Saved',
-      body:
-        lang === 'sw'
-          ? 'Mapendekezo ya AI yatabadilika papo hapo.'
-          : 'AI recommendations will update immediately.',
+      title: tr('profile.edit.saved.title'),
+      body: tr('profile.edit.saved.body'),
       type: 'success',
     });
     setSaved(true);
@@ -300,58 +300,31 @@ export default function EditProfileScreen() {
   }
 
   // ── i18n ────────────────────────────────────────────────────────────────────
-  const t =
-    lang === 'sw'
-      ? {
-          title: 'Hariri Wasifu wa Shamba',
-          sub: 'Mabadiliko huboresha mapendekezo ya AI mara moja',
-          name: 'Jina kamili',
-          namePh: 'e.g. Amina Juma',
-          nameErr: 'Jina lazima liwe na herufi 2 au zaidi',
-          role: 'Wajibu',
-          region: 'Mkoa',
-          crops: `Mazao makuu (chagua hadi ${MAX_CROPS})`,
-          cropsErr: 'Chagua angalau zao moja',
-          size: 'Ukubwa wa shamba (ekari)',
-          activity: 'Shughuli kuu',
-          mazao: 'Mazao',
-          mifugo: 'Mifugo',
-          mchanganyiko: 'Mchanganyiko',
-          livestock: 'Una mifugo?',
-          irrigation: 'Una umwagiliaji?',
-          language: 'Lugha ya programu',
-          appearance: 'Mandhari',
-          themeSystem: 'Mfumo',
-          themeLight: 'Mwanga',
-          themeDark: 'Giza',
-          save: 'Hifadhi Mabadiliko',
-          unsaved: 'Mabadiliko bila kuhifadhi',
-        }
-      : {
-          title: 'Edit Farm Profile',
-          sub: 'Changes refine your AI recommendations immediately',
-          name: 'Full name',
-          namePh: 'e.g. Amina Juma',
-          nameErr: 'Name must be at least 2 characters',
-          role: 'Role',
-          region: 'Region',
-          crops: `Primary crops (pick up to ${MAX_CROPS})`,
-          cropsErr: 'Select at least one crop',
-          size: 'Farm size (acres)',
-          activity: 'Main activity',
-          mazao: 'Crops',
-          mifugo: 'Livestock',
-          mchanganyiko: 'Mixed',
-          livestock: 'Raise livestock?',
-          irrigation: 'Have irrigation?',
-          language: 'App language',
-          appearance: 'Appearance',
-          themeSystem: 'System',
-          themeLight: 'Light',
-          themeDark: 'Dark',
-          save: 'Save Changes',
-          unsaved: 'Unsaved changes',
-        };
+  const t = {
+    title: tr('profile.edit.title'),
+    sub: tr('profile.edit.sub'),
+    name: tr('profile.edit.name'),
+    namePh: tr('profile.edit.namePh'),
+    nameErr: tr('profile.edit.nameErr'),
+    role: tr('profile.edit.role'),
+    region: tr('profile.edit.region'),
+    crops: tr('profile.edit.crops', { max: MAX_CROPS }),
+    cropsErr: tr('profile.edit.cropsErr'),
+    size: tr('profile.edit.size'),
+    activity: tr('profile.edit.activity'),
+    mazao: tr('profile.edit.activity.crops'),
+    mifugo: tr('profile.edit.activity.livestock'),
+    mchanganyiko: tr('profile.edit.activity.mixed'),
+    livestock: tr('profile.edit.livestock'),
+    irrigation: tr('profile.edit.irrigation'),
+    language: tr('profile.edit.language'),
+    appearance: tr('profile.edit.appearance'),
+    themeSystem: tr('profile.edit.theme.system'),
+    themeLight: tr('profile.edit.theme.light'),
+    themeDark: tr('profile.edit.theme.dark'),
+    save: tr('profile.edit.save'),
+    unsaved: tr('profile.edit.unsaved'),
+  };
 
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
@@ -371,8 +344,8 @@ export default function EditProfileScreen() {
               { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' },
             ]}
             accessibilityRole="button"
-            accessibilityLabel="Go back"
-            accessibilityHint={isDirty ? 'You have unsaved changes' : undefined}
+            accessibilityLabel={tr('common.back')}
+            accessibilityHint={isDirty ? tr('profile.edit.unsavedHint') : undefined}
           >
             <ChevronLeft size={22} color={colors.text} />
           </TouchableOpacity>
@@ -394,7 +367,7 @@ export default function EditProfileScreen() {
               canSave && isDirty && { backgroundColor: colors.primaryLight },
             ]}
             accessibilityRole="button"
-            accessibilityLabel="Save profile"
+            accessibilityLabel={t.save}
             accessibilityState={{ disabled: !(canSave && isDirty) }}
           >
             <Save
@@ -439,11 +412,7 @@ export default function EditProfileScreen() {
                 placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'}
                 style={[s.input, { color: colors.text }]}
                 accessibilityLabel={t.name}
-                accessibilityHint={
-                  lang === 'sw'
-                    ? 'Weka jina lako kamili la herufi mbili au zaidi'
-                    : 'Enter your full name of two or more characters'
-                }
+                accessibilityHint={tr('profile.edit.nameHint')}
               />
             </BlurView>
             {!nameValid && name.length > 0 && (
@@ -528,6 +497,12 @@ export default function EditProfileScreen() {
                 </TouchableOpacity>
               ))}
             </ScrollView>
+            {!regionValid && (
+              <View style={[s.errRow, { marginTop: 6 }]}>
+                <AlertCircle size={12} color="#f59e0b" />
+                <Text style={[s.errText, { color: '#f59e0b' }]}>{tr('profile.edit.regionErr')}</Text>
+              </View>
+            )}
 
             {/* Crops */}
             <Section icon={<Sprout size={16} color={colors.primary} />} label={t.crops} />
@@ -568,9 +543,7 @@ export default function EditProfileScreen() {
               <View style={[s.errRow, { marginTop: 6 }]}>
                 <Check size={12} color={colors.primary} />
                 <Text style={[s.errText, { color: colors.primary }]}>
-                  {lang === 'sw'
-                    ? `Mazao ${MAX_CROPS} yamechaguliwa`
-                    : `${MAX_CROPS} crops selected — max reached`}
+                  {tr('profile.edit.cropsMax', { max: MAX_CROPS })}
                 </Text>
               </View>
             )}
@@ -590,11 +563,7 @@ export default function EditProfileScreen() {
                 placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'}
                 style={[s.input, { color: colors.text }]}
                 accessibilityLabel={t.size}
-                accessibilityHint={
-                  lang === 'sw'
-                    ? 'Weka ukubwa wa shamba lako kwa ekari'
-                    : 'Enter the size of your farm in acres'
-                }
+                accessibilityHint={tr('profile.edit.sizeHint')}
               />
             </BlurView>
 

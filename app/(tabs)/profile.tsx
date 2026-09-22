@@ -1,55 +1,61 @@
-import React, { useState, useMemo } from 'react';
+/**
+ * Profile tab — Agro ID summary, account settings, the "More / Zaidi" feature index (KIL-005),
+ * legal links, sign-out and account deletion.
+ *
+ * Everything shown here is real state: the Agro ID card only renders a person's own Agro ID
+ * (never a placeholder identity), the sync row reads the real offline outbox, and the More section
+ * hides every feature the person's role cannot use (lib/access.tsx).
+ */
+import React from 'react';
 import {
   StyleSheet,
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
-  Dimensions,
-  SafeAreaView,
-  StatusBar,
-  Image,
-  Switch,
   Platform,
+  Alert,
+  AlertButton,
+  Pressable,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Settings,
-  ShieldCheck,
-  HelpCircle,
-  LogOut,
-  ChevronRight,
-  Database,
   Fingerprint,
-  WifiOff,
   Globe,
-  Bot,
-  Award,
-  Tv,
+  Bell,
+  CloudUpload,
+  ShieldCheck,
+  UserPen,
+  LogOut,
   Trash2,
 } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../constants/Theme';
-import Animated, { FadeIn, FadeOut, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useKilimoStore } from '../../store/useKilimoStore';
 import { useAgroAuth } from '../../hooks/useAgroAuth';
-import { ArrowUpRight } from 'lucide-react-native';
-import { Alert, AlertButton } from 'react-native';
+import { useQueueCounts } from '../../hooks/useSyncEngine';
 import { signOutCurrentUser, countUnsyncedChanges } from '../../lib/session';
-import { translate as translateOffline } from '../../lib/i18n';
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-const AGRO_ID_FALLBACK = {
-  name: 'Justin Mafie',
-  role: 'Mkulima Mkuu',
-  location: 'Arusha, Tanzania',
-  id: 'KILIMO-8492-XJ',
-  tier: 'Premium Co-op Member',
-  joinDate: '2023',
-};
+import { translate as translateOffline, useT } from '../../lib/i18n';
+import {
+  allFeatures,
+  normalizeRole,
+  roleLabel,
+  useAccess,
+  type AccessLevel,
+  type Feature,
+} from '../../lib/access';
+import {
+  AppText,
+  Badge,
+  Button,
+  Card,
+  ListGroup,
+  ListRow,
+  ScreenHeader,
+  MIN_TOUCH_TARGET,
+} from '../../components/ui';
+import { visibleMoreGroups } from '../../components/profile/moreFeatures';
 
 const showSafeAlert = (
   title: string,
@@ -66,16 +72,7 @@ const showSafeAlert = (
   };
   const runPrimary = () => {
     const primaryBtn =
-      buttons?.find((b) => b.style === 'destructive') ||
-      buttons?.find(
-        (b) =>
-          b.text === 'Ondoka' ||
-          b.text === 'Discard' ||
-          b.text === 'Sync' ||
-          b.text === 'Kusawazisha'
-      ) ||
-      buttons?.[1] ||
-      buttons?.[0];
+      buttons?.find((b) => b.style === 'destructive') || buttons?.[1] || buttons?.[0];
     primaryBtn?.onPress?.();
   };
 
@@ -94,683 +91,343 @@ const showSafeAlert = (
   }
 };
 
+/** Access level for every feature for the current role (fixed-order loop: hook order is stable). */
+function useAccessMap(): Record<Feature, AccessLevel> {
+  const map = {} as Record<Feature, AccessLevel>;
+  for (const f of allFeatures()) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    map[f] = useAccess(f);
+  }
+  return map;
+}
+
+/** Haptics are a nicety: never let an unavailable module (web, tests) break a press. */
+function haptic(fn: () => unknown) {
+  try {
+    void Promise.resolve(fn()).catch(() => {});
+  } catch {
+    /* unavailable */
+  }
+}
+
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join('')
+    .substring(0, 2)
+    .toUpperCase();
+}
+
 export default function ProfileScreen() {
-  const { colors, spacing, radius, isDark } = useTheme();
+  const { colors, radius } = useTheme();
+  const { t } = useT();
   const router = useRouter();
-  const storedAgroId = useKilimoStore((s) => s.agroId);
-  const isOffline = useKilimoStore((s) => s.isOffline);
-  const setOffline = useKilimoStore((s) => s.setOffline);
+  const agroId = useKilimoStore((s) => s.agroId);
   const resetOnboarding = useKilimoStore((s) => s.resetOnboarding);
   const language = useKilimoStore((s) => s.language);
   const setLanguage = useKilimoStore((s) => s.setLanguage);
-  const { deleteAccount, loading: authLoading } = useAgroAuth();
   const aiCertified = useKilimoStore((s) => s.aiCertified);
+  const { deleteAccount, loading: authLoading } = useAgroAuth();
+  const { pending, failed } = useQueueCounts();
+  const access = useAccessMap();
 
-  const [biometric, setBiometric] = useState(true);
+  const role = normalizeRole(agroId?.role);
+  const moreGroups = visibleMoreGroups(role, (f) => access[f]);
+  const verification = (agroId?.verificationStatus as string) || 'unverified';
 
-  const AGRO_ID_DATA = useMemo(() => {
-    if (storedAgroId) return storedAgroId;
-    return {
-      ...AGRO_ID_FALLBACK,
-      role: language === 'sw' ? 'Mkulima Mkuu' : 'Master Farmer',
-      tier: language === 'sw' ? 'Mwanachama wa Ushirika wa Premium' : 'Premium Co-op Member',
-    };
-  }, [storedAgroId, language]);
+  const syncValue =
+    failed > 0
+      ? t('profile.sync.failed', { count: failed })
+      : pending > 0
+        ? t('profile.sync.pending', { count: pending })
+        : t('profile.sync.clear');
 
-  const PROFILE_SECTIONS = [
-    {
-      title: language === 'sw' ? 'AGRO ID & USALAMA' : 'AGRO ID & SECURITY',
-      items: [
+  const verificationLabel =
+    verification === 'verified'
+      ? t('profile.verification.verified')
+      : verification === 'pending'
+        ? t('profile.verification.pending')
+        : verification === 'rejected'
+          ? t('profile.verification.rejected')
+          : t('profile.verification.unverified');
+
+  const go = (route: string) => {
+    haptic(() => Haptics.selectionAsync());
+    router.push(route as any);
+  };
+
+  const onToggleLanguage = () => {
+    const next = language === 'sw' ? 'en' : 'sw';
+    setLanguage(next);
+    haptic(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
+  };
+
+  const onSignOut = () => {
+    haptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy));
+    // Offline-safe sign-out (lib/session.ts): drains the outbox if online, always
+    // removes the persisted session locally, clears user-scoped data (incl. the queue).
+    const unsynced = countUnsyncedChanges();
+    const so = (key: Parameters<typeof translateOffline>[1], n?: number) =>
+      translateOffline(language, key, n === undefined ? undefined : { count: n });
+    showSafeAlert(
+      so('offline.signOut.title'),
+      unsynced > 0
+        ? `${so('offline.signOut.body')}\n\n${so('offline.signOut.unsynced', unsynced)}`
+        : so('offline.signOut.body'),
+      [
+        { text: translateOffline(language, 'common.cancel'), style: 'cancel' },
         {
-          id: 'identity',
-          title: language === 'sw' ? 'Uthibitisho wa Kibayometriki' : 'Biometric Identity',
-          icon: <Fingerprint size={20} color="#3b82f6" />,
-          hasSwitch: true,
-          switchVal: biometric,
-          onSwitch: (v: boolean) => {
-            setBiometric(v);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          },
-          value: '',
-        },
-        {
-          id: 'security',
-          title: language === 'sw' ? 'Usalama & Faragha' : 'Security & Privacy',
-          icon: <ShieldCheck size={20} color="#64748b" />,
-          hasSwitch: false,
-          value: '',
-          onPress: () => router.push('/privacy' as any),
-        },
-      ],
-    },
-    {
-      title: language === 'sw' ? 'AI & MAFUNZO' : 'AI & TRAINING',
-      items: [
-        {
-          id: 'ai-hub',
-          title: language === 'sw' ? 'Mafunzo ya Sankofa AI' : 'Sankofa AI Training Hub',
-          icon: <Award size={20} color="#eab308" />,
-          hasSwitch: false,
-          value: aiCertified
-            ? language === 'sw'
-              ? 'Imethibitishwa'
-              : 'Certified'
-            : language === 'sw'
-              ? 'Anza'
-              : 'Start',
-          onPress: () => router.push('/ai-training-hub' as any),
-        },
-        {
-          id: 'video-hub',
-          title: language === 'sw' ? 'Maktaba ya Video' : 'Agriculture Video Hub',
-          icon: <Tv size={20} color="#ef4444" />,
-          hasSwitch: false,
-          value: '',
-          onPress: () => router.push('/video-hub' as any),
-        },
-      ],
-    },
-    {
-      title: language === 'sw' ? 'KILIMO CHA KISASA' : 'SMART FARMING',
-      items: [
-        {
-          id: 'iot',
-          title: language === 'sw' ? 'Mifumo ya IoT & Drones' : 'IoT & Drone Systems',
-          icon: <Settings size={20} color="#0ea5e9" />,
-          hasSwitch: false,
-          value: language === 'sw' ? 'Inatafuta...' : 'Searching...',
-          onPress: () => router.push('/iot-systems' as any),
-        },
-        {
-          id: 'soil',
-          title: language === 'sw' ? 'Uchambuzi wa Udongo' : 'Soil Analysis',
-          icon: <Database size={20} color="#a3e635" />,
-          hasSwitch: false,
-          value: '',
-          onPress: () => router.push('/soil-analysis' as any),
-        },
-      ],
-    },
-    {
-      title: language === 'sw' ? 'MIFUMO & MTANDAO' : 'SYSTEM & NETWORK',
-      items: [
-        {
-          id: 'language',
-          title: language === 'sw' ? 'Lugha ya Programu' : 'App Language',
-          icon: <Globe size={20} color={colors.primary} />,
-          hasSwitch: false,
-          value: language === 'sw' ? 'Kiswahili' : 'English',
+          text: so('offline.signOut.confirm'),
+          style: 'destructive',
           onPress: () => {
-            const nextLang = language === 'sw' ? 'en' : 'sw';
-            setLanguage(nextLang);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            showSafeAlert(
-              nextLang === 'sw' ? 'Lugha Imesasishwa' : 'Language Updated',
-              nextLang === 'sw'
-                ? 'Lugha ya programu sasa ni Kiswahili.'
-                : 'App language is now English.'
-            );
+            void signOutCurrentUser();
           },
         },
+      ]
+    );
+  };
+
+  const onDeleteAccount = () => {
+    haptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy));
+    showSafeAlert(
+      t('profile.delete.title'),
+      t('profile.delete.body'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          id: 'offline',
-          title: language === 'sw' ? 'Njia ya Nje ya Mtandao' : 'Offline-First Mode',
-          icon: <WifiOff size={20} color="#ef4444" />,
-          hasSwitch: true,
-          switchVal: isOffline,
-          onSwitch: (v: boolean) => {
-            setOffline(v);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          },
-          value: '',
-        },
-        {
-          id: 'sync',
-          title: language === 'sw' ? 'Kusawazisha Data' : 'Local Cache Sync',
-          icon: <Database size={20} color="#8b5cf6" />,
-          hasSwitch: false,
-          value: language === 'sw' ? 'Mwisho: saa 2 zilizopita' : 'Last sync: 2h ago',
-          onPress: () => {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            showSafeAlert(
-              language === 'sw' ? 'Kusawazisha' : 'Sync',
-              language === 'sw'
-                ? 'Data yako imesawazishwa kikamilifu.'
-                : 'Your data has been fully synchronized.'
-            );
+          text: t('profile.delete.confirm'),
+          style: 'destructive',
+          onPress: async () => {
+            const res = (await deleteAccount()) as { ok: boolean; error?: string };
+            if (res.ok) {
+              haptic(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
+              resetOnboarding();
+            } else {
+              showSafeAlert(
+                t('profile.delete.failedTitle'),
+                t('profile.delete.failedBody', { detail: res.error ?? '' })
+              );
+            }
           },
         },
       ],
-    },
-    {
-      title: language === 'sw' ? 'MSAADA & VIGEZO' : 'HELP & SUPPORT',
-      items: [
-        {
-          id: 'help',
-          title: language === 'sw' ? 'Msaada & Huduma' : 'Help & Support',
-          icon: <HelpCircle size={20} color="#64748b" />,
-          hasSwitch: false,
-          value: '',
-          onPress: () => router.push('/terms' as any),
-        },
-      ],
-    },
-  ];
+      // Irreversible: never auto-confirm if the web dialog is blocked.
+      { cancelOnUnavailable: true }
+    );
+  };
+
+  const iconColor = colors.primary;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-
-      {/* Cinematic Background */}
-      <View style={StyleSheet.absoluteFill}>
-        <LinearGradient
-          colors={isDark ? ['#080C08', '#0E1E10', '#080C08'] : ['#F0FAF2', '#E6F5EB', '#F0FAF2']}
-          style={StyleSheet.absoluteFill}
-        />
-      </View>
-
-      <SafeAreaView style={styles.safeArea}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-        >
-          <View>
-            {/* Header */}
-            <Animated.View style={styles.header}>
-              <Text style={[styles.headerTitle, { color: colors.text }]}>
-                {language === 'sw' ? 'Kitambulisho' : 'Identity'}
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  router.push('/edit-profile' as any);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Edit profile settings"
-                style={{
-                  minHeight: 44,
-                  minWidth: 44,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}
+    <SafeAreaView style={[styles.flex, { backgroundColor: colors.background }]} edges={['top']}>
+      <ScreenHeader
+        variant="large"
+        title={t('profile.title')}
+        trailing={
+          <Pressable
+            onPress={() => go('/edit-profile')}
+            accessibilityRole="button"
+            accessibilityLabel={t('profile.a11y.editProfile')}
+            style={styles.iconButton}
+          >
+            <Settings size={24} color={colors.text} />
+          </Pressable>
+        }
+      />
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Agro ID card — only ever the person's own Agro ID. */}
+        {agroId ? (
+          <Card
+            onPress={() => go('/agro-id')}
+            accessibilityLabel={t('profile.a11y.openAgroId', { name: agroId.name })}
+            style={styles.block}
+          >
+            <View style={styles.idHeader}>
+              <Badge
+                label={t('profile.card.agroId')}
+                variant="solid"
+                size="sm"
+                icon={<Fingerprint size={12} color={colors.onPrimary} />}
+              />
+              {aiCertified ? <Badge label={t('profile.card.certified')} variant="info" size="sm" /> : null}
+              <View style={styles.flex} />
+              <AppText style={{ color: colors.textMute }} selectable>
+                {agroId.id}
+              </AppText>
+            </View>
+            <View style={styles.idRow}>
+              <View
+                style={[
+                  styles.avatar,
+                  { backgroundColor: colors.primarySoft, borderRadius: radius.lg },
+                ]}
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
               >
-                <Settings size={24} color={colors.text} />
-              </TouchableOpacity>
-            </Animated.View>
-
-            {/* Agro ID Card */}
-            <Animated.View style={styles.idCardContainer}>
-              <TouchableOpacity
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  router.push('/agro-id' as any);
-                }}
-                activeOpacity={0.92}
-                accessibilityRole="button"
-                accessibilityLabel="Open Agro ID dashboard"
-              >
-                <BlurView
-                  intensity={isDark ? 30 : 70}
-                  tint={isDark ? 'dark' : 'light'}
-                  style={[styles.idCard, { borderColor: colors.border }]}
-                >
-                  <LinearGradient
-                    colors={
-                      isDark
-                        ? [colors.primary + '26', 'rgba(30, 41, 59, 0.4)']
-                        : [colors.primary + '1A', 'rgba(255, 255, 255, 0.8)']
-                    }
-                    style={StyleSheet.absoluteFill}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                  />
-
-                  <View style={styles.idHeader}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <View style={styles.idBadge}>
-                        <Fingerprint size={12} color={colors.primary} />
-                        <Text style={[styles.idBadgeText, { color: colors.primary }]}>AGRO ID</Text>
-                      </View>
-                      {aiCertified && (
-                        <View
-                          style={[styles.idBadge, { backgroundColor: 'rgba(59, 130, 246, 0.15)' }]}
-                        >
-                          <Bot size={12} color="#3b82f6" />
-                          <Text style={[styles.idBadgeText, { color: '#3b82f6' }]}>
-                            SANKOFA CERTIFIED
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    <Text style={[styles.idNumber, { color: colors.textMute }]}>
-                      {AGRO_ID_DATA.id}
-                    </Text>
-                  </View>
-
-                  <View style={styles.profileRow}>
-                    <View
-                      style={[
-                        styles.profileImage,
-                        {
-                          borderColor: colors.primary + '40',
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                          backgroundColor: colors.card,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={{
-                          color: colors.text,
-                          fontSize: 24,
-                          fontFamily: 'InstrumentSerif_400Regular',
-                        }}
-                      >
-                        {AGRO_ID_DATA.name
-                          .split(' ')
-                          .map((n) => n[0])
-                          .join('')
-                          .substring(0, 2)}
-                      </Text>
-                    </View>
-                    <View style={styles.profileInfo}>
-                      <Text style={[styles.profileName, { color: colors.text }]}>
-                        {AGRO_ID_DATA.name}
-                      </Text>
-                      <Text style={[styles.profileRole, { color: colors.textMute }]}>
-                        {AGRO_ID_DATA.role}
-                      </Text>
-                      <Text style={[styles.profileLocation, { color: colors.textMute }]}>
-                        {AGRO_ID_DATA.location}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={[styles.tierContainer, { borderTopColor: colors.border }]}>
-                    <Text style={[styles.tierText, { color: colors.text }]}>
-                      {AGRO_ID_DATA.tier}
-                    </Text>
-                    <Text style={[styles.joinText, { color: colors.textMute }]}>
-                      {language === 'sw'
-                        ? `Mwanachama tangu ${AGRO_ID_DATA.joinDate}`
-                        : `Member since ${AGRO_ID_DATA.joinDate}`}
-                    </Text>
-                  </View>
-                </BlurView>
-              </TouchableOpacity>
-            </Animated.View>
-
-            {/* Sections */}
-            {PROFILE_SECTIONS.map((section, sIdx) => (
-              <View key={sIdx} style={styles.sectionContainer}>
-                <Text style={[styles.sectionTitle, { color: colors.textMute }]}>
-                  {section.title}
+                <Text style={[styles.avatarText, { color: colors.primary }]}>
+                  {initials(agroId.name || '?')}
                 </Text>
-
-                <BlurView
-                  intensity={isDark ? 20 : 60}
-                  tint={isDark ? 'dark' : 'light'}
-                  style={[styles.sectionBlock, { borderColor: colors.border }]}
-                >
-                  {section.items.map((item, iIdx) => (
-                    <View key={item.id}>
-                      <TouchableOpacity
-                        activeOpacity={item.hasSwitch ? 1 : 0.7}
-                        onPress={() => {
-                          if (!item.hasSwitch && (item as any).onPress) {
-                            Haptics.selectionAsync();
-                            (item as any).onPress();
-                          }
-                        }}
-                        style={styles.itemRow}
-                        accessibilityRole={item.hasSwitch ? 'none' : 'button'}
-                        accessibilityLabel={item.title}
-                        accessibilityHint={!item.hasSwitch && item.value ? item.value : undefined}
-                      >
-                        <View
-                          style={[
-                            styles.itemIconBg,
-                            {
-                              backgroundColor: isDark
-                                ? 'rgba(255,255,255,0.05)'
-                                : 'rgba(0,0,0,0.03)',
-                            },
-                          ]}
-                        >
-                          {item.icon}
-                        </View>
-                        <View style={styles.itemContent}>
-                          <Text style={[styles.itemTitle, { color: colors.text }]}>
-                            {item.title}
-                          </Text>
-                          {!item.hasSwitch && item.value ? (
-                            <Text style={[styles.itemValue, { color: colors.textMute }]}>
-                              {item.value}
-                            </Text>
-                          ) : null}
-                        </View>
-
-                        {item.hasSwitch ? (
-                          <Switch
-                            value={(item as any).switchVal as boolean}
-                            trackColor={{
-                              false: isDark ? '#1C241E' : '#E6DFD5',
-                              true: colors.primary,
-                            }}
-                            thumbColor="#fff"
-                            onValueChange={(v) => (item as any).onSwitch?.(v)}
-                            accessibilityLabel={item.title}
-                            accessibilityRole="switch"
-                            accessibilityState={{ checked: (item as any).switchVal as boolean }}
-                          />
-                        ) : (
-                          <ChevronRight size={20} color={colors.textMute} />
-                        )}
-                      </TouchableOpacity>
-
-                      {iIdx < section.items.length - 1 && (
-                        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-                      )}
-                    </View>
-                  ))}
-                </BlurView>
               </View>
-            ))}
-
-            {/* Logout */}
-            <View>
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                  // Offline-safe sign-out (lib/session.ts): drains the outbox if online, always
-                  // removes the persisted session locally, clears user-scoped data (incl. the queue).
-                  const unsynced = countUnsyncedChanges();
-                  const so = (key: Parameters<typeof translateOffline>[1], n?: number) =>
-                    translateOffline(language, key, n === undefined ? undefined : { count: n });
-                  showSafeAlert(
-                    so('offline.signOut.title'),
-                    unsynced > 0
-                      ? `${so('offline.signOut.body')}\n\n${so('offline.signOut.unsynced', unsynced)}`
-                      : so('offline.signOut.body'),
-                    [
-                      { text: translateOffline(language, 'common.cancel'), style: 'cancel' },
-                      {
-                        text: so('offline.signOut.confirm'),
-                        style: 'destructive',
-                        onPress: () => {
-                          void signOutCurrentUser();
-                        },
-                      },
-                    ]
-                  );
-                }}
-                style={styles.logoutBtn}
-                accessibilityRole="button"
-                accessibilityLabel="Log out"
-                accessibilityHint="Signs you out and returns to the login screen"
-              >
-                <LogOut size={20} color="#ef4444" />
-                <Text style={styles.logoutText}>Ondoka (Log Out)</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Delete account (required by App Store 5.1.1(v) / Google Play) */}
-            <View style={{ marginTop: 12 }}>
-              <TouchableOpacity
-                activeOpacity={0.8}
-                disabled={authLoading}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                  const isSw = language === 'sw';
-                  showSafeAlert(
-                    isSw ? 'Futa Akaunti' : 'Delete Account',
-                    isSw
-                      ? 'Hii itafuta kabisa akaunti yako na taarifa zako zote (rekodi za fedha, Agro ID). Haiwezi kutenduliwa.'
-                      : 'This permanently deletes your account and all your data (financial records, Agro ID). This cannot be undone.',
-                    [
-                      { text: isSw ? 'Ghairi' : 'Cancel', style: 'cancel' },
-                      {
-                        text: isSw ? 'Futa Kabisa' : 'Delete Forever',
-                        style: 'destructive',
-                        onPress: async () => {
-                          const res = await deleteAccount();
-                          if (res.ok) {
-                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                            resetOnboarding();
-                          } else {
-                            showSafeAlert(
-                              isSw ? 'Imeshindikana' : 'Deletion failed',
-                              (isSw ? 'Tafadhali jaribu tena. ' : 'Please try again. ') +
-                                (res.error ?? '')
-                            );
-                          }
-                        },
-                      },
-                    ],
-                    // Irreversible: never auto-confirm if the web dialog is blocked.
-                    { cancelOnUnavailable: true }
-                  );
-                }}
-                style={styles.deleteAccountBtn}
-                accessibilityRole="button"
-                accessibilityLabel={language === 'sw' ? 'Futa akaunti' : 'Delete account'}
-                accessibilityHint={
-                  language === 'sw'
-                    ? 'Kufuta akaunti yako na taarifa zote kabisa'
-                    : 'Permanently deletes your account and all data'
-                }
-              >
-                <Trash2 size={16} color="#ef4444" />
-                <Text style={styles.deleteAccountText}>
-                  {language === 'sw' ? 'Futa Akaunti (Delete Account)' : 'Delete Account'}
+              <View style={styles.flex}>
+                <Text style={[styles.name, { color: colors.text }]} numberOfLines={2}>
+                  {agroId.name}
                 </Text>
-              </TouchableOpacity>
+                <Text style={[styles.meta, { color: colors.textMute }]}>{roleLabel(role)}</Text>
+                {agroId.location ? (
+                  <Text style={[styles.meta, { color: colors.textMute }]}>{agroId.location}</Text>
+                ) : null}
+              </View>
             </View>
-          </View>
+            <View style={[styles.idFooter, { borderTopColor: colors.border }]}>
+              <Text style={[styles.meta, { color: colors.text }]}>
+                {t('profile.card.tier', { tier: agroId.tier })}
+              </Text>
+              {agroId.joinDate ? (
+                <Text style={[styles.meta, { color: colors.textMute }]}>
+                  {t('profile.card.memberSince', { date: agroId.joinDate })}
+                </Text>
+              ) : null}
+            </View>
+          </Card>
+        ) : (
+          <Card style={styles.block}>
+            <Text style={[styles.name, { color: colors.text }]}>{t('profile.card.none.title')}</Text>
+            <Text style={[styles.body, { color: colors.textMute }]}>
+              {t('profile.card.none.body')}
+            </Text>
+            <Button
+              label={t('profile.card.none.action')}
+              onPress={() => go('/agro-id')}
+              size="md"
+              style={{ marginTop: 12 }}
+            />
+          </Card>
+        )}
 
-          <View style={{ height: 100 }} />
-        </ScrollView>
-      </SafeAreaView>
-    </View>
+        {/* Account */}
+        <Text style={[styles.section, { color: colors.textMute }]}>
+          {t('profile.section.account')}
+        </Text>
+        <ListGroup style={styles.block}>
+          <ListRow
+            title={t('profile.row.editProfile')}
+            leading={<UserPen size={20} color={iconColor} />}
+            onPress={() => go('/edit-profile')}
+          />
+          <ListRow
+            title={t('profile.row.verification')}
+            subtitle={verificationLabel}
+            leading={<ShieldCheck size={20} color={iconColor} />}
+            onPress={() =>
+              go(
+                verification === 'pending' || verification === 'verified'
+                  ? '/verification/pending'
+                  : '/verification/intro'
+              )
+            }
+          />
+          <ListRow
+            title={t('profile.row.language')}
+            value={language === 'sw' ? 'Kiswahili' : 'English'}
+            leading={<Globe size={20} color={iconColor} />}
+            onPress={onToggleLanguage}
+            accessibilityHint={t('profile.a11y.languageHint')}
+          />
+          <ListRow
+            title={t('profile.row.notifications')}
+            leading={<Bell size={20} color={iconColor} />}
+            onPress={() => go('/notifications')}
+          />
+          <ListRow
+            title={t('profile.row.sync')}
+            subtitle={syncValue}
+            leading={<CloudUpload size={20} color={failed > 0 ? colors.errorText : iconColor} />}
+            onPress={() => go('/offline-queue')}
+          />
+        </ListGroup>
+
+        {/* More / Zaidi — every feature without another entry point, gated by role. */}
+        <Text
+          accessibilityRole="header"
+          style={[styles.moreTitle, { color: colors.text }]}
+        >
+          {t('profile.more.title')}
+        </Text>
+        {moreGroups.map((group) => (
+          <View key={group.id} testID={`more-group-${group.id}`}>
+            <Text style={[styles.section, { color: colors.textMute }]}>{t(group.titleKey)}</Text>
+            <ListGroup style={styles.block}>
+              {group.items.map((item) => (
+                <ListRow
+                  key={item.id}
+                  title={t(item.titleKey)}
+                  subtitle={t(item.subtitleKey)}
+                  onPress={() => go(item.route)}
+                  accessibilityHint={t('profile.a11y.opens')}
+                />
+              ))}
+            </ListGroup>
+          </View>
+        ))}
+
+        {/* Sign out + delete account */}
+        <Button
+          label={t('profile.signOut')}
+          variant="destructiveOutline"
+          icon={<LogOut size={18} color={colors.errorText} />}
+          onPress={onSignOut}
+          accessibilityHint={t('profile.a11y.signOutHint')}
+          style={styles.block}
+        />
+        {/* Delete account (required by App Store 5.1.1(v) / Google Play) */}
+        <Button
+          label={t('profile.delete.action')}
+          variant="link"
+          size="sm"
+          disabled={authLoading}
+          icon={<Trash2 size={16} color={colors.errorText} />}
+          onPress={onDeleteAccount}
+          accessibilityHint={t('profile.a11y.deleteHint')}
+        />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  flex: { flex: 1 },
+  scroll: { paddingHorizontal: 20, paddingBottom: 140 },
+  iconButton: {
+    minWidth: MIN_TOUCH_TARGET,
+    minHeight: MIN_TOUCH_TARGET,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  safeArea: {
-    flex: 1,
-  },
-  bgOrb: {
-    position: 'absolute',
-    width: 400,
-    height: 400,
-    borderRadius: 200,
-    filter: 'blur(100px)',
-  },
-  bgGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: SCREEN_HEIGHT,
-  },
-  scrollContent: {
-    padding: 24,
+  block: { marginBottom: 20 },
+  idHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
+  idRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 16 },
+  avatar: { width: 64, height: 64, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontSize: 22, fontFamily: 'Inter_700Bold' },
+  name: { fontSize: 20, fontFamily: 'Inter_700Bold', marginBottom: 4 },
+  meta: { fontSize: 13, fontFamily: 'Inter_500Medium', marginTop: 2 },
+  body: { fontSize: 14, fontFamily: 'Inter_400Regular', lineHeight: 20, marginTop: 4 },
+  idFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
     paddingTop: 12,
-    paddingBottom: 120,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontFamily: 'InstrumentSerif_400Regular',
-    letterSpacing: -1,
-  },
-  idCardContainer: {
-    marginBottom: 32,
-  },
-  idCard: {
-    borderRadius: 32,
-    padding: 24,
-    overflow: 'hidden',
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  idHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  idBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(46, 111, 64, 0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    gap: 6,
-  },
-  idBadgeText: {
-    fontSize: 12,
-    fontFamily: 'InstrumentSerif_400Regular',
-    letterSpacing: 1,
-  },
-  idNumber: {
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
-    letterSpacing: 2,
-  },
-  profileRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  profileImage: {
-    width: 72,
-    height: 72,
-    borderRadius: 24,
-    borderWidth: 2,
-  },
-  profileInfo: {
-    marginLeft: 16,
-    flex: 1,
-  },
-  profileName: {
-    fontSize: 24,
-    fontFamily: 'InstrumentSerif_400Regular',
-    letterSpacing: -0.5,
-    marginBottom: 4,
-  },
-  profileRole: {
-    fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
-    marginBottom: 2,
-  },
-  profileLocation: {
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-    opacity: 0.7,
-  },
-  tierContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: 'transparent',
   },
-  tierText: {
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
-  },
-  joinText: {
+  section: {
     fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-  },
-  sectionContainer: {
-    marginBottom: 28,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontFamily: 'InstrumentSerif_400Regular',
-    letterSpacing: 1.5,
-    marginBottom: 12,
-    marginLeft: 8,
-  },
-  sectionBlock: {
-    borderRadius: 24,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-  },
-  itemIconBg: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  itemContent: {
-    flex: 1,
-    marginLeft: 16,
-  },
-  itemTitle: {
-    fontSize: 15,
     fontFamily: 'Inter_600SemiBold',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    marginLeft: 4,
   },
-  itemValue: {
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
-    marginTop: 2,
-  },
-  divider: {
-    height: 1,
-    marginLeft: 72,
-  },
-  logoutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 18,
-    borderRadius: 20,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    gap: 8,
-  },
-  logoutText: {
-    color: '#ef4444',
-    fontSize: 15,
-    fontFamily: 'Inter_800ExtraBold',
-  },
-  deleteAccountBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.35)',
-    backgroundColor: 'transparent',
-    gap: 8,
-  },
-  deleteAccountText: {
-    color: '#ef4444',
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
-  },
+  moreTitle: { fontSize: 20, fontFamily: 'Inter_700Bold', marginBottom: 12, marginTop: 4 },
 });

@@ -1,44 +1,56 @@
+/**
+ * Verification step 1 — national ID (NIDA) or passport number. Held in memory only
+ * (components/profile/verification.ts); submitted on the next step.
+ */
 import React, { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { useRouter } from 'expo-router';
-import PageScaffold from '../../components/PageScaffold';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
+import { useTheme } from '../../constants/Theme';
+import { useT } from '../../lib/i18n';
+import { Button, TextField } from '../../components/ui';
+import { ProfileScreenFrame } from '../../components/profile/ProfileScreenFrame';
+import { getDraft, isValidNationalId, updateDraft } from '../../components/profile/verification';
 
 export default function PersonalVerification() {
+  const { colors } = useTheme();
+  const { t } = useT();
   const router = useRouter();
-  const [nida, setNida] = useState('');
-  const [dob, setDob] = useState('');
-
-  const isValid = nida.length >= 8 && dob.length >= 4;
+  const [nationalId, setNationalId] = useState(getDraft().nationalId);
+  const [touched, setTouched] = useState(false);
+  const valid = isValidNationalId(nationalId);
 
   return (
-    <PageScaffold title="Personal Details" subtitle="Step 1 of 2">
-      <View style={styles.content}>
-        <Input
-          label="NIDA Number or Passport"
-          placeholder="e.g. 19901234..."
-          value={nida}
-          onChangeText={setNida}
-          keyboardType="number-pad"
-        />
-        <Input
-          label="Date of Birth (YYYY-MM-DD)"
-          placeholder="1990-01-01"
-          value={dob}
-          onChangeText={setDob}
-        />
-        <Button
-          label="Continue to Business Info"
-          disabled={!isValid}
-          onPress={() => router.push('/verification/business')}
-          style={{ marginTop: 24 }}
-        />
-      </View>
-    </PageScaffold>
+    <ProfileScreenFrame
+      title={t('profile.verify.personal.title')}
+      subtitle={t('profile.verify.step', { step: 1, total: 2 })}
+      fallbackRoute="/verification/intro"
+    >
+      <Text style={[styles.lead, { color: colors.textMute }]}>
+        {t('profile.verify.personal.body')}
+      </Text>
+      <TextField
+        label={t('profile.verify.personal.idLabel')}
+        hint={t('profile.verify.personal.idHint')}
+        error={touched && !valid ? t('profile.verify.personal.idError') : undefined}
+        value={nationalId}
+        onChangeText={(v) => setNationalId(v)}
+        onBlur={() => setTouched(true)}
+        autoCapitalize="characters"
+        autoCorrect={false}
+        accessibilityLabel={t('profile.verify.personal.idLabel')}
+      />
+      <Button
+        label={t('profile.verify.personal.continue')}
+        disabled={!valid}
+        onPress={() => {
+          updateDraft({ nationalId });
+          router.push('/verification/business' as any);
+        }}
+      />
+    </ProfileScreenFrame>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 24 },
+  lead: { fontSize: 14, fontFamily: 'Inter_400Regular', lineHeight: 21 },
 });
