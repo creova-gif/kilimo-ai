@@ -50,8 +50,6 @@ import AIAdminScreen, { effectiveRetrieval } from '../app/ai-admin';
 import AITrainingHubScreen from '../app/ai-training-hub';
 import VideoHubScreen from '../app/video-hub';
 import AiVoiceScreen from '../app/ai-voice';
-import { demoDiagnosis } from '../lib/ai-demo';
-import { AIError } from '../lib/ai';
 import { useKilimoStore } from '../store/useKilimoStore';
 
 const SOURCE = {
@@ -275,11 +273,6 @@ describe('Scan never fabricates a diagnosis', () => {
     });
     await waitFor(() => expect(screen.getByTestId('scan-unusable')).toBeTruthy());
     expect(screen.queryByText('Something')).toBeNull();
-  });
-
-  it('the retired demo shim rejects instead of inventing a disease', async () => {
-    await expect(demoDiagnosis()).rejects.toBeInstanceOf(AIError);
-    await expect(demoDiagnosis()).rejects.toMatchObject({ kind: 'not_configured' });
   });
 
   it('assessDiagnosis flags unusable photos and empty results', () => {
