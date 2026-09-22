@@ -92,6 +92,18 @@ try:
     req('PATCH', f'/rest/v1/consultation_requests?id=eq.{cid}', ANON, A, {'status': 'answered', 'answer': 'fake'})
     s, d = req('GET', f'/rest/v1/consultation_requests?id=eq.{cid}&select=status,answer', ANON, A)
     check('owner cannot self-answer consultation', d[0]['status'] == 'submitted' and d[0]['answer'] is None, f'{d}')
+    # soil tests (Wave 2): owner-only, must reference the caller's own plot
+    ins(A, 'soil_tests', {'plot_id': plot['id'], 'tested_on': '2026-09-01', 'ph': 6.2})
+    s, d = req('GET', '/rest/v1/soil_tests?select=*', ANON, B)
+    check('B cannot read soil_tests', s == 200 and d == [], f'{s} {d}')
+    s, d = req('POST', '/rest/v1/soil_tests', ANON, B, {'plot_id': plot['id'], 'tested_on': '2026-09-01', 'ph': 5})
+    check("B cannot add soil test to A's plot", s >= 400, f'{s} {d}')
+    # public verification aggregates the REAL finance ledger (service role only; anon denied)
+    s, d = req('GET', f'/rest/v1/agro_ledger_summary?user_id=eq.{aid}&select=entry_count,net_tzs,verified_entry_count', SR)
+    check('verification summary reflects finance_entries', s == 200 and d and d[0]['entry_count'] == 1
+          and float(d[0]['net_tzs']) == -5000 and d[0]['verified_entry_count'] == 0, f'{s} {d}')
+    s, d = req('GET', '/rest/v1/agro_ledger_summary?select=*', ANON, A)
+    check('users cannot read the summary view directly', s >= 400 or d == [], f'{s} {d}')
     # community: groups readable, posts members-only
     g = ins(A, 'peer_groups', {'name': f'Maize growers {tag}', 'description': 'd'})
     s, d = req('GET', f"/rest/v1/peer_group_members?group_id=eq.{g['id']}&user_id=eq.{aid}&select=role", ANON, A)

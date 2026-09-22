@@ -15,7 +15,7 @@
  * Base 300 + up to 550 = 850 max.
  */
 
-import type { LedgerEntry } from '../../store/useFarmDataStore';
+import type { LedgerEntry } from './ledger';
 
 export type CreditBand = 'building' | 'fair' | 'good' | 'strong';
 

@@ -1,5 +1,5 @@
 import { computeCreditScore, bandFor } from '../lib/credit/score';
-import type { LedgerEntry } from '../store/useFarmDataStore';
+import type { LedgerEntry } from '../lib/credit/ledger';
 
 const NOW = '2026-06-01T00:00:00.000Z';
 const daysAgo = (d: number) => new Date(new Date(NOW).getTime() - d * 86400_000).toISOString();
