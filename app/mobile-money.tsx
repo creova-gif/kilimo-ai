@@ -25,7 +25,6 @@ import {
   EyeOff,
   Sparkles,
   Clock,
-  CheckCircle2,
   AlertCircle,
   ChevronRight,
   Wallet,
@@ -38,6 +37,15 @@ import { useTheme } from '../constants/Theme';
 import { useKilimoStore } from '../store/useKilimoStore';
 
 const { width: SW } = Dimensions.get('window');
+
+// No real M-Pesa/Airtel Money API integration exists anywhere in this
+// codebase (wallet-admin's own real workflow is manual receipt entry, since
+// Daraja wiring is a separate, tracked follow-up). This used to fake an
+// instant "Imekamilika/Success" for Send/Receive/Pay Bills after collecting
+// a real phone number and amount — a farmer could believe they'd actually
+// sent money to someone. Matches the same class of finding already fixed
+// in insurance.tsx (fake enrollment) and finance.tsx (fake AUTO-SYNC).
+const MOBILE_MONEY_LIVE = false;
 
 type Provider = 'mpesa' | 'airtel';
 
@@ -152,8 +160,22 @@ export default function MobileMoneyScreen() {
 
   const balance = wallet.balanceTZS;
 
+  const showComingSoon = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    Alert.alert(
+      language === 'sw' ? 'Bado Haipatikani' : 'Coming Soon',
+      language === 'sw'
+        ? 'Kutuma/kupokea pesa kupitia app haipatikani bado. Hakuna pesa iliyotumwa.'
+        : 'Sending/receiving money through the app isn’t available yet. No money was sent.'
+    );
+  };
+
   const handleAction = (id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (!MOBILE_MONEY_LIVE) {
+      showComingSoon();
+      return;
+    }
     setActiveAction((prev) => (prev === id ? null : id));
     setAmount('');
     setPhone('');
@@ -163,6 +185,11 @@ export default function MobileMoneyScreen() {
     const n = parseInt(amount.replace(/,/g, ''), 10);
     if (!phone || !n || n <= 0) {
       Alert.alert(language === 'sw' ? 'Tafadhali jaza fomu' : 'Please complete the form');
+      return;
+    }
+    if (!MOBILE_MONEY_LIVE) {
+      setActiveAction(null);
+      showComingSoon();
       return;
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -264,20 +291,24 @@ export default function MobileMoneyScreen() {
               </View>
               <Text style={s.balAmount}>{hideBalance ? '••••••' : fmtTZS(balance)}</Text>
               <View style={s.balFooter}>
+                {/* No real M-Pesa/Airtel account linkage exists in this app
+                    (wallet.mpesaPhone is never set anywhere) — this used to
+                    unconditionally claim "Active Account" regardless. */}
                 <View style={[s.balBadge, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
-                  <CheckCircle2 size={11} color="rgba(255,255,255,0.9)" />
+                  <AlertCircle size={11} color="rgba(255,255,255,0.9)" />
                   <Text style={s.balBadgeTxt}>
-                    {language === 'sw' ? 'Akaunti Hai' : 'Active Account'}
+                    {language === 'sw' ? 'Haijaunganishwa' : 'Not Linked'}
                   </Text>
                 </View>
                 <TouchableOpacity
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                  }}
+                  disabled={!MOBILE_MONEY_LIVE}
+                  onPress={() => Haptics.selectionAsync()}
                   style={[s.balBadge, { backgroundColor: 'rgba(255,255,255,0.15)' }]}
                 >
                   <RefreshCw size={11} color="rgba(255,255,255,0.9)" />
-                  <Text style={s.balBadgeTxt}>{language === 'sw' ? 'Sasisha' : 'Refresh'}</Text>
+                  <Text style={s.balBadgeTxt}>
+                    {language === 'sw' ? 'Haipatikani' : 'Unavailable'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </LinearGradient>
