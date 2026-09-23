@@ -133,10 +133,6 @@ export default function SoilAnalysis() {
   const { colors, isDark } = useTheme();
   const language = useKilimoStore((s) => s.language);
 
-  // Mock pH historical readings (showing a drop)
-  const phTrendData = [6.8, 6.5, 6.4, 5.9, 5.5, 5.2];
-  const phTrendMonths = ['Des', 'Jan', 'Feb', 'Mac', 'Apr', 'Mei'];
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
@@ -188,11 +184,11 @@ export default function SoilAnalysis() {
             <View style={styles.statusHeader}>
               <View>
                 <Text style={[styles.statusLabel, { color: colors.textMute }]}>
-                  {language === 'sw' ? 'Afya ya Udongo' : 'Overall Soil Health'}
+                  {language === 'sw' ? 'Matokeo ya Udongo' : 'Soil Results'}
                 </Text>
                 <View style={styles.statusRow}>
                   <Text style={[styles.statusMain, { color: '#ef4444' }]}>
-                    {language === 'sw' ? 'Tishio la Asidi' : 'Acidic Alert'}
+                    {language === 'sw' ? 'Hakuna kipimo kilichounganishwa' : 'No test connected'}
                   </Text>
                 </View>
               </View>
@@ -201,12 +197,11 @@ export default function SoilAnalysis() {
               </View>
             </View>
 
-            {/* Bars */}
-            <View style={styles.barsContainer}>
-              <NutrientBar label="Nitrogen (N)" value={85} color={colors.primary} />
-              <NutrientBar label="Phosphorus (P)" value={70} color="#F59E0B" />
-              <NutrientBar label="Potassium (K)" value={60} color="#3b82f6" />
-            </View>
+            <Text style={[styles.noResultsBody, { color: colors.textMute }]}>
+              {language === 'sw'
+                ? 'Unganisha chanzo cha kipimo cha udongo au weka matokeo ya maabara ili kuona N, P, K na pH hapa.'
+                : 'Connect a soil-test source or enter laboratory results to view N, P, K, and pH here.'}
+            </Text>
           </View>
 
           {/* Soil pH Anomaly Alert Banner */}
@@ -219,12 +214,12 @@ export default function SoilAnalysis() {
             <ShieldAlert size={20} color="#ef4444" />
             <View style={{ flex: 1 }}>
               <Text style={styles.anomalyTitle}>
-                {language === 'sw' ? 'TAHADHARI YA pH YA UDONGO' : 'CRITICAL pH ANOMALY DETECTED'}
+                {language === 'sw' ? 'KIPIMO CHA pH KINAHITAJIKA' : 'SOIL pH TEST REQUIRED'}
               </Text>
               <Text style={styles.anomalyDesc}>
                 {language === 'sw'
-                  ? 'pH ya udongo imeshuka kwa kasi kutoka 6.8 (Desemba) hadi 5.2 (Mwezi huu) katika Block A. Udongo ni asidi sana!'
-                  : 'pH levels dropped sharply from 6.8 (Dec) to 5.2 (This Month) in Block A. High soil acidification!'}
+                  ? 'Hakuna historia ya pH au kipimo cha Block A kilichounganishwa kwenye app.'
+                  : 'No pH history or Block A test result is connected to the app.'}
               </Text>
             </View>
           </View>
@@ -232,13 +227,12 @@ export default function SoilAnalysis() {
           {/* Soil pH History Line Chart Section */}
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
             {language === 'sw'
-              ? 'Mwenendo wa pH (Mwisho Miezi 6)'
-              : 'pH Level History (Past 6 Months)'}
+              ? 'Historia ya pH'
+              : 'pH History'}
           </Text>
           <View
             style={[styles.chartCard, { backgroundColor: colors.card, borderColor: colors.border }]}
           >
-            <SoilPHTrendChart data={phTrendData} months={phTrendMonths} colors={colors} />
             <Text
               style={{
                 fontSize: 12,
@@ -249,8 +243,8 @@ export default function SoilAnalysis() {
               }}
             >
               {language === 'sw'
-                ? 'Kiwango cha pH kinapaswa kuwa kati ya 6.0 na 7.0 kwa mazao mengi'
-                : 'pH levels should ideally range between 6.0 and 7.0 for most staple crops'}
+                ? 'Historia itapatikana baada ya vipimo vya udongo kuhifadhiwa. Viwango sahihi hutegemea zao na aina ya udongo.'
+                : 'History will appear after soil tests are saved. Suitable ranges depend on the crop and soil type.'}
             </Text>
           </View>
 
@@ -468,6 +462,11 @@ const styles = StyleSheet.create({
   statusMain: {
     fontSize: 24,
     fontFamily: 'Inter_800ExtraBold',
+  },
+  noResultsBody: {
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+    lineHeight: 18,
   },
   infoIcon: {
     width: 36,
