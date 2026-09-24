@@ -50,7 +50,7 @@ const CATEGORIES: {
   color: string;
   Icon: any;
 }[] = [
-  { key: 'seed', label: 'Seed', swahili: 'Mbegu', color: '#2E6F40', Icon: Wheat },
+  { key: 'seed', label: 'Seed', swahili: 'Mbegu', color: '#3C4A2A', Icon: Wheat },
   { key: 'fertilizer', label: 'Fertilizer', swahili: 'Mbolea', color: '#3b82f6', Icon: Sprout },
   { key: 'pesticide', label: 'Pesticide', swahili: 'Dawa', color: '#f59e0b', Icon: Syringe },
   { key: 'feed', label: 'Feed', swahili: 'Chakula', color: '#8b5cf6', Icon: Beef },
@@ -683,12 +683,12 @@ export default function InventoryScreen() {
               />
               <StatTile
                 icon={
-                  <TrendingDown size={18} color={lowStock.length > 0 ? '#ef4444' : '#2E6F40'} />
+                  <TrendingDown size={18} color={lowStock.length > 0 ? '#ef4444' : '#3C4A2A'} />
                 }
                 label="Stock Chini"
                 value={String(lowStock.length)}
                 sub={lowStock.length > 0 ? 'Angalia' : 'Salama'}
-                accent={lowStock.length > 0 ? '#ef4444' : '#2E6F40'}
+                accent={lowStock.length > 0 ? '#ef4444' : '#3C4A2A'}
               />
               <StatTile
                 icon={<DollarSign size={18} color="#8b5cf6" />}

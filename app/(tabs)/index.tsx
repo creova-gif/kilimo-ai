@@ -1967,7 +1967,7 @@ export default function HomeScreen() {
         id: 'calendar',
         label: language === 'sw' ? 'Kalenda' : 'Calendar',
         icon: <Calendar size={22} color="#fff" />,
-        color: '#3A8D52',
+        color: '#6E8550',
         desc: language === 'sw' ? 'Ratiba ya Shamba' : 'Farm Schedule',
       },
       {
@@ -1981,7 +1981,7 @@ export default function HomeScreen() {
         id: 'market',
         label: language === 'sw' ? 'Soko' : 'Market',
         icon: <TrendingUp size={22} color="#fff" />,
-        color: '#256035',
+        color: '#2F3A21',
         desc: language === 'sw' ? 'Bei za Mazao' : 'Market Prices',
       },
       {
@@ -4337,9 +4337,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
-    backgroundColor: 'rgba(46, 111, 64,0.1)',
+    backgroundColor: 'rgba(60, 74, 42,0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.25)',
+    borderColor: 'rgba(60, 74, 42,0.25)',
   },
   trackProgressTrack: {
     height: 3,
@@ -4351,7 +4351,7 @@ const styles = StyleSheet.create({
   trackProgressFill: {
     height: '100%',
     borderRadius: 2,
-    backgroundColor: '#2E6F40',
+    backgroundColor: '#3C4A2A',
   },
   trackRow: {
     flexDirection: 'row',
@@ -4431,7 +4431,7 @@ const styles = StyleSheet.create({
   trackExpandedBtnText: {
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
-    color: '#2E6F40',
+    color: '#3C4A2A',
   },
 
   // ── Crop Value Card Styles ─────────────────────────────────────────────────
@@ -4584,7 +4584,7 @@ const styles = StyleSheet.create({
   cropValueCtaText: {
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
-    color: '#2E6F40',
+    color: '#3C4A2A',
   },
 
   // ── Daily Organizer Strip Styles ───────────────────────────────────────────
@@ -4676,7 +4676,7 @@ const styles = StyleSheet.create({
   organizerFooterText: {
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
-    color: '#2E6F40',
+    color: '#3C4A2A',
   },
 
   // Quick Action List Styles
@@ -5078,7 +5078,7 @@ const styles = StyleSheet.create({
     width: 200,
     height: 200,
     borderRadius: 100,
-    backgroundColor: 'rgba(46, 111, 64,0.07)',
+    backgroundColor: 'rgba(60, 74, 42,0.07)',
     top: -70,
     right: -50,
   },
@@ -5087,7 +5087,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: 'rgba(46, 111, 64,0.05)',
+    backgroundColor: 'rgba(60, 74, 42,0.05)',
     bottom: -40,
     left: 10,
   },
@@ -5101,9 +5101,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: 'rgba(46, 111, 64,0.15)',
+    backgroundColor: 'rgba(60, 74, 42,0.15)',
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.28)',
+    borderColor: 'rgba(60, 74, 42,0.28)',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
@@ -5111,11 +5111,11 @@ const styles = StyleSheet.create({
   weeklyHeroAiBadgeText: {
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
-    color: '#2E6F40',
+    color: '#3C4A2A',
     letterSpacing: 0.8,
   },
   weeklyHeroLivePill: {
-    backgroundColor: '#2E6F40',
+    backgroundColor: '#3C4A2A',
     paddingHorizontal: 9,
     paddingVertical: 4,
     borderRadius: 20,
@@ -5155,9 +5155,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(46, 111, 64,0.18)',
+    backgroundColor: 'rgba(60, 74, 42,0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.32)',
+    borderColor: 'rgba(60, 74, 42,0.32)',
     paddingHorizontal: 13,
     paddingVertical: 8,
     borderRadius: 20,
@@ -5165,7 +5165,7 @@ const styles = StyleSheet.create({
   weeklyHeroCtaText: {
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
-    color: '#2E6F40',
+    color: '#3C4A2A',
     letterSpacing: 0.4,
   },
   // ── Regular Rec Card Redesign ─────────────────────────────
@@ -5519,7 +5519,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1.5,
     gap: 10,
-    shadowColor: '#2E6F40',
+    shadowColor: '#3C4A2A',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.1,
     shadowRadius: 16,

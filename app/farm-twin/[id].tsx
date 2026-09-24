@@ -392,7 +392,7 @@ export default function ScenarioEditor() {
           <View style={se.heroRow}>
             <View style={se.heroStat}>
               <Text style={[se.heroLabel, { color: colors.textMute }]}>MAVUNO JUMLA</Text>
-              <Text style={[se.heroVal, { color: '#2E6F40' }]}>{output.totalYieldTonnes}t</Text>
+              <Text style={[se.heroVal, { color: '#3C4A2A' }]}>{output.totalYieldTonnes}t</Text>
               <Text style={[se.heroSub, { color: colors.textMute }]}>
                 {output.yieldTonnesHa}t/ha
               </Text>

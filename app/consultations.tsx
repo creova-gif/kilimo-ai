@@ -54,7 +54,7 @@ const SPECIALTIES = [
 const STATUS_META = {
   requested: { color: '#f59e0b', label: 'Imeombwa' },
   scheduled: { color: '#3b82f6', label: 'Imepangwa' },
-  completed: { color: '#2E6F40', label: 'Imekamilika' },
+  completed: { color: '#3C4A2A', label: 'Imekamilika' },
   cancelled: { color: '#ef4444', label: 'Imefutwa' },
   available: { color: '#94a3b8', label: 'Inapatikana' },
 };

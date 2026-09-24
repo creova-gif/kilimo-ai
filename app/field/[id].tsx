@@ -201,8 +201,8 @@ function NDVIChart({ colors }: { colors: any }) {
     <Svg width={W} height={H}>
       <Defs>
         <SvgGradient id="ndviArea" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0%" stopColor="#2E6F40" stopOpacity="0.25" />
-          <Stop offset="100%" stopColor="#2E6F40" stopOpacity="0.01" />
+          <Stop offset="0%" stopColor="#3C4A2A" stopOpacity="0.25" />
+          <Stop offset="100%" stopColor="#3C4A2A" stopOpacity="0.01" />
         </SvgGradient>
       </Defs>
       {[0.25, 0.5, 0.75, 1.0].map((v) => {
@@ -234,14 +234,14 @@ function NDVIChart({ colors }: { colors: any }) {
       <Polyline
         points={linePoints}
         fill="none"
-        stroke="#2E6F40"
+        stroke="#3C4A2A"
         strokeWidth="2.5"
         strokeLinejoin="round"
         strokeLinecap="round"
       />
       {pts.map((p, i) => (
         <React.Fragment key={i}>
-          <SvgCircle cx={p.x} cy={p.y} r="4" fill="#2E6F40" stroke="#FFF" strokeWidth="1.5" />
+          <SvgCircle cx={p.x} cy={p.y} r="4" fill="#3C4A2A" stroke="#FFF" strokeWidth="1.5" />
           <SvgText
             x={p.x}
             y={H - 6}
@@ -293,7 +293,7 @@ export default function FieldDetailScreen() {
   const isWarning = zone.alertType === 'warning';
   const productivityColor =
     zone.productivity === 'High'
-      ? '#2E6F40'
+      ? '#3C4A2A'
       : zone.productivity === 'Average'
         ? '#F59E0B'
         : '#ef4444';
@@ -383,7 +383,7 @@ export default function FieldDetailScreen() {
 
           <View style={styles.heroBody}>
             <View style={styles.heroBadge}>
-              <Sprout size={10} color="#2E6F40" />
+              <Sprout size={10} color="#3C4A2A" />
               <Text style={styles.heroBadgeText}>
                 {language === 'sw' ? 'UCHAGUZI WA BASA' : 'FIELD SELECTION'}
               </Text>
@@ -393,9 +393,9 @@ export default function FieldDetailScreen() {
               {isWarning ? (
                 <AlertTriangle size={12} color="#F59E0B" />
               ) : (
-                <Sprout size={12} color="#2E6F40" />
+                <Sprout size={12} color="#3C4A2A" />
               )}
-              <Text style={[styles.heroStatus, { color: isWarning ? '#F59E0B' : '#2E6F40' }]}>
+              <Text style={[styles.heroStatus, { color: isWarning ? '#F59E0B' : '#3C4A2A' }]}>
                 {language === 'sw' ? zone.messageSw : zone.messageEn}
               </Text>
             </View>
@@ -444,7 +444,7 @@ export default function FieldDetailScreen() {
             >
               {/* Gauge header strip */}
               <LinearGradient
-                colors={['#2E6F400a', 'transparent']}
+                colors={['#3C4A2A0a', 'transparent']}
                 style={styles.nutrientGaugeHeader}
               >
                 <Text style={[styles.nutrientHeaderLabel, { color: colors.textMute }]}>
@@ -512,10 +512,10 @@ export default function FieldDetailScreen() {
           {/* ── Crop Info Strip ───────────────────────────────────── */}
           <Animated.View entering={FadeInUp.delay(320)}>
             <LinearGradient
-              colors={['#2E6F4018', '#2E6F4006']}
-              style={[styles.cropStrip, { borderColor: '#2E6F4030' }]}
+              colors={['#3C4A2A18', '#3C4A2A06']}
+              style={[styles.cropStrip, { borderColor: '#3C4A2A30' }]}
             >
-              <Sprout size={20} color="#2E6F40" />
+              <Sprout size={20} color="#3C4A2A" />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.cropStripLabel, { color: colors.textMute }]}>
                   {language === 'sw' ? 'Zao linalolimwa' : 'Current Crop'}
@@ -551,7 +551,7 @@ export default function FieldDetailScreen() {
       >
         <TouchableOpacity style={styles.ctaBtn} activeOpacity={0.85} onPress={handleVraSetup}>
           <LinearGradient
-            colors={['#2E6F40', '#18a847']}
+            colors={['#3C4A2A', '#18a847']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.ctaGradient}
@@ -622,9 +622,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: 'rgba(46, 111, 64,0.2)',
+    backgroundColor: 'rgba(60, 74, 42,0.2)',
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.3)',
+    borderColor: 'rgba(60, 74, 42,0.3)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 20,
@@ -634,7 +634,7 @@ const styles = StyleSheet.create({
   heroBadgeText: {
     fontFamily: 'Inter_700Bold',
     fontSize: 9,
-    color: '#2E6F40',
+    color: '#3C4A2A',
     letterSpacing: 1.2,
   },
   heroTitle: {
@@ -827,7 +827,7 @@ const styles = StyleSheet.create({
   ctaBtn: {
     borderRadius: 18,
     overflow: 'hidden',
-    shadowColor: '#2E6F40',
+    shadowColor: '#3C4A2A',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 14,

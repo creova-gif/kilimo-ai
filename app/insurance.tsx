@@ -46,7 +46,7 @@ const INSURANCE_INTEGRATION_LIVE = false;
 const STATUS_META = {
   browse: { color: '#94a3b8', label: 'Available' },
   pending: { color: '#f59e0b', label: 'Pending' },
-  active: { color: '#2E6F40', label: 'Active' },
+  active: { color: '#3C4A2A', label: 'Active' },
   expired: { color: '#64748b', label: 'Expired' },
   claimed: { color: '#3b82f6', label: 'Claim Filed' },
 };
@@ -1571,10 +1571,10 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     padding: 10,
-    backgroundColor: 'rgba(46, 111, 64,0.06)',
+    backgroundColor: 'rgba(60, 74, 42,0.06)',
     borderRadius: 10,
     borderWidth: 0.5,
-    borderColor: 'rgba(46, 111, 64,0.2)',
+    borderColor: 'rgba(60, 74, 42,0.2)',
     marginBottom: 8,
   },
   prefillBannerText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#146e2e', flex: 1 },

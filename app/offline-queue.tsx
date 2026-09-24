@@ -69,7 +69,7 @@ const TYPE_META: Record<
   },
   task_complete: {
     icon: (c) => <ClipboardList size={16} color={c} />,
-    color: '#2E6F40',
+    color: '#3C4A2A',
     label: 'KAZI',
   },
   irrigation_log: { icon: (c) => <Zap size={16} color={c} />, color: '#06b6d4', label: 'MAJI' },
@@ -188,8 +188,8 @@ export default function OfflineQueueScreen() {
             style={[
               s.onlineBtn,
               {
-                backgroundColor: online ? '#2E6F4022' : '#ef444422',
-                borderColor: online ? '#2E6F4055' : '#ef444455',
+                backgroundColor: online ? '#3C4A2A22' : '#ef444422',
+                borderColor: online ? '#3C4A2A55' : '#ef444455',
               },
             ]}
           >
@@ -217,11 +217,11 @@ export default function OfflineQueueScreen() {
         >
           <LinearGradient
             colors={
-              online ? ['#2E6F4018', '#2E6F4008'] : ['rgba(239,68,68,0.1)', 'rgba(239,68,68,0.04)']
+              online ? ['#3C4A2A18', '#3C4A2A08'] : ['rgba(239,68,68,0.1)', 'rgba(239,68,68,0.04)']
             }
-            style={[s.statusCard, { borderColor: online ? '#2E6F4030' : 'rgba(239,68,68,0.25)' }]}
+            style={[s.statusCard, { borderColor: online ? '#3C4A2A30' : 'rgba(239,68,68,0.25)' }]}
           >
-            <View style={[s.statusIcon, { backgroundColor: online ? '#2E6F4022' : '#ef444422' }]}>
+            <View style={[s.statusIcon, { backgroundColor: online ? '#3C4A2A22' : '#ef444422' }]}>
               {online ? (
                 <Cloud size={22} color={colors.primary} />
               ) : (
@@ -289,7 +289,7 @@ export default function OfflineQueueScreen() {
                     s.qCard,
                     {
                       backgroundColor: colors.card,
-                      borderColor: done ? '#2E6F4044' : colors.border,
+                      borderColor: done ? '#3C4A2A44' : colors.border,
                       opacity: done ? 0.6 : 1,
                     },
                   ]}

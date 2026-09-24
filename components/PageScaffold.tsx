@@ -109,7 +109,7 @@ export default function PageScaffold({
               styles.iconBtn,
               {
                 borderColor: colors.border,
-                backgroundColor: isDark ? 'rgba(46, 111, 64,0.08)' : 'rgba(46, 111, 64,0.06)',
+                backgroundColor: isDark ? 'rgba(60, 74, 42,0.08)' : 'rgba(60, 74, 42,0.06)',
               },
             ]}
           >

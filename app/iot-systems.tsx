@@ -1981,7 +1981,7 @@ export default function IOTSystems() {
             <View
               style={[
                 styles.glassCard,
-                { backgroundColor: colors.card, borderColor: '#2E6F4030', borderWidth: 1.5 },
+                { backgroundColor: colors.card, borderColor: '#3C4A2A30', borderWidth: 1.5 },
               ]}
             >
               {/* Header */}
@@ -2078,14 +2078,14 @@ export default function IOTSystems() {
                         borderRadius: 14,
                         borderWidth: 1,
                         backgroundColor: a.active ? colors.primary + '0D' : 'rgba(0,0,0,0.02)',
-                        borderColor: a.active ? '#2E6F4040' : colors.border,
+                        borderColor: a.active ? '#3C4A2A40' : colors.border,
                       },
                     ]}
                   >
                     <View
                       style={[
                         styles.deviceIconBox,
-                        { backgroundColor: a.active ? '#2E6F4018' : colors.background },
+                        { backgroundColor: a.active ? '#3C4A2A18' : colors.background },
                       ]}
                     >
                       <BatteryCharging
@@ -3009,7 +3009,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#2E6F40',
+    backgroundColor: '#3C4A2A',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 12,
@@ -3201,7 +3201,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     backgroundColor: 'rgba(0,0,0,0.03)',
     borderWidth: 2,
-    borderColor: 'rgba(46, 111, 64,0.3)',
+    borderColor: 'rgba(60, 74, 42,0.3)',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -3266,11 +3266,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(46, 111, 64,0.06)',
+    backgroundColor: 'rgba(60, 74, 42,0.06)',
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.15)',
+    borderColor: 'rgba(60, 74, 42,0.15)',
   },
   linkAlertText: {
     fontSize: 12,

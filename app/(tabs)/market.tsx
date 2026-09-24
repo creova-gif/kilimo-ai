@@ -1305,7 +1305,7 @@ export default function MarketScreen() {
                       </Text>
                       <View
                         style={{
-                          backgroundColor: ord.status === 'Delivered' ? '#2E6F4020' : '#f59e0b20',
+                          backgroundColor: ord.status === 'Delivered' ? '#3C4A2A20' : '#f59e0b20',
                           paddingHorizontal: 8,
                           paddingVertical: 4,
                           borderRadius: 8,
@@ -1315,7 +1315,7 @@ export default function MarketScreen() {
                           style={{
                             fontSize: 12,
                             fontFamily: 'Inter_700Bold',
-                            color: ord.status === 'Delivered' ? '#2E6F40' : '#f59e0b',
+                            color: ord.status === 'Delivered' ? '#3C4A2A' : '#f59e0b',
                           }}
                         >
                           {ord.status}
@@ -1789,7 +1789,7 @@ export default function MarketScreen() {
 
                 {/* Mobile Money Integration Note */}
                 <View style={styles.mobiMoneyNote}>
-                  <CheckCircle2 size={12} color="#2E6F40" />
+                  <CheckCircle2 size={12} color="#3C4A2A" />
                   <Text style={styles.mobiMoneyText}>
                     {language === 'sw'
                       ? 'Lipa salama kupitia M-Pesa / TigoPesa'
@@ -2647,7 +2647,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#2E6F40',
+    backgroundColor: '#3C4A2A',
     paddingHorizontal: 8,
     borderRadius: 8,
     minHeight: 44,
@@ -2659,7 +2659,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#2E6F40',
+    backgroundColor: '#3C4A2A',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -2786,7 +2786,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(46, 111, 64, 0.1)',
+    backgroundColor: 'rgba(60, 74, 42, 0.1)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,

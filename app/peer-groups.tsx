@@ -569,8 +569,8 @@ export default function PeerGroupsScreen() {
                             style={[
                               s.volunteerBtn,
                               {
-                                backgroundColor: t.joined ? '#2E6F4020' : colors.primary,
-                                borderColor: t.joined ? '#2E6F4070' : 'transparent',
+                                backgroundColor: t.joined ? '#3C4A2A20' : colors.primary,
+                                borderColor: t.joined ? '#3C4A2A70' : 'transparent',
                               },
                             ]}
                           >
@@ -709,8 +709,8 @@ export default function PeerGroupsScreen() {
                             style={[
                               s.rsvpBtn,
                               {
-                                backgroundColor: e.rsvp ? '#2E6F4020' : colors.primary,
-                                borderColor: e.rsvp ? '#2E6F4070' : 'transparent',
+                                backgroundColor: e.rsvp ? '#3C4A2A20' : colors.primary,
+                                borderColor: e.rsvp ? '#3C4A2A70' : 'transparent',
                               },
                             ]}
                           >
@@ -902,7 +902,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: 'rgba(46, 111, 64,0.1)',
+    backgroundColor: 'rgba(60, 74, 42,0.1)',
   },
   rsvpBtn: {
     marginTop: 12,

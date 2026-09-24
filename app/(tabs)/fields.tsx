@@ -935,7 +935,7 @@ const styles = StyleSheet.create({
   activeSelectionLabel: {
     fontSize: 9,
     fontFamily: 'InstrumentSerif_400Regular',
-    color: '#2E6F40',
+    color: '#3C4A2A',
     letterSpacing: 1.2,
   },
   activeZoneTitle: {
@@ -1031,7 +1031,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -10,
     alignSelf: 'center',
-    backgroundColor: '#2E6F40',
+    backgroundColor: '#3C4A2A',
     width: 50,
     height: 50,
     borderRadius: 25,

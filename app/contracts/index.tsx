@@ -91,10 +91,10 @@ const STATUS_ICON: Record<ContractStatus, React.ReactNode> = {
   draft: <Circle size={10} color="#94a3b8" fill="#94a3b8" />,
   sent: <Circle size={10} color="#3b82f6" fill="#3b82f6" />,
   under_review: <Circle size={10} color="#f59e0b" fill="#f59e0b" />,
-  signed: <CheckCircle2 size={10} color="#2E6F40" />,
-  active: <CheckCircle2 size={10} color="#2E6F40" />,
+  signed: <CheckCircle2 size={10} color="#3C4A2A" />,
+  active: <CheckCircle2 size={10} color="#3C4A2A" />,
   milestone_due: <Circle size={10} color="#f59e0b" fill="#f59e0b" />,
-  completed: <CheckCircle2 size={10} color="#2E6F40" />,
+  completed: <CheckCircle2 size={10} color="#3C4A2A" />,
   cancelled: <Circle size={10} color="#ef4444" fill="#ef4444" />,
   disputed: <Circle size={10} color="#ef4444" fill="#ef4444" />,
 };
@@ -176,7 +176,7 @@ function CreateContractModal({
           <View style={[cm.handle, { backgroundColor: colors.border }]} />
 
           {/* Header */}
-          <LinearGradient colors={['#2E6F4018', '#2E6F4000']} style={cm.sheetHeaderGrad}>
+          <LinearGradient colors={['#3C4A2A18', '#3C4A2A00']} style={cm.sheetHeaderGrad}>
             <View style={cm.sheetHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <LinearGradient colors={[colors.primary, '#0a3d18']} style={cm.iconCircle}>
@@ -205,7 +205,7 @@ function CreateContractModal({
             {contractValue > 0 && (
               <Animated.View
                 entering={FadeInDown}
-                style={[cm.valueBar, { backgroundColor: '#2E6F4015', borderColor: '#2E6F4030' }]}
+                style={[cm.valueBar, { backgroundColor: '#3C4A2A15', borderColor: '#3C4A2A30' }]}
               >
                 <Text style={[cm.valueBarLabel, { color: colors.textMute }]}>
                   Thamani ya mkataba
@@ -250,7 +250,7 @@ function CreateContractModal({
                     cm.chip,
                     {
                       borderColor: crop === c ? colors.primary : colors.border,
-                      backgroundColor: crop === c ? '#2E6F4020' : 'transparent',
+                      backgroundColor: crop === c ? '#3C4A2A20' : 'transparent',
                     },
                   ]}
                 >
@@ -293,7 +293,7 @@ function CreateContractModal({
                     cm.chip,
                     {
                       borderColor: region === r ? colors.primary : colors.border,
-                      backgroundColor: region === r ? '#2E6F4020' : 'transparent',
+                      backgroundColor: region === r ? '#3C4A2A20' : 'transparent',
                     },
                   ]}
                 >
@@ -757,11 +757,11 @@ const s = StyleSheet.create({
     marginBottom: 20,
   },
   heroBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  heroBadgeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#2E6F40' },
+  heroBadgeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#3C4A2A' },
   heroBadgeText: {
     fontSize: 10,
     fontFamily: 'Inter_800ExtraBold',
-    color: '#2E6F40',
+    color: '#3C4A2A',
     letterSpacing: 1.5,
   },
   heroTitle: { fontSize: 32, fontFamily: 'InstrumentSerif_400Regular', letterSpacing: -1 },

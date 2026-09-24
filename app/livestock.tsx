@@ -47,7 +47,7 @@ const SW = Dimensions.get('window').width || 360;
 
 // ─── Species config ───────────────────────────────────────────────────────────
 const SPECIES: { key: LivestockSpecies; label: string; swahili: string; color: string }[] = [
-  { key: 'cattle', label: 'Cattle', swahili: "Ng'ombe", color: '#2E6F40' },
+  { key: 'cattle', label: 'Cattle', swahili: "Ng'ombe", color: '#3C4A2A' },
   { key: 'goat', label: 'Goat', swahili: 'Mbuzi', color: '#f59e0b' },
   { key: 'sheep', label: 'Sheep', swahili: 'Kondoo', color: '#8b5cf6' },
   { key: 'poultry', label: 'Poultry', swahili: 'Kuku', color: '#3b82f6' },
@@ -56,7 +56,7 @@ const SPECIES: { key: LivestockSpecies; label: string; swahili: string; color: s
 
 const HEALTH: { key: LivestockAnimal['healthStatus']; label: string; color: string; icon: any }[] =
   [
-    { key: 'healthy', label: 'Mzima', color: '#2E6F40', icon: CheckCircle2 },
+    { key: 'healthy', label: 'Mzima', color: '#3C4A2A', icon: CheckCircle2 },
     { key: 'attention', label: 'Tahadhari', color: '#f59e0b', icon: AlertTriangle },
     { key: 'sick', label: 'Mgonjwa', color: '#ef4444', icon: HeartPulse },
   ];
@@ -794,12 +794,12 @@ function RIFTHerdTagSection({ animals }: { animals: LivestockAnimal[] }) {
             rt.featureCard,
             {
               backgroundColor: isDark ? colors.primary + '0F' : colors.primary + '0A',
-              borderColor: '#2E6F4030',
+              borderColor: '#3C4A2A30',
             },
           ]}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <View style={[rt.tagIconBg, { backgroundColor: '#2E6F4018' }]}>
+            <View style={[rt.tagIconBg, { backgroundColor: '#3C4A2A18' }]}>
               <Text style={{ fontSize: 16 }}>🏷️</Text>
             </View>
             <View>

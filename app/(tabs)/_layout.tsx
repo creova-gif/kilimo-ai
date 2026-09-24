@@ -11,7 +11,7 @@ import Animated from 'react-native-reanimated';
 
 // Brand forest green (DESIGN.md) — replaces the generic emerald so the nav
 // matches the rest of the product.
-const ICON_ACTIVE = '#2E6F40';
+const ICON_ACTIVE = '#3C4A2A';
 
 function TabIcon({
   focused,
@@ -144,7 +144,7 @@ export default function TabLayout() {
               accessibilityLabel="Ongeza"
             >
               <LinearGradient
-                colors={['#3A8D52', '#2E6F40']}
+                colors={['#6E8550', '#3C4A2A']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={{
@@ -153,7 +153,7 @@ export default function TabLayout() {
                   borderRadius: 28,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  shadowColor: '#2E6F40',
+                  shadowColor: '#3C4A2A',
                   shadowOpacity: 0.35,
                   shadowRadius: 14,
                   shadowOffset: { width: 0, height: 8 },

@@ -115,7 +115,7 @@ export default function WalletAdminOverview() {
                 activeOpacity={0.85}
                 onPress={() => router.push('/wallet-admin/transactions')}
               >
-                <View style={[s.tileBadge, { backgroundColor: '#2E6F4022' }]}>
+                <View style={[s.tileBadge, { backgroundColor: '#3C4A2A22' }]}>
                   <Text style={[s.tileBadgeText, { color: colors.primary }]}>
                     {transactions.length}
                   </Text>

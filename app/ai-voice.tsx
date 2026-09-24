@@ -53,7 +53,7 @@ import { chat as aiChat, transcribeAudio, aiConfigured, AIError } from '../lib/a
 import { demoChat } from '../lib/ai-demo';
 
 const { width: SW } = Dimensions.get('window');
-const PRIMARY = '#2E6F40';
+const PRIMARY = '#3C4A2A';
 const ORB_SIZE = 136;
 const ORB_CONTAINER = 220;
 
