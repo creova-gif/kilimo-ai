@@ -521,6 +521,12 @@ const LEGACY_FIXTURE_IDS = {
 const withoutIds = <T extends { id: string }>(arr: T[] | undefined, ids: readonly string[]) =>
   Array.isArray(arr) ? arr.filter((x) => !ids.includes(x.id)) : [];
 
+/**
+ * Persist migration for `kilimo-farm-data` (v0/v1 → v2). Removes the fixture
+ * records older builds seeded (by exact id) and resets the seeded g1 group
+ * membership and p2 "active" policy. User-created records keep their
+ * uid()-style ids and pass through untouched. Idempotent.
+ */
 export function migrateFarmData(persistedState: unknown): Partial<FarmDataState> {
   const state = (persistedState ?? {}) as Partial<FarmDataState>;
   const next: Partial<FarmDataState> = {
