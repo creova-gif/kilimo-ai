@@ -1,11 +1,12 @@
 # KILIMO AI — FIGMA-TO-PRODUCTION MIGRATION & FULL PRODUCT ENGINEERING MASTER PROMPT
 
-> Owner's brief (2026-09-24). Sections 0–5 and 40–41 are kept word for word; long bullet lists elsewhere are shortened into prose without dropping any requirement. Saved so every session works from the same charter. Figma: https://www.figma.com/design/178jR1R7rV98GJzqsYy4Sp/kilimo.ai?node-id=0-1
+> Owner's brief (2026-09-24). The mission, §1.1, §2, §40 and §41 are word for word. The other sections are shortened (bullet lists turned into prose), but every requirement is kept. Saved so every session works from the same charter. Figma: https://www.figma.com/design/178jR1R7rV98GJzqsYy4Sp/kilimo.ai?node-id=0-1
 
 **Project:** Kilimo AI  
 **Repository:** `https://github.com/creova-gif/kilimo-ai.git`  
 **Primary design source:** attached `kilimo.ai(1).fig` Figma file  
-**Supporting engineering references:**  
+**Supporting engineering references:**
+
 - `04_USER_JOURNEYS(3).docx`
 - `20_RAG_ENGINEERING.docx`
 - `07_BENCHMARKS.docx`
