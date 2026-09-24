@@ -43,7 +43,7 @@ const { width: SW } = Dimensions.get('window');
 
 // ─── Categories ──────────────────────────────────────────────────────────────
 const CATEGORIES = [
-  { id: 'all', title: 'Yote', color: '#2E6F40' },
+  { id: 'all', title: 'Yote', color: '#3C4A2A' },
   { id: 'staple', title: 'Nafaka & Mizizi', color: '#f59e0b' },
   { id: 'cash', title: 'Biashara', color: '#3b82f6' },
   { id: 'horticulture', title: 'Matunda & Mboga', color: '#a855f7' },
@@ -434,12 +434,12 @@ const CROPS = [
 const PROFIT_COLOR: Record<string, string> = {
   Chini: '#64748b',
   Kati: '#f59e0b',
-  Juu: '#2E6F40',
-  'Juu Sana': '#2E6F40',
+  Juu: '#3C4A2A',
+  'Juu Sana': '#3C4A2A',
 };
 
 const DIFF_COLOR: Record<string, string> = {
-  Rahisi: '#2E6F40',
+  Rahisi: '#3C4A2A',
   Kati: '#f59e0b',
   Nguvu: '#ef4444',
 };
@@ -455,7 +455,7 @@ function ProfitDots({ score }: { score: number }) {
             width: 5,
             height: 5,
             borderRadius: 3,
-            backgroundColor: i <= score ? '#2E6F40' : 'rgba(0,0,0,0.1)',
+            backgroundColor: i <= score ? '#3C4A2A' : 'rgba(0,0,0,0.1)',
           }}
         />
       ))}
@@ -476,7 +476,7 @@ function CropCard({ crop, index, onPress }: { crop: any; index: number; onPress:
             cc.wrap,
             {
               backgroundColor: colors.card,
-              borderColor: isHighProfit ? 'rgba(46, 111, 64,0.25)' : colors.border,
+              borderColor: isHighProfit ? 'rgba(60, 74, 42,0.25)' : colors.border,
               borderWidth: isHighProfit ? 1.5 : 1,
             },
           ]}
@@ -492,7 +492,7 @@ function CropCard({ crop, index, onPress }: { crop: any; index: number; onPress:
             <LinearGradient colors={['transparent', 'rgba(0,0,0,0.6)']} style={cc.imgGrad} />
             {isHighProfit && (
               <View style={cc.hotChip}>
-                <Zap size={8} color="#000" />
+                <Zap size={8} color="#fff" />
                 <Text style={cc.hotText}>HOT</Text>
               </View>
             )}
@@ -562,9 +562,9 @@ const cc = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 3,
     borderRadius: 20,
-    backgroundColor: '#2E6F40',
+    backgroundColor: '#3C4A2A',
   },
-  hotText: { fontSize: 7, fontFamily: 'Inter_700Bold', color: '#000' },
+  hotText: { fontSize: 7, fontFamily: 'Inter_700Bold', color: '#fff' },
   body: { padding: 10, gap: 3 },
   name: { fontSize: 13.5, fontFamily: 'Inter_700Bold' },
   sub: { fontSize: 10, fontFamily: 'Inter_600SemiBold', fontStyle: 'italic' },
@@ -641,7 +641,7 @@ export default function CropLibraryScreen() {
           </TouchableOpacity>
           <View style={{ alignItems: 'center' }}>
             <View style={s.badge}>
-              <BookOpen size={10} color="#2E6F40" />
+              <BookOpen size={10} color="#3C4A2A" />
               <Text style={s.badgeText}>MAKTABA</Text>
             </View>
             <Text style={[s.title, { color: colors.text }]}>Maktaba ya Mazao</Text>
@@ -661,7 +661,7 @@ export default function CropLibraryScreen() {
             ]}
           >
             <LinearGradient
-              colors={['rgba(46, 111, 64,0.05)', 'transparent']}
+              colors={['rgba(60, 74, 42,0.05)', 'transparent']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={StyleSheet.absoluteFill}
@@ -673,7 +673,7 @@ export default function CropLibraryScreen() {
             </View>
             <View style={s.statDivider} />
             <View style={s.statCol}>
-              <Text style={[s.statNum, { color: '#2E6F40' }]}>
+              <Text style={[s.statNum, { color: '#3C4A2A' }]}>
                 {CROPS.filter((c) => c.profitScore >= 3).length}
               </Text>
               <Text style={[s.statLbl, { color: colors.textMute }]}>Faida Juu</Text>
@@ -791,7 +791,7 @@ export default function CropLibraryScreen() {
               <View style={s.statsGrid}>
                 {[
                   {
-                    icon: <Clock size={16} color="#2E6F40" />,
+                    icon: <Clock size={16} color="#3C4A2A" />,
                     label: 'Kukomaa',
                     value: selectedCrop?.duration,
                   },
@@ -910,9 +910,9 @@ export default function CropLibraryScreen() {
                       Price Trend / Masoko:
                     </Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <TrendingUp size={12} color="#2E6F40" />
+                      <TrendingUp size={12} color="#3C4A2A" />
                       <Text
-                        style={{ fontSize: 12, fontFamily: 'Inter_800ExtraBold', color: '#2E6F40' }}
+                        style={{ fontSize: 12, fontFamily: 'Inter_800ExtraBold', color: '#3C4A2A' }}
                       >
                         {selectedCrop?.priceTrend}
                       </Text>
@@ -925,7 +925,7 @@ export default function CropLibraryScreen() {
               <View
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}
               >
-                <Sparkles size={18} color="#2E6F40" />
+                <Sparkles size={18} color="#3C4A2A" />
                 <Text style={[s.sectionTitleText, { color: colors.text }]}>
                   Mwongozo wa Sankofa AI
                 </Text>
@@ -935,14 +935,14 @@ export default function CropLibraryScreen() {
                 style={[
                   s.aiBox,
                   {
-                    backgroundColor: isDark ? 'rgba(46, 111, 64,0.06)' : 'rgba(46, 111, 64,0.04)',
-                    borderColor: 'rgba(46, 111, 64,0.15)',
+                    backgroundColor: isDark ? 'rgba(60, 74, 42,0.06)' : 'rgba(60, 74, 42,0.04)',
+                    borderColor: 'rgba(60, 74, 42,0.15)',
                   },
                 ]}
               >
                 {loading ? (
                   <View style={{ padding: 24, alignItems: 'center', gap: 12 }}>
-                    <ActivityIndicator size="large" color="#2E6F40" />
+                    <ActivityIndicator size="large" color="#3C4A2A" />
                     <Text
                       style={{
                         color: colors.textMute,
@@ -975,7 +975,7 @@ const s = StyleSheet.create({
     width: 280,
     height: 280,
     borderRadius: 140,
-    backgroundColor: 'rgba(46, 111, 64,0.05)',
+    backgroundColor: 'rgba(60, 74, 42,0.05)',
   },
   header: {
     flexDirection: 'row',
@@ -1000,13 +1000,13 @@ const s = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 3,
     borderRadius: 8,
-    backgroundColor: 'rgba(46, 111, 64,0.1)',
+    backgroundColor: 'rgba(60, 74, 42,0.1)',
     marginBottom: 4,
   },
   badgeText: {
     fontSize: 8.5,
     fontFamily: 'Inter_800ExtraBold',
-    color: '#2E6F40',
+    color: '#3C4A2A',
     letterSpacing: 1,
   },
   title: {

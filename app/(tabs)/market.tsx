@@ -60,6 +60,8 @@ import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../constants/Theme';
 import { useKilimoStore } from '../../store/useKilimoStore';
+import { Gate } from '../../lib/access';
+import { EmptyState } from '../../components/ui/EmptyState';
 import { GlassCard } from '../../components/PageScaffold';
 import { useMarketIntelligence } from '../../hooks/useMarketIntelligence';
 import { getSupabase } from '../../lib/supabase';
@@ -451,7 +453,33 @@ const NeuralSparkline = ({ data, positive }: { data: number[]; positive: boolean
 };
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
+// Market is a primary tab (Figma nav) but not every role may use it
+// (lib/access.tsx: extension_officer has marketplace 'none'). The tab bar
+// hides it for those roles; this guard covers deep links.
 export default function MarketScreen() {
+  const language = useKilimoStore((s) => s.language);
+  return (
+    <Gate
+      feature="marketplace"
+      fallback={
+        <View style={{ flex: 1, justifyContent: 'center', padding: 24 }}>
+          <EmptyState
+            title={language === 'sw' ? 'Soko halipatikani' : 'Market not available'}
+            description={
+              language === 'sw'
+                ? 'Soko halipatikani kwa jukumu lako.'
+                : 'The marketplace is not available for your role.'
+            }
+          />
+        </View>
+      }
+    >
+      <MarketContent />
+    </Gate>
+  );
+}
+
+function MarketContent() {
   const { colors, isDark } = useTheme();
   const router = useRouter();
   const addNotification = useKilimoStore((s) => s.addNotification);
@@ -1241,8 +1269,8 @@ export default function MarketScreen() {
                                     : `Make offer for ${itemName}`
                                 }
                               >
-                                <Wallet size={16} color="#000" />
-                                <Text style={[styles.contractBtnText, { color: '#000' }]}>
+                                <Wallet size={16} color="#fff" />
+                                <Text style={[styles.contractBtnText, { color: '#fff' }]}>
                                   {language === 'sw' ? 'Toa Ofa' : 'Make Offer'}
                                 </Text>
                               </TouchableOpacity>
@@ -1305,7 +1333,7 @@ export default function MarketScreen() {
                       </Text>
                       <View
                         style={{
-                          backgroundColor: ord.status === 'Delivered' ? '#2E6F4020' : '#f59e0b20',
+                          backgroundColor: ord.status === 'Delivered' ? '#3C4A2A20' : '#f59e0b20',
                           paddingHorizontal: 8,
                           paddingVertical: 4,
                           borderRadius: 8,
@@ -1315,7 +1343,7 @@ export default function MarketScreen() {
                           style={{
                             fontSize: 12,
                             fontFamily: 'Inter_700Bold',
-                            color: ord.status === 'Delivered' ? '#2E6F40' : '#f59e0b',
+                            color: ord.status === 'Delivered' ? '#3C4A2A' : '#f59e0b',
                           }}
                         >
                           {ord.status}
@@ -1428,7 +1456,7 @@ export default function MarketScreen() {
                         language === 'sw' ? 'Linganisha bidhaa' : 'Compare products'
                       }
                     >
-                      <Text style={{ color: '#000', fontSize: 12, fontFamily: 'Inter_700Bold' }}>
+                      <Text style={{ color: '#fff', fontSize: 12, fontFamily: 'Inter_700Bold' }}>
                         {language === 'sw' ? 'Linganisha' : 'Compare'}
                       </Text>
                     </TouchableOpacity>
@@ -1789,7 +1817,7 @@ export default function MarketScreen() {
 
                 {/* Mobile Money Integration Note */}
                 <View style={styles.mobiMoneyNote}>
-                  <CheckCircle2 size={12} color="#2E6F40" />
+                  <CheckCircle2 size={12} color="#3C4A2A" />
                   <Text style={styles.mobiMoneyText}>
                     {language === 'sw'
                       ? 'Lipa salama kupitia M-Pesa / TigoPesa'
@@ -2647,7 +2675,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#2E6F40',
+    backgroundColor: '#3C4A2A',
     paddingHorizontal: 8,
     borderRadius: 8,
     minHeight: 44,
@@ -2659,7 +2687,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#2E6F40',
+    backgroundColor: '#3C4A2A',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -2786,7 +2814,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(46, 111, 64, 0.1)',
+    backgroundColor: 'rgba(60, 74, 42, 0.1)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
@@ -2856,7 +2884,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 44,
   },
-  saveBtnText: { fontSize: 14, fontFamily: 'Inter_700Bold', color: '#000' },
+  saveBtnText: { fontSize: 14, fontFamily: 'Inter_700Bold', color: '#fff' },
 });
 
 const pm = StyleSheet.create({

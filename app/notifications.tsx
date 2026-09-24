@@ -41,7 +41,7 @@ import { useKilimoStore } from '../store/useKilimoStore';
 const TYPE_CONFIG: Record<string, { icon: any; color: string; bg: string }> = {
   weather_alert: { icon: AlertTriangle, color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.12)' },
   market_alert: { icon: TrendingUp, color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)' },
-  task_reminder: { icon: CheckCircle2, color: '#2E6F40', bg: 'rgba(46, 111, 64, 0.12)' },
+  task_reminder: { icon: CheckCircle2, color: '#3C4A2A', bg: 'rgba(60, 74, 42, 0.12)' },
   insight: { icon: Sparkles, color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.12)' },
 };
 const DEFAULT_TYPE_CONFIG = { icon: Info, color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)' };

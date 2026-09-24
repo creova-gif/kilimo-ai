@@ -83,7 +83,7 @@ const CAT_LABEL: Record<TaskCategory, string> = {
 
 const CAT_COLOR: Record<TaskCategory, string> = {
   irrigation: '#3b82f6',
-  planting: '#2E6F40',
+  planting: '#3C4A2A',
   harvest: '#f59e0b',
   scouting: '#a855f7',
   finance: '#10b981',
@@ -92,7 +92,7 @@ const CAT_COLOR: Record<TaskCategory, string> = {
 
 const CAT_ICON: Record<TaskCategory, React.ReactNode> = {
   irrigation: <Droplets size={14} color="#3b82f6" />,
-  planting: <Leaf size={14} color="#2E6F40" />,
+  planting: <Leaf size={14} color="#3C4A2A" />,
   harvest: <Wheat size={14} color="#f59e0b" />,
   scouting: <Eye size={14} color="#a855f7" />,
   finance: <Wallet size={14} color="#10b981" />,
@@ -109,7 +109,7 @@ const PRI_COLOR: Record<TaskPriority, string> = {
 const STATUS_COLOR: Record<string, string> = {
   pending: '#f59e0b',
   in_progress: '#3b82f6',
-  done: '#2E6F40',
+  done: '#3C4A2A',
   cancelled: '#94a3b8',
 };
 
@@ -876,7 +876,7 @@ export default function TasksScreen() {
                         }
                         accessibilityState={{ checked: isDone }}
                       >
-                        {isDone && <Check size={12} color="#000" strokeWidth={3} />}
+                        {isDone && <Check size={12} color="#fff" strokeWidth={3} />}
                       </TouchableOpacity>
                       <Text
                         style={[
@@ -1251,7 +1251,7 @@ const st = StyleSheet.create({
     width: 320,
     height: 320,
     borderRadius: 160,
-    backgroundColor: 'rgba(46, 111, 64,0.08)',
+    backgroundColor: 'rgba(60, 74, 42,0.08)',
   },
   glowBL: {
     position: 'absolute',
@@ -1260,7 +1260,7 @@ const st = StyleSheet.create({
     width: 240,
     height: 240,
     borderRadius: 120,
-    backgroundColor: 'rgba(46, 111, 64,0.05)',
+    backgroundColor: 'rgba(60, 74, 42,0.05)',
   },
   header: {
     flexDirection: 'row',
@@ -1286,10 +1286,10 @@ const st = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 10,
-    backgroundColor: 'rgba(46, 111, 64,0.1)',
+    backgroundColor: 'rgba(60, 74, 42,0.1)',
     marginBottom: 4,
   },
-  commandText: { fontSize: 12, fontFamily: 'Inter_700Bold', color: '#2E6F40', letterSpacing: 1 },
+  commandText: { fontSize: 12, fontFamily: 'Inter_700Bold', color: '#3C4A2A', letterSpacing: 1 },
   headerTitle: { fontSize: 21, fontFamily: 'InstrumentSerif_400Regular', letterSpacing: -0.5 },
   scrollContent: { padding: 16, gap: 14 },
   dashCard: { borderRadius: 22, borderWidth: 1, overflow: 'hidden', padding: 20 },
@@ -1297,7 +1297,7 @@ const st = StyleSheet.create({
   dashLabel: {
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
-    color: '#2E6F40',
+    color: '#3C4A2A',
     letterSpacing: 1,
     marginBottom: 6,
   },
@@ -1313,11 +1313,11 @@ const st = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     borderWidth: 3,
-    borderColor: 'rgba(46, 111, 64,0.3)',
+    borderColor: 'rgba(60, 74, 42,0.3)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  dashPct: { fontSize: 18, fontFamily: 'InstrumentSerif_400Regular', color: '#2E6F40' },
+  dashPct: { fontSize: 18, fontFamily: 'InstrumentSerif_400Regular', color: '#3C4A2A' },
   xpRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 12 },
   xpText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#f59e0b' },
   barTrack: { height: 8, borderRadius: 4, overflow: 'hidden' },
@@ -1382,9 +1382,9 @@ const st = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
-    backgroundColor: 'rgba(46, 111, 64,0.1)',
+    backgroundColor: 'rgba(60, 74, 42,0.1)',
   },
-  calAddText: { fontSize: 12, fontFamily: 'Inter_800ExtraBold', color: '#2E6F40' },
+  calAddText: { fontSize: 12, fontFamily: 'Inter_800ExtraBold', color: '#3C4A2A' },
   emptyCard: { padding: 32, borderRadius: 18, borderWidth: 1, alignItems: 'center', gap: 8 },
   emptyText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   taskCard: {

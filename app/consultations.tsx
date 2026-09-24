@@ -54,7 +54,7 @@ const SPECIALTIES = [
 const STATUS_META = {
   requested: { color: '#f59e0b', label: 'Imeombwa' },
   scheduled: { color: '#3b82f6', label: 'Imepangwa' },
-  completed: { color: '#2E6F40', label: 'Imekamilika' },
+  completed: { color: '#3C4A2A', label: 'Imekamilika' },
   cancelled: { color: '#ef4444', label: 'Imefutwa' },
   available: { color: '#94a3b8', label: 'Inapatikana' },
 };
@@ -636,8 +636,8 @@ export default function ConsultationsScreen() {
                         onPress={() => handleRequest(e, 'video')}
                         style={[s.actBtn, { backgroundColor: colors.primary }]}
                       >
-                        <Video size={12} color="#000" />
-                        <Text style={[s.actText, { color: '#000' }]}>Video</Text>
+                        <Video size={12} color="#fff" />
+                        <Text style={[s.actText, { color: '#fff' }]}>Video</Text>
                       </TouchableOpacity>
                     </View>
                   </View>

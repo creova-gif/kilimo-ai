@@ -617,7 +617,7 @@ const styles = StyleSheet.create({
   idBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(46, 111, 64, 0.15)',
+    backgroundColor: 'rgba(60, 74, 42, 0.15)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,

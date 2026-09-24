@@ -77,15 +77,15 @@ function ActivitySparkline({ isDark }: { isDark: boolean }) {
     <Svg width={CHART_W} height={CHART_H}>
       <Defs>
         <SvgGrad id="spkGrad" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor="#2E6F40" stopOpacity="0.28" />
-          <Stop offset="1" stopColor="#2E6F40" stopOpacity="0" />
+          <Stop offset="0" stopColor="#3C4A2A" stopOpacity="0.28" />
+          <Stop offset="1" stopColor="#3C4A2A" stopOpacity="0" />
         </SvgGrad>
       </Defs>
       <Path d={area} fill="url(#spkGrad)" />
       <Path
         d={line}
         fill="none"
-        stroke="#2E6F40"
+        stroke="#3C4A2A"
         strokeWidth={2.5}
         strokeLinejoin="round"
         strokeLinecap="round"
@@ -103,7 +103,7 @@ const STAT_CHIPS = [
     value: '18%',
     subSw: 'Kiwango cha Kawaida',
     subEn: 'Normal Level',
-    bg: '#2E6F40',
+    bg: '#3C4A2A',
     text: '#fff',
   },
   {
@@ -154,7 +154,7 @@ const ALL_FEATURES: FeatureEntry[] = [
     sub: 'Mshauri wako wa AI',
     route: '/(tabs)/ai',
     icon: null,
-    color: '#2E6F40',
+    color: '#3C4A2A',
     pinned: true,
   },
   {
@@ -171,7 +171,7 @@ const ALL_FEATURES: FeatureEntry[] = [
     sub: 'Tambua magonjwa ya mazao',
     route: '/scan',
     icon: null,
-    color: '#2E6F40',
+    color: '#3C4A2A',
     pinned: true,
   },
   {
@@ -196,7 +196,7 @@ const ALL_FEATURES: FeatureEntry[] = [
     sub: 'Panga mzunguko wa mazao',
     route: '/crop-planning',
     icon: null,
-    color: '#2E6F40',
+    color: '#3C4A2A',
   },
   {
     feature: 'crop_library',
@@ -204,7 +204,7 @@ const ALL_FEATURES: FeatureEntry[] = [
     sub: 'Miongozo ya kilimo & magonjwa',
     route: '/crop-library',
     icon: null,
-    color: '#2E6F40',
+    color: '#3C4A2A',
     pinned: true,
   },
   {
@@ -213,7 +213,7 @@ const ALL_FEATURES: FeatureEntry[] = [
     sub: 'Bei za mazao ya sasa hivi',
     route: '/market',
     icon: null,
-    color: '#2E6F40',
+    color: '#3C4A2A',
     pinned: true,
   },
   {
@@ -238,7 +238,7 @@ const ALL_FEATURES: FeatureEntry[] = [
     sub: 'Nunua na uza mazao',
     route: '/market',
     icon: null,
-    color: '#2E6F40',
+    color: '#3C4A2A',
   },
   {
     feature: 'farm_mapping',
@@ -246,7 +246,7 @@ const ALL_FEATURES: FeatureEntry[] = [
     sub: 'GPS na safu za NDVI',
     route: '/map',
     icon: null,
-    color: '#2E6F40',
+    color: '#3C4A2A',
     pinned: true,
   },
   {
@@ -303,7 +303,7 @@ const ALL_FEATURES: FeatureEntry[] = [
     sub: 'Matumizi na mapato',
     route: '/finance',
     icon: null,
-    color: '#2E6F40',
+    color: '#3C4A2A',
     pinned: true,
   },
   {
@@ -312,7 +312,7 @@ const ALL_FEATURES: FeatureEntry[] = [
     sub: 'Tuma na pokea pesa',
     route: '/mobile-money',
     icon: null,
-    color: '#2E6F40',
+    color: '#3C4A2A',
   },
   {
     feature: 'wallet_admin',
@@ -320,7 +320,7 @@ const ALL_FEATURES: FeatureEntry[] = [
     sub: 'Malipo na akaunti',
     route: '/wallet-admin',
     icon: null,
-    color: '#2E6F40',
+    color: '#3C4A2A',
   },
   {
     feature: 'insurance',
@@ -352,7 +352,7 @@ const ALL_FEATURES: FeatureEntry[] = [
     sub: 'Ushauri wa wataalamu',
     route: '/consultations',
     icon: null,
-    color: '#2E6F40',
+    color: '#3C4A2A',
   },
   {
     feature: 'weather_alerts',
@@ -365,29 +365,29 @@ const ALL_FEATURES: FeatureEntry[] = [
 ];
 
 const ICONS: Record<Feature, React.ReactNode> = {
-  ai_chat: <Sparkles size={20} color="#2E6F40" />,
-  photo_diagnosis: <Camera size={20} color="#2E6F40" />,
+  ai_chat: <Sparkles size={20} color="#3C4A2A" />,
+  photo_diagnosis: <Camera size={20} color="#3C4A2A" />,
   analytics_predictive: <BarChart3 size={20} color="#F59E0B" />,
   digital_farm_twin: <Cpu size={20} color="#8b5cf6" />,
-  crop_planning: <Sprout size={20} color="#2E6F40" />,
-  crop_library: <Leaf size={20} color="#2E6F40" />,
-  market_prices: <TrendingUp size={20} color="#2E6F40" />,
+  crop_planning: <Sprout size={20} color="#3C4A2A" />,
+  crop_library: <Leaf size={20} color="#3C4A2A" />,
+  market_prices: <TrendingUp size={20} color="#3C4A2A" />,
   contract_farming: <FileText size={20} color="#8b5cf6" />,
   input_supply: <Truck size={20} color="#3b82f6" />,
-  marketplace: <ShoppingBag size={20} color="#2E6F40" />,
-  farm_mapping: <MapPin size={20} color="#2E6F40" />,
+  marketplace: <ShoppingBag size={20} color="#3C4A2A" />,
+  farm_mapping: <MapPin size={20} color="#3C4A2A" />,
   livestock: <Beef size={20} color="#F59E0B" />,
   inventory: <Package size={20} color="#8b5cf6" />,
   task_management: <ClipboardList size={20} color="#64748b" />,
-  wallet_admin: <Wallet size={20} color="#2E6F40" />,
+  wallet_admin: <Wallet size={20} color="#3C4A2A" />,
   insurance: <ShieldCheck size={20} color="#8b5cf6" />,
   agro_id: <User size={20} color="#3b82f6" />,
   peer_groups: <Users size={20} color="#8b5cf6" />,
-  expert_consultations: <GraduationCap size={20} color="#2E6F40" />,
+  expert_consultations: <GraduationCap size={20} color="#3C4A2A" />,
   weather_alerts: <Bell size={20} color="#F59E0B" />,
   voice_assistant: <Zap size={20} color="#F59E0B" />,
-  finance_tracker: <BarChart3 size={20} color="#2E6F40" />,
-  mobile_money: <Wallet size={20} color="#2E6F40" />,
+  finance_tracker: <BarChart3 size={20} color="#3C4A2A" />,
+  mobile_money: <Wallet size={20} color="#3C4A2A" />,
   offline_mode: <Zap size={20} color="#64748b" />,
   iot_systems: <Cpu size={20} color="#0ea5e9" />,
   soil_analysis: <Leaf size={20} color="#a3e635" />,
@@ -398,7 +398,7 @@ const CATEGORIES = [
     key: 'ai',
     title: 'Akili Bandia',
     titleEn: 'AI',
-    color: '#2E6F40',
+    color: '#3C4A2A',
     features: [
       'ai_chat',
       'voice_assistant',
@@ -413,7 +413,7 @@ const CATEGORIES = [
     key: 'market',
     title: 'Soko',
     titleEn: 'Market',
-    color: '#2E6F40',
+    color: '#3C4A2A',
     features: ['market_prices', 'contract_farming', 'input_supply', 'marketplace'] as Feature[],
   },
   {
@@ -435,7 +435,7 @@ const CATEGORIES = [
     key: 'finance',
     title: 'Fedha',
     titleEn: 'Finance',
-    color: '#2E6F40',
+    color: '#3C4A2A',
     features: [
       'finance_tracker',
       'mobile_money',
@@ -560,7 +560,7 @@ export default function FeaturesScreen() {
       <View
         style={[
           s.orb1,
-          { backgroundColor: isDark ? 'rgba(46, 111, 64,0.1)' : 'rgba(46, 111, 64,0.05)' },
+          { backgroundColor: isDark ? 'rgba(60, 74, 42,0.1)' : 'rgba(60, 74, 42,0.05)' },
         ]}
       />
       <View
@@ -578,7 +578,7 @@ export default function FeaturesScreen() {
               colors={isDark ? ['#0c250c', '#080f08'] : ['#f0fdf4', '#f8fafc']}
               style={[
                 s.hero,
-                { borderColor: isDark ? 'rgba(46, 111, 64,0.22)' : 'rgba(46, 111, 64,0.15)' },
+                { borderColor: isDark ? 'rgba(60, 74, 42,0.22)' : 'rgba(60, 74, 42,0.15)' },
               ]}
             >
               {/* Top row */}
@@ -595,8 +595,8 @@ export default function FeaturesScreen() {
                       s.heroBadge,
                       {
                         backgroundColor: isDark
-                          ? 'rgba(46, 111, 64,0.25)'
-                          : 'rgba(46, 111, 64,0.1)',
+                          ? 'rgba(60, 74, 42,0.25)'
+                          : 'rgba(60, 74, 42,0.1)',
                       },
                     ]}
                   >
@@ -610,7 +610,7 @@ export default function FeaturesScreen() {
                   </Text>
                   <Text style={[s.heroRole, { color: colors.textMute }]}>{roleLabel(role)}</Text>
                 </View>
-                <LinearGradient colors={['#2E6F40', '#0a3d18']} style={s.heroCircle}>
+                <LinearGradient colors={['#3C4A2A', '#0a3d18']} style={s.heroCircle}>
                   <LayoutGrid size={22} color="#fff" strokeWidth={2.5} />
                 </LinearGradient>
               </View>
@@ -625,12 +625,12 @@ export default function FeaturesScreen() {
                   marginBottom: 10,
                 }}
               >
-                <Activity size={11} color="#2E6F40" />
+                <Activity size={11} color="#3C4A2A" />
                 <Text
                   style={{
                     fontFamily: 'Inter_700Bold',
                     fontSize: 9,
-                    color: '#2E6F40',
+                    color: '#3C4A2A',
                     letterSpacing: 1,
                   }}
                 >
@@ -675,15 +675,15 @@ export default function FeaturesScreen() {
                   {
                     backgroundColor: isDark ? '#091a09' : '#e8f5e9',
                     borderWidth: 1,
-                    borderColor: isDark ? 'rgba(46, 111, 64,0.22)' : 'rgba(46, 111, 64,0.3)',
+                    borderColor: isDark ? 'rgba(60, 74, 42,0.22)' : 'rgba(60, 74, 42,0.3)',
                   },
                 ]}
               >
-                <Text style={[s.statChipLabel, { color: '#2E6F40', opacity: 0.85 }]}>
+                <Text style={[s.statChipLabel, { color: '#3C4A2A', opacity: 0.85 }]}>
                   {lang === 'sw' ? 'VIFAA' : 'DEVICES'}
                 </Text>
                 <Text style={[s.statChipVal, { color: isDark ? '#fff' : colors.text }]}>6</Text>
-                <Text style={[s.statChipSub, { color: '#2E6F40', opacity: 0.8 }]}>
+                <Text style={[s.statChipSub, { color: '#3C4A2A', opacity: 0.8 }]}>
                   {lang === 'sw' ? 'Mtandaoni' : 'Online'}
                 </Text>
               </View>
@@ -746,7 +746,7 @@ export default function FeaturesScreen() {
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                     <View style={s.livePulse} />
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: '#2E6F40' }}>
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: '#3C4A2A' }}>
                       LIVE
                     </Text>
                     <ChevronRight size={14} color={colors.textMute} />
@@ -775,7 +775,7 @@ export default function FeaturesScreen() {
                             {
                               width: `${dev.bat}%` as any,
                               backgroundColor:
-                                dev.bat > 60 ? '#2E6F40' : dev.bat > 30 ? '#f59e0b' : '#ef4444',
+                                dev.bat > 60 ? '#3C4A2A' : dev.bat > 30 ? '#f59e0b' : '#ef4444',
                             },
                           ]}
                         />
@@ -786,7 +786,7 @@ export default function FeaturesScreen() {
                           fontSize: 10,
                           width: 32,
                           textAlign: 'right',
-                          color: dev.bat > 60 ? '#2E6F40' : '#f59e0b',
+                          color: dev.bat > 60 ? '#3C4A2A' : '#f59e0b',
                         }}
                       >
                         {dev.bat}%
@@ -968,7 +968,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  livePulse: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#2E6F40' },
+  livePulse: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#3C4A2A' },
   batTrack: {
     width: 56,
     height: 4,

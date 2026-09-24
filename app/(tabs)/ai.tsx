@@ -630,10 +630,10 @@ export default function SankofaScreen() {
                           borderRadius: sz / 2,
                           borderColor:
                             voiceState === 'LISTENING'
-                              ? `rgba(46, 111, 64,${0.4 - i * 0.12})`
+                              ? `rgba(60, 74, 42,${0.4 - i * 0.12})`
                               : voiceState === 'PROCESSING'
                                 ? `rgba(139,92,246,${0.4 - i * 0.12})`
-                                : `rgba(46, 111, 64,${0.15 - i * 0.04})`,
+                                : `rgba(60, 74, 42,${0.15 - i * 0.04})`,
                         },
                       ]}
                     />
@@ -641,7 +641,7 @@ export default function SankofaScreen() {
                   <LinearGradient
                     colors={
                       voiceState === 'LISTENING'
-                        ? [colors.primary, '#3A8D52']
+                        ? [colors.primary, '#6E8550']
                         : voiceState === 'PROCESSING'
                           ? ['rgba(139,92,246,0.4)', 'rgba(139,92,246,0.1)']
                           : [colors.primary + '33', colors.primary + '0D']
@@ -1007,7 +1007,7 @@ function ChatMessage({
         </View>
       ) : (
         <LinearGradient
-          colors={['#3A8D52', colors.primary]}
+          colors={['#6E8550', colors.primary]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={[styles.bubble, styles.userBubble]}
@@ -1048,11 +1048,11 @@ function TypingIndicator() {
   return (
     <View style={styles.typingRow}>
       <LinearGradient colors={['#112519', '#060e08']} style={styles.avatar}>
-        <BrainCircuit size={14} color="#2E6F40" />
+        <BrainCircuit size={14} color="#3C4A2A" />
       </LinearGradient>
       <View>
         <View style={styles.aiBubbleSourceRow}>
-          <BrainCircuit size={8} color="#2E6F40" />
+          <BrainCircuit size={8} color="#3C4A2A" />
           <Text style={styles.aiBubbleSourceText}>SANKOFA</Text>
         </View>
         <View style={styles.typingBubble}>
@@ -1215,7 +1215,7 @@ const styles = StyleSheet.create({
     width: 340,
     height: 340,
     borderRadius: 170,
-    backgroundColor: 'rgba(46, 111, 64,0.1)',
+    backgroundColor: 'rgba(60, 74, 42,0.1)',
     ...(Platform.OS === 'web' ? ({ filter: 'blur(90px)' } as any) : {}),
   },
   glowBL: {
@@ -1225,7 +1225,7 @@ const styles = StyleSheet.create({
     width: 260,
     height: 260,
     borderRadius: 130,
-    backgroundColor: 'rgba(46, 111, 64,0.06)',
+    backgroundColor: 'rgba(60, 74, 42,0.06)',
     ...(Platform.OS === 'web' ? ({ filter: 'blur(70px)' } as any) : {}),
   },
 
@@ -1238,7 +1238,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 11,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(46, 111, 64,0.12)',
+    borderBottomColor: 'rgba(60, 74, 42,0.12)',
     backgroundColor: 'rgba(6,12,7,0.97)',
   },
   iconBtn: {
@@ -1263,7 +1263,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.35)',
+    borderColor: 'rgba(60, 74, 42,0.35)',
   },
   avatarRing: {
     position: 'absolute',
@@ -1274,9 +1274,9 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
   },
   engineBadge: {
-    backgroundColor: 'rgba(46, 111, 64,0.12)',
+    backgroundColor: 'rgba(60, 74, 42,0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.28)',
+    borderColor: 'rgba(60, 74, 42,0.28)',
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
@@ -1284,7 +1284,7 @@ const styles = StyleSheet.create({
   engineBadgeText: {
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
-    color: '#2E6F40',
+    color: '#3C4A2A',
     letterSpacing: 0.5,
   },
   headerTitle: {
@@ -1336,7 +1336,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 8,
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.3)',
+    borderColor: 'rgba(60, 74, 42,0.3)',
   },
   userAvatar: {
     width: 34,
@@ -1361,9 +1361,9 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderTopLeftRadius: 4,
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.2)',
+    borderColor: 'rgba(60, 74, 42,0.2)',
     borderLeftWidth: 3,
-    borderLeftColor: '#2E6F40',
+    borderLeftColor: '#3C4A2A',
     paddingHorizontal: 14,
     paddingVertical: 12,
     maxWidth: '100%',
@@ -1385,7 +1385,7 @@ const styles = StyleSheet.create({
   aiBubbleSourceText: {
     fontSize: 12,
     fontFamily: 'Inter_800ExtraBold',
-    color: '#2E6F40',
+    color: '#3C4A2A',
     letterSpacing: 1,
   },
   userBubble: {
@@ -1428,16 +1428,16 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderTopLeftRadius: 4,
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.2)',
+    borderColor: 'rgba(60, 74, 42,0.2)',
     borderLeftWidth: 3,
-    borderLeftColor: '#2E6F40',
+    borderLeftColor: '#3C4A2A',
     gap: 5,
   },
   typingDot: {
     width: 7,
     height: 7,
     borderRadius: 3.5,
-    backgroundColor: '#2E6F40',
+    backgroundColor: '#3C4A2A',
   },
 
   // Suggestions
@@ -1454,9 +1454,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: 20,
-    backgroundColor: 'rgba(46, 111, 64,0.06)',
+    backgroundColor: 'rgba(60, 74, 42,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.22)',
+    borderColor: 'rgba(60, 74, 42,0.22)',
     marginRight: 8,
   },
   suggestionText: {
@@ -1471,7 +1471,7 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     paddingBottom: Platform.OS === 'ios' ? 30 : 18,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(46, 111, 64,0.12)',
+    borderTopColor: 'rgba(60, 74, 42,0.12)',
     backgroundColor: 'rgba(5,10,6,0.99)',
   },
   inputRow: {
@@ -1498,7 +1498,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     backgroundColor: 'rgba(255,255,255,0.04)',
     borderWidth: 1.5,
-    borderColor: 'rgba(46, 111, 64,0.28)',
+    borderColor: 'rgba(60, 74, 42,0.28)',
   },
   input: {
     flex: 1,
@@ -1574,7 +1574,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.4)',
+    borderColor: 'rgba(60, 74, 42,0.4)',
   },
   exitVoiceBtn: {
     flexDirection: 'row',
@@ -1604,7 +1604,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.12)',
+    borderColor: 'rgba(60, 74, 42,0.12)',
     padding: 24,
     paddingBottom: Platform.OS === 'ios' ? 44 : 28,
   },
@@ -1638,9 +1638,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(46, 111, 64,0.1)',
+    backgroundColor: 'rgba(60, 74, 42,0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.2)',
+    borderColor: 'rgba(60, 74, 42,0.2)',
   },
   sheetOptionTitle: {
     fontSize: 15,
@@ -1681,7 +1681,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 14,
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.2)',
+    borderColor: 'rgba(60, 74, 42,0.2)',
   },
   loaderText: {
     fontSize: 14,
@@ -1693,8 +1693,8 @@ const styles = StyleSheet.create({
   excelCard: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.2)',
-    backgroundColor: 'rgba(46, 111, 64,0.04)',
+    borderColor: 'rgba(60, 74, 42,0.2)',
+    backgroundColor: 'rgba(60, 74, 42,0.04)',
     padding: 16,
     marginBottom: 20,
   },
@@ -1708,7 +1708,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(46, 111, 64,0.12)',
+    backgroundColor: 'rgba(60, 74, 42,0.12)',
   },
   excelFileName: {
     fontSize: 15,
@@ -1742,15 +1742,15 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingVertical: 9,
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.2)',
+    borderColor: 'rgba(60, 74, 42,0.2)',
     borderRadius: 10,
     alignItems: 'center',
-    backgroundColor: 'rgba(46, 111, 64,0.05)',
+    backgroundColor: 'rgba(60, 74, 42,0.05)',
   },
   excelToggleText: {
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
-    color: '#2E6F40',
+    color: '#3C4A2A',
   },
   table: {
     borderWidth: 1,
@@ -1769,7 +1769,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tableHeaderCell: {
-    backgroundColor: 'rgba(46, 111, 64,0.08)',
+    backgroundColor: 'rgba(60, 74, 42,0.08)',
   },
   tableHeaderText: {
     fontSize: 12,
@@ -1793,14 +1793,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 9,
     borderRadius: 10,
-    backgroundColor: 'rgba(46, 111, 64,0.08)',
+    backgroundColor: 'rgba(60, 74, 42,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.2)',
+    borderColor: 'rgba(60, 74, 42,0.2)',
   },
   shortcutText: {
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
-    color: '#2E6F40',
+    color: '#3C4A2A',
   },
 
   // Detached

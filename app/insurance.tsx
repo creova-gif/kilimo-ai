@@ -46,7 +46,7 @@ const INSURANCE_INTEGRATION_LIVE = false;
 const STATUS_META = {
   browse: { color: '#94a3b8', label: 'Available' },
   pending: { color: '#f59e0b', label: 'Pending' },
-  active: { color: '#2E6F40', label: 'Active' },
+  active: { color: '#3C4A2A', label: 'Active' },
   expired: { color: '#64748b', label: 'Expired' },
   claimed: { color: '#3b82f6', label: 'Claim Filed' },
 };
@@ -433,7 +433,7 @@ export default function InsuranceScreen() {
                       },
                     ]}
                   >
-                    <Text style={{ color: '#000', fontSize: 12, fontFamily: 'Inter_800ExtraBold' }}>
+                    <Text style={{ color: '#fff', fontSize: 12, fontFamily: 'Inter_800ExtraBold' }}>
                       {step}
                     </Text>
                   </View>
@@ -861,7 +861,7 @@ export default function InsuranceScreen() {
                     accessibilityLabel={language === 'sw' ? 'Endelea' : 'Continue'}
                   >
                     <Text style={s.modalPriBtnText}>Continue</Text>
-                    <ChevronRight size={16} color="#000" />
+                    <ChevronRight size={16} color="#fff" />
                   </TouchableOpacity>
                 ) : (
                   <TouchableOpacity
@@ -876,13 +876,13 @@ export default function InsuranceScreen() {
                     }
                   >
                     {loadingEnroll ? (
-                      <ActivityIndicator size="small" color="#000" />
+                      <ActivityIndicator size="small" color="#fff" />
                     ) : (
                       <>
                         <Text style={s.modalPriBtnText}>
                           {language === 'sw' ? 'Thibitisha Malipo' : 'Submit & Pay'}
                         </Text>
-                        <Check size={16} color="#000" />
+                        <Check size={16} color="#fff" />
                       </>
                     )}
                   </TouchableOpacity>
@@ -936,7 +936,7 @@ export default function InsuranceScreen() {
                       },
                     ]}
                   >
-                    <Text style={{ color: '#000', fontSize: 12, fontFamily: 'Inter_800ExtraBold' }}>
+                    <Text style={{ color: '#fff', fontSize: 12, fontFamily: 'Inter_800ExtraBold' }}>
                       {step}
                     </Text>
                   </View>
@@ -1144,7 +1144,7 @@ export default function InsuranceScreen() {
                                 : 'Capture photo evidence of damage'
                             }
                           >
-                            <Camera size={16} color="#000" />
+                            <Camera size={16} color="#fff" />
                             <Text style={s.cameraBtnText}>
                               {language === 'sw' ? 'Piga Picha · Capture' : 'Capture Evidence'}
                             </Text>
@@ -1365,7 +1365,7 @@ export default function InsuranceScreen() {
                     accessibilityLabel={language === 'sw' ? 'Endelea' : 'Continue'}
                   >
                     <Text style={s.modalPriBtnText}>Continue</Text>
-                    <ChevronRight size={16} color="#000" />
+                    <ChevronRight size={16} color="#fff" />
                   </TouchableOpacity>
                 ) : (
                   <TouchableOpacity
@@ -1378,13 +1378,13 @@ export default function InsuranceScreen() {
                     }
                   >
                     {loadingClaim ? (
-                      <ActivityIndicator size="small" color="#000" />
+                      <ActivityIndicator size="small" color="#fff" />
                     ) : (
                       <>
                         <Text style={s.modalPriBtnText}>
                           {language === 'sw' ? 'Tuma Dai Sasa' : 'Submit Claim'}
                         </Text>
-                        <Check size={16} color="#000" />
+                        <Check size={16} color="#fff" />
                       </>
                     )}
                   </TouchableOpacity>
@@ -1497,7 +1497,7 @@ const s = StyleSheet.create({
     minHeight: 44,
     justifyContent: 'center',
   },
-  enrollText: { color: '#000', fontSize: 13, fontFamily: 'Inter_700Bold', letterSpacing: 0.5 },
+  enrollText: { color: '#fff', fontSize: 13, fontFamily: 'Inter_700Bold', letterSpacing: 0.5 },
   policyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   statusBadge: {
     flexDirection: 'row',
@@ -1571,10 +1571,10 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     padding: 10,
-    backgroundColor: 'rgba(46, 111, 64,0.06)',
+    backgroundColor: 'rgba(60, 74, 42,0.06)',
     borderRadius: 10,
     borderWidth: 0.5,
-    borderColor: 'rgba(46, 111, 64,0.2)',
+    borderColor: 'rgba(60, 74, 42,0.2)',
     marginBottom: 8,
   },
   prefillBannerText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#146e2e', flex: 1 },
@@ -1646,7 +1646,7 @@ const s = StyleSheet.create({
     borderRadius: 14,
     gap: 6,
   },
-  modalPriBtnText: { color: '#000', fontSize: 13.5, fontFamily: 'Inter_700Bold' },
+  modalPriBtnText: { color: '#fff', fontSize: 13.5, fontFamily: 'Inter_700Bold' },
   modalSecBtn: {
     borderWidth: 1,
     borderRadius: 14,
@@ -1685,7 +1685,7 @@ const s = StyleSheet.create({
     minHeight: 44,
     justifyContent: 'center',
   },
-  cameraBtnText: { color: '#000', fontSize: 12, fontFamily: 'Inter_700Bold' },
+  cameraBtnText: { color: '#fff', fontSize: 12, fontFamily: 'Inter_700Bold' },
 
   photoPreviewContainer: {
     height: 220,

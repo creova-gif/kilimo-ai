@@ -259,7 +259,7 @@ export default function PeerGroupsScreen() {
                       {g.joined ? (
                         <LogOut size={12} color="#ef4444" />
                       ) : (
-                        <LogIn size={12} color="#000" />
+                        <LogIn size={12} color="#fff" />
                       )}
                       <Text style={[s.joinText, { color: g.joined ? '#ef4444' : '#000' }]}>
                         {g.joined ? 'Leave' : 'Join'}
@@ -431,7 +431,7 @@ export default function PeerGroupsScreen() {
                           { backgroundColor: colors.primary, opacity: draft.trim() ? 1 : 0.4 },
                         ]}
                       >
-                        <Send size={16} color="#000" />
+                        <Send size={16} color="#fff" />
                       </TouchableOpacity>
                     </GlassCard>
                   ) : (
@@ -569,8 +569,8 @@ export default function PeerGroupsScreen() {
                             style={[
                               s.volunteerBtn,
                               {
-                                backgroundColor: t.joined ? '#2E6F4020' : colors.primary,
-                                borderColor: t.joined ? '#2E6F4070' : 'transparent',
+                                backgroundColor: t.joined ? '#3C4A2A20' : colors.primary,
+                                borderColor: t.joined ? '#3C4A2A70' : 'transparent',
                               },
                             ]}
                           >
@@ -592,7 +592,7 @@ export default function PeerGroupsScreen() {
                                 style={{
                                   fontSize: 11.5,
                                   fontFamily: 'Inter_700Bold',
-                                  color: '#000',
+                                  color: '#fff',
                                 }}
                               >
                                 Shiriki · Volunteer
@@ -709,8 +709,8 @@ export default function PeerGroupsScreen() {
                             style={[
                               s.rsvpBtn,
                               {
-                                backgroundColor: e.rsvp ? '#2E6F4020' : colors.primary,
-                                borderColor: e.rsvp ? '#2E6F4070' : 'transparent',
+                                backgroundColor: e.rsvp ? '#3C4A2A20' : colors.primary,
+                                borderColor: e.rsvp ? '#3C4A2A70' : 'transparent',
                               },
                             ]}
                           >
@@ -732,7 +732,7 @@ export default function PeerGroupsScreen() {
                                 style={{
                                   fontSize: 11.5,
                                   fontFamily: 'Inter_700Bold',
-                                  color: '#000',
+                                  color: '#fff',
                                 }}
                               >
                                 Nitakuja · Attend
@@ -902,7 +902,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: 'rgba(46, 111, 64,0.1)',
+    backgroundColor: 'rgba(60, 74, 42,0.1)',
   },
   rsvpBtn: {
     marginTop: 12,

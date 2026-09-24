@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: 'rgba(46, 111, 64,0.2)',
+    backgroundColor: 'rgba(60, 74, 42,0.2)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 20,
@@ -418,7 +418,7 @@ const styles = StyleSheet.create({
   heroBadgeText: {
     fontFamily: 'Inter_700Bold',
     fontSize: 9,
-    color: '#2E6F40',
+    color: '#3C4A2A',
     letterSpacing: 1,
   },
   heroTitle: {
@@ -567,7 +567,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(46, 111, 64, 0.08)',
+    backgroundColor: 'rgba(60, 74, 42, 0.08)',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
@@ -575,7 +575,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   recActionText: {
-    color: '#2E6F40',
+    color: '#3C4A2A',
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
   },

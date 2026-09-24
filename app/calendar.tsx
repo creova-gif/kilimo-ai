@@ -95,7 +95,7 @@ const DAYS_EN = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const PRIORITY_COLOR: Record<string, string> = {
   critical: '#ef4444',
   high: '#f59e0b',
-  medium: '#2E6F40',
+  medium: '#3C4A2A',
   low: '#94a3b8',
 };
 const PRIORITY_LABEL_SW: Record<string, string> = {
@@ -271,8 +271,8 @@ const CompletionBurst = ({ onDone }: { onDone: () => void }) => {
         style,
       ]}
     >
-      <View style={{ backgroundColor: '#2E6F40', borderRadius: 20, padding: 10 }}>
-        <Check size={20} color="#000" strokeWidth={3} />
+      <View style={{ backgroundColor: '#3C4A2A', borderRadius: 20, padding: 10 }}>
+        <Check size={20} color="#fff" strokeWidth={3} />
       </View>
     </Animated.View>
   );
@@ -768,7 +768,7 @@ If suggesting task changes, be specific. Max 3 sentences.`;
               onPress={() => openAdd()}
               style={[styles.emptyDayBtn, { backgroundColor: colors.primary }]}
             >
-              <Plus size={13} color="#000" />
+              <Plus size={13} color="#fff" />
               <Text style={styles.emptyDayBtnText}>
                 {language === 'sw' ? 'Ongeza Kazi' : 'Add a Task'}
               </Text>
@@ -1086,10 +1086,10 @@ If suggesting task changes, be specific. Max 3 sentences.`;
                 ]}
               >
                 {saving ? (
-                  <ActivityIndicator size="small" color="#000" />
+                  <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <>
-                    <Check size={14} color="#000" strokeWidth={3} />
+                    <Check size={14} color="#fff" strokeWidth={3} />
                     <Text style={styles.saveBtnText}>{language === 'sw' ? 'Hifadhi' : 'Save'}</Text>
                   </>
                 )}
@@ -1340,7 +1340,7 @@ If suggesting task changes, be specific. Max 3 sentences.`;
             onPress={() => openAdd()}
             style={[styles.addHeaderBtn, { backgroundColor: colors.primary }]}
           >
-            <Plus size={16} color="#000" strokeWidth={2.5} />
+            <Plus size={16} color="#fff" strokeWidth={2.5} />
           </TouchableOpacity>
         </View>
 
@@ -1360,7 +1360,7 @@ If suggesting task changes, be specific. Max 3 sentences.`;
         style={[styles.fab, { backgroundColor: colors.primary }]}
         activeOpacity={0.85}
       >
-        <Plus size={24} color="#000" strokeWidth={2.5} />
+        <Plus size={24} color="#fff" strokeWidth={2.5} />
       </TouchableOpacity>
 
       {/* Modals */}
@@ -1392,7 +1392,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
   },
-  aiHeaderBtnText: { fontSize: 11, fontFamily: 'Inter_700Bold', color: '#2E6F40' },
+  aiHeaderBtnText: { fontSize: 11, fontFamily: 'Inter_700Bold', color: '#3C4A2A' },
   addHeaderBtn: {
     width: 34,
     height: 34,
@@ -1429,8 +1429,8 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     borderRadius: 10,
   },
-  cellSelected: { backgroundColor: '#2E6F40' },
-  cellToday: { borderWidth: 1.5, borderColor: '#2E6F40', borderRadius: 10 },
+  cellSelected: { backgroundColor: '#3C4A2A' },
+  cellToday: { borderWidth: 1.5, borderColor: '#3C4A2A', borderRadius: 10 },
   cellNum: { fontSize: 13, fontFamily: 'InstrumentSerif_400Regular' },
   dotRow: { flexDirection: 'row', gap: 2, marginTop: 2 },
   taskDot: { width: 4, height: 4, borderRadius: 2 },
@@ -1452,7 +1452,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
   },
-  addDayBtnText: { fontSize: 11, fontFamily: 'Inter_700Bold', color: '#2E6F40' },
+  addDayBtnText: { fontSize: 11, fontFamily: 'Inter_700Bold', color: '#3C4A2A' },
 
   emptyDay: { alignItems: 'center', paddingTop: 32, gap: 10 },
   emptyDayText: { fontSize: 13, fontFamily: 'Inter_500Medium', textAlign: 'center' },
@@ -1465,7 +1465,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 14,
   },
-  emptyDayBtnText: { fontSize: 12, fontFamily: 'Inter_700Bold', color: '#000' },
+  emptyDayBtnText: { fontSize: 12, fontFamily: 'Inter_700Bold', color: '#fff' },
 
   taskRow: {
     flexDirection: 'row',
@@ -1514,7 +1514,7 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#2E6F40',
+    shadowColor: '#3C4A2A',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 12,
@@ -1598,7 +1598,7 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: 14,
   },
-  saveBtnText: { fontSize: 13, fontFamily: 'Inter_700Bold', color: '#000' },
+  saveBtnText: { fontSize: 13, fontFamily: 'Inter_700Bold', color: '#fff' },
 
   // ── AI panel ──────────────────────────────────────────────────────────────
   aiOverlay: { flex: 1, justifyContent: 'flex-end' },
@@ -1624,9 +1624,9 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(46, 111, 64,0.15)',
+    backgroundColor: 'rgba(60, 74, 42,0.15)',
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.3)',
+    borderColor: 'rgba(60, 74, 42,0.3)',
   },
   aiTitle: { fontSize: 15, fontFamily: 'InstrumentSerif_400Regular' },
   aiSub: { fontSize: 10, fontFamily: 'Inter_500Medium' },

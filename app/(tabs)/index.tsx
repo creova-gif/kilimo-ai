@@ -266,7 +266,7 @@ const TrackRecords = ({ colors, isDark, language, router: _router }: any) => {
                   ]}
                 >
                   {isCompleted ? (
-                    <Check size={11} color="#000" strokeWidth={3} />
+                    <Check size={11} color="#fff" strokeWidth={3} />
                   ) : isNext ? (
                     <View
                       style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#f59e0b' }}
@@ -1967,7 +1967,7 @@ export default function HomeScreen() {
         id: 'calendar',
         label: language === 'sw' ? 'Kalenda' : 'Calendar',
         icon: <Calendar size={22} color="#fff" />,
-        color: '#3A8D52',
+        color: '#6E8550',
         desc: language === 'sw' ? 'Ratiba ya Shamba' : 'Farm Schedule',
       },
       {
@@ -1981,7 +1981,7 @@ export default function HomeScreen() {
         id: 'market',
         label: language === 'sw' ? 'Soko' : 'Market',
         icon: <TrendingUp size={22} color="#fff" />,
-        color: '#256035',
+        color: '#2F3A21',
         desc: language === 'sw' ? 'Bei za Mazao' : 'Market Prices',
       },
       {
@@ -2113,31 +2113,14 @@ export default function HomeScreen() {
         const reply = await chat([{ role: 'user', content: promptText }]);
         setChatReply(reply);
       } else {
-        await new Promise((r) => setTimeout(r, 1000));
-        const queryLower = query.toLowerCase();
-        if (queryLower.includes('nitrogen') || queryLower.includes('nitrojeni')) {
-          setChatReply(
-            language === 'sw'
-              ? 'Nitrojeni iko chini kwa sababu ya kilimo cha mfululizo. Kupanda maharage au kuweka mbolea ya Urea kutarudisha rutuba.'
-              : 'Low nitrogen is usually caused by repeated mono-cropping. Intercropping with beans or applying Urea fertilizer will restore soil nutrients.'
-          );
-        } else if (
-          queryLower.includes('bei') ||
-          queryLower.includes('market') ||
-          queryLower.includes('price')
-        ) {
-          setChatReply(
-            language === 'sw'
-              ? 'Bei ya Mahindi soko la Tandale imepanda hadi TZS 85,000 kwa gunia la kilo 100 leo. Hii ni ongezeko la 2.4%.'
-              : 'Maize prices at Tandale market increased to TZS 85,000 per 100kg bag today. That is a 2.4% increase.'
-          );
-        } else {
-          setChatReply(
-            language === 'sw'
-              ? 'Sankofa AI imepokea swali lako. Mwagilia mmea asubuhi kabla ya jua kali na uhakikishe mifereji iko wazi shambani.'
-              : 'Sankofa AI has received your query. Please irrigate your crops early in the morning and verify field drainage is optimal.'
-          );
-        }
+        // No AI backend configured: say so instead of inventing an answer.
+        // (This used to return canned replies — including a made-up Tandale
+        // maize price — labelled as "Kilimo AI".)
+        setChatReply(
+          language === 'sw'
+            ? 'Kilimo AI haipatikani kwa sasa. Jaribu tena ukiwa na mtandao, au muulize afisa ugani.'
+            : 'Kilimo AI is not available right now. Try again when connected, or ask an extension officer.'
+        );
       }
     } catch {
       setChatReply(
@@ -4337,9 +4320,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
-    backgroundColor: 'rgba(46, 111, 64,0.1)',
+    backgroundColor: 'rgba(60, 74, 42,0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.25)',
+    borderColor: 'rgba(60, 74, 42,0.25)',
   },
   trackProgressTrack: {
     height: 3,
@@ -4351,7 +4334,7 @@ const styles = StyleSheet.create({
   trackProgressFill: {
     height: '100%',
     borderRadius: 2,
-    backgroundColor: '#2E6F40',
+    backgroundColor: '#3C4A2A',
   },
   trackRow: {
     flexDirection: 'row',
@@ -4431,7 +4414,7 @@ const styles = StyleSheet.create({
   trackExpandedBtnText: {
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
-    color: '#2E6F40',
+    color: '#3C4A2A',
   },
 
   // ── Crop Value Card Styles ─────────────────────────────────────────────────
@@ -4584,7 +4567,7 @@ const styles = StyleSheet.create({
   cropValueCtaText: {
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
-    color: '#2E6F40',
+    color: '#3C4A2A',
   },
 
   // ── Daily Organizer Strip Styles ───────────────────────────────────────────
@@ -4676,7 +4659,7 @@ const styles = StyleSheet.create({
   organizerFooterText: {
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
-    color: '#2E6F40',
+    color: '#3C4A2A',
   },
 
   // Quick Action List Styles
@@ -5078,7 +5061,7 @@ const styles = StyleSheet.create({
     width: 200,
     height: 200,
     borderRadius: 100,
-    backgroundColor: 'rgba(46, 111, 64,0.07)',
+    backgroundColor: 'rgba(60, 74, 42,0.07)',
     top: -70,
     right: -50,
   },
@@ -5087,7 +5070,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: 'rgba(46, 111, 64,0.05)',
+    backgroundColor: 'rgba(60, 74, 42,0.05)',
     bottom: -40,
     left: 10,
   },
@@ -5101,9 +5084,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: 'rgba(46, 111, 64,0.15)',
+    backgroundColor: 'rgba(60, 74, 42,0.15)',
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.28)',
+    borderColor: 'rgba(60, 74, 42,0.28)',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
@@ -5111,11 +5094,11 @@ const styles = StyleSheet.create({
   weeklyHeroAiBadgeText: {
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
-    color: '#2E6F40',
+    color: '#3C4A2A',
     letterSpacing: 0.8,
   },
   weeklyHeroLivePill: {
-    backgroundColor: '#2E6F40',
+    backgroundColor: '#3C4A2A',
     paddingHorizontal: 9,
     paddingVertical: 4,
     borderRadius: 20,
@@ -5155,9 +5138,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(46, 111, 64,0.18)',
+    backgroundColor: 'rgba(60, 74, 42,0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.32)',
+    borderColor: 'rgba(60, 74, 42,0.32)',
     paddingHorizontal: 13,
     paddingVertical: 8,
     borderRadius: 20,
@@ -5165,7 +5148,7 @@ const styles = StyleSheet.create({
   weeklyHeroCtaText: {
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
-    color: '#2E6F40',
+    color: '#3C4A2A',
     letterSpacing: 0.4,
   },
   // ── Regular Rec Card Redesign ─────────────────────────────
@@ -5519,7 +5502,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1.5,
     gap: 10,
-    shadowColor: '#2E6F40',
+    shadowColor: '#3C4A2A',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.1,
     shadowRadius: 16,

@@ -1182,7 +1182,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(46, 111, 64, 0.08)',
+    backgroundColor: 'rgba(60, 74, 42, 0.08)',
   },
   rowDivider: {
     height: 1,

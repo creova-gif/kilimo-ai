@@ -143,7 +143,7 @@ const CAT_META: Record<
 > = {
   mazao: {
     icon: (c) => <Wheat size={14} color={c} />,
-    color: '#2E6F40',
+    color: '#3C4A2A',
     label: 'Mazao',
     labelEn: 'Crops',
   },
@@ -251,7 +251,7 @@ function MonthlyChart({
         <SvgDefs>
           <SvgGrad id="incGrad" x1="0" y1="0" x2="0" y2="1">
             <SvgStop offset="0%" stopColor={colors.primary} stopOpacity="1" />
-            <SvgStop offset="100%" stopColor="#3A8D52" stopOpacity="0.9" />
+            <SvgStop offset="100%" stopColor="#6E8550" stopOpacity="0.9" />
           </SvgGrad>
           <SvgGrad id="expGrad" x1="0" y1="0" x2="0" y2="1">
             <SvgStop offset="0%" stopColor="#ef4444" stopOpacity="0.85" />
@@ -528,7 +528,7 @@ export default function FinanceScreen() {
           >
             <LinearGradient
               colors={isDark ? ['#0d1f0e', '#080f09'] : ['#f0fdf4', '#e8f9ed']}
-              style={[s.plCard, { borderColor: isDark ? '#2E6F4022' : '#2E6F4033' }]}
+              style={[s.plCard, { borderColor: isDark ? '#3C4A2A22' : '#3C4A2A33' }]}
             >
               <View style={s.plRow}>
                 <View style={s.plItem}>
@@ -1135,7 +1135,7 @@ export default function FinanceScreen() {
                   : 'Generate contract invoice and save'
               }
             >
-              <Text style={{ color: '#000', fontSize: 14, fontFamily: 'Inter_700Bold' }}>
+              <Text style={{ color: '#fff', fontSize: 14, fontFamily: 'Inter_700Bold' }}>
                 {language === 'sw' ? 'Tengeneza Ankara' : 'Generate & Save'}
               </Text>
             </TouchableOpacity>
@@ -1328,12 +1328,12 @@ const s = StyleSheet.create({
   syncRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
   syncTitle: { fontSize: 12, fontFamily: 'Inter_700Bold' },
   syncStatusBadge: {
-    backgroundColor: 'rgba(46, 111, 64,0.1)',
+    backgroundColor: 'rgba(60, 74, 42,0.1)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
-  syncStatusText: { fontSize: 12, fontFamily: 'Inter_800ExtraBold', color: '#2E6F40' },
+  syncStatusText: { fontSize: 12, fontFamily: 'Inter_800ExtraBold', color: '#3C4A2A' },
 
   // Modals
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
