@@ -6,24 +6,30 @@ Branch: `feat/figma-production-reconciliation`.
 
 ## Phase tracker
 
-| Phase                     | Status          | Output                                                                                                                                                                                                   |
-| ------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A — Evidence              | **In progress** | [00 Inventory](./00_CURRENT_STATE_INVENTORY.md) ✅ · [01 Figma inventory](./01_FIGMA_SCREEN_INVENTORY.md) ✅ · [02 Gap matrix](./02_FIGMA_CODE_GAP_MATRIX.md) ✅ · runtime audit ⏳ · PRD cross-check ⏳ |
-| B — Architecture          | Not started     | 03 IA, design tokens, service boundaries, data model, roles, offline strategy                                                                                                                            |
-| C — UX reconciliation     | Not started     | Navigation, auth/onboarding, shared scaffolds                                                                                                                                                            |
-| D — Screen migration      | Not started     | Every Figma screen and state                                                                                                                                                                             |
-| E — Feature completion    | Not started     |                                                                                                                                                                                                          |
-| F — Backend               | Blocked by C6   | Supabase project is paused                                                                                                                                                                               |
-| G — External integrations | Not started     | Payments, SMS, push, market data, IoT                                                                                                                                                                    |
-| H — Hardening             | Not started     |                                                                                                                                                                                                          |
-| I — Pilot                 | Not started     |                                                                                                                                                                                                          |
+| Phase                     | Status               | Output                                                                                                                                                                                                                     |
+| ------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A — Evidence              | **Mostly done**      | [00](./00_CURRENT_STATE_INVENTORY.md) ✅ · [01](./01_FIGMA_SCREEN_INVENTORY.md) ✅ · [02](./02_FIGMA_CODE_GAP_MATRIX.md) ✅ · runtime audit: web build screenshots started ([evidence/](./evidence/)) · PRD cross-check ⏳ |
+| B — Architecture          | **In progress**      | [03 IA](./03_INFORMATION_ARCHITECTURE.md) ✅ · brand tokens from Figma ✅ · [04 deviations](./04_DESIGN_DEVIATIONS.md) ✅ · service boundaries / data model ⏳ (backend deferred, C6)                                      |
+| C — UX reconciliation     | **Started**          | Figma bottom nav ✅ · Button primitive ✅ · real Inter ✅ · contrast fixes ✅ · onboarding/auth, scaffolds ⏳                                                                                                              |
+| D — Screen migration      | Not started          | Every Figma screen and state                                                                                                                                                                                               |
+| E — Feature completion    | Not started          |                                                                                                                                                                                                                            |
+| F — Backend               | Deferred (owner, C6) | Supabase project stays paused until UI phases are done                                                                                                                                                                     |
+| G — External integrations | Not started          | Payments, SMS, push, market data, IoT                                                                                                                                                                                      |
+| H — Hardening             | Not started          |                                                                                                                                                                                                                            |
+| I — Pilot                 | Not started          |                                                                                                                                                                                                                            |
 
 ## Headline numbers (Phase A)
 
 204 Figma screens/states (excluding 9 superseded frames, 3 components, 11 section labels):
 **130 partial · 56 missing · 18 blocked on external services · 0 verified matches.**
 
-## Open decisions for the owner
+## Owner decisions (2026-09-24)
+
+- **C1 navigation:** adopt Figma tabs — done.
+- **C2 auth:** phone OTP only — password frames dropped.
+- **C6 backend:** UI first; Supabase stays paused.
+
+## Still open
 
 See [02 → Conflicts](./02_FIGMA_CODE_GAP_MATRIX.md#conflicts-that-need-an-owner-decision): C1 navigation, C2 auth, C3 duplicate Figma frames, C4 roles, C5 brand colour, C6 paused Supabase project.
 
