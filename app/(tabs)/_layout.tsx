@@ -2,15 +2,13 @@ import React, { useEffect } from 'react';
 import { Tabs, router } from 'expo-router';
 import { Platform, StyleSheet, View, TouchableOpacity, Text } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Home, User, Bot, Tractor, Plus } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Home, User, Map, Leaf, TrendingUp } from 'lucide-react-native';
 import { useTheme } from '../../constants/Theme';
 import { useKilimoStore } from '../../store/useKilimoStore';
 import { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import Animated from 'react-native-reanimated';
 
-// Brand forest green (DESIGN.md) — replaces the generic emerald so the nav
-// matches the rest of the product.
+// Brand olive (DESIGN.md / Figma) for the active tab.
 const ICON_ACTIVE = '#3C4A2A';
 
 function TabIcon({
@@ -69,6 +67,8 @@ function TabIcon({
 
 export default function TabLayout() {
   const { colors, isDark } = useTheme();
+  const language = useKilimoStore((s) => s.language);
+  const sw = language === 'sw';
 
   const tabBarBg = isDark ? '#111827' : '#ffffff';
   const iconInactive = isDark ? '#6B7280' : '#9CA3AF';
@@ -104,7 +104,7 @@ export default function TabLayout() {
         name="index"
         options={{
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon focused={focused} label="Mwanzo">
+            <TabIcon focused={focused} label={sw ? 'Nyumbani' : 'Home'}>
               <Home color={color} size={24} strokeWidth={focused ? 2.5 : 2} />
             </TabIcon>
           ),
@@ -114,8 +114,8 @@ export default function TabLayout() {
         name="fields"
         options={{
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon focused={focused} label="Mashamba">
-              <Tractor color={color} size={24} strokeWidth={focused ? 2.5 : 2} />
+            <TabIcon focused={focused} label={sw ? 'Shamba' : 'Farm'}>
+              <Map color={color} size={24} strokeWidth={focused ? 2.5 : 2} />
             </TabIcon>
           ),
         }}
@@ -141,13 +141,11 @@ export default function TabLayout() {
                 alignItems: 'center',
               }}
               accessibilityRole="button"
-              accessibilityLabel="Ongeza"
+              accessibilityLabel={sw ? 'Huduma zote' : 'All features'}
             >
-              <LinearGradient
-                colors={['#6E8550', '#3C4A2A']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+              <View
                 style={{
+                  backgroundColor: colors.primary,
                   width: 56,
                   height: 56,
                   borderRadius: 28,
@@ -162,18 +160,18 @@ export default function TabLayout() {
                   borderColor: tabBarBg,
                 }}
               >
-                <Plus color="#ffffff" size={26} strokeWidth={2.75} />
-              </LinearGradient>
+                <Leaf color="#ffffff" size={26} strokeWidth={2.25} />
+              </View>
             </TouchableOpacity>
           ),
         }}
       />
       <Tabs.Screen
-        name="ai"
+        name="market"
         options={{
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon focused={focused} label="Sankofa">
-              <Bot color={color} size={24} strokeWidth={focused ? 2.5 : 2} />
+            <TabIcon focused={focused} label={sw ? 'Soko' : 'Market'}>
+              <TrendingUp color={color} size={24} strokeWidth={focused ? 2.5 : 2} />
             </TabIcon>
           ),
         }}
@@ -182,13 +180,14 @@ export default function TabLayout() {
         name="profile"
         options={{
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon focused={focused} label="Profaili">
+            <TabIcon focused={focused} label={sw ? 'Mimi' : 'Me'}>
               <User color={color} size={24} strokeWidth={focused ? 2.5 : 2} />
             </TabIcon>
           ),
         }}
       />
-      <Tabs.Screen name="market" options={{ href: null }} />
+      {/* AI is reached from the Home "Uliza Kilimo AI" field (Figma nav, decision C1). */}
+      <Tabs.Screen name="ai" options={{ href: null }} />
       <Tabs.Screen name="video-hub" options={{ href: null }} />
       <Tabs.Screen name="ai-training-hub" options={{ href: null }} />
       <Tabs.Screen name="edit-profile" options={{ href: null }} />
