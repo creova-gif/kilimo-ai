@@ -283,7 +283,7 @@ export default function ScenarioEditor() {
           onPress={handleSave}
           style={[se.saveBtn, { backgroundColor: colors.primary }]}
         >
-          <Save size={16} color="#000" />
+          <Save size={16} color="#fff" />
           <Text style={se.saveBtnText}>Hifadhi</Text>
         </TouchableOpacity>
       }
@@ -504,7 +504,7 @@ const se = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 20,
   },
-  saveBtnText: { fontFamily: 'Inter_800ExtraBold', fontSize: 12, color: '#000' },
+  saveBtnText: { fontFamily: 'Inter_800ExtraBold', fontSize: 12, color: '#fff' },
   groupLabel: { fontFamily: 'Inter_700Bold', fontSize: 10, letterSpacing: 1 },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: '#ffffff18', marginVertical: 6 },
   switchRow: {

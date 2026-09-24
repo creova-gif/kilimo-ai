@@ -229,7 +229,7 @@ export default function FarmTwinList() {
               onPress={() => setShowModal(true)}
               style={[s.addBtn, { backgroundColor: colors.primary }]}
             >
-              <Plus size={20} color="#000" />
+              <Plus size={20} color="#fff" />
             </TouchableOpacity>
           ) : undefined
         }
@@ -546,7 +546,7 @@ export default function FarmTwinList() {
                 style={[s.modalBtn, { backgroundColor: colors.primary }]}
                 onPress={handleCreate}
               >
-                <Text style={[s.modalBtnText, { color: '#000' }]}>Unda</Text>
+                <Text style={[s.modalBtnText, { color: '#fff' }]}>Unda</Text>
               </TouchableOpacity>
             </View>
           </View>

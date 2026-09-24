@@ -1241,8 +1241,8 @@ export default function MarketScreen() {
                                     : `Make offer for ${itemName}`
                                 }
                               >
-                                <Wallet size={16} color="#000" />
-                                <Text style={[styles.contractBtnText, { color: '#000' }]}>
+                                <Wallet size={16} color="#fff" />
+                                <Text style={[styles.contractBtnText, { color: '#fff' }]}>
                                   {language === 'sw' ? 'Toa Ofa' : 'Make Offer'}
                                 </Text>
                               </TouchableOpacity>
@@ -1428,7 +1428,7 @@ export default function MarketScreen() {
                         language === 'sw' ? 'Linganisha bidhaa' : 'Compare products'
                       }
                     >
-                      <Text style={{ color: '#000', fontSize: 12, fontFamily: 'Inter_700Bold' }}>
+                      <Text style={{ color: '#fff', fontSize: 12, fontFamily: 'Inter_700Bold' }}>
                         {language === 'sw' ? 'Linganisha' : 'Compare'}
                       </Text>
                     </TouchableOpacity>
@@ -2856,7 +2856,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 44,
   },
-  saveBtnText: { fontSize: 14, fontFamily: 'Inter_700Bold', color: '#000' },
+  saveBtnText: { fontSize: 14, fontFamily: 'Inter_700Bold', color: '#fff' },
 });
 
 const pm = StyleSheet.create({

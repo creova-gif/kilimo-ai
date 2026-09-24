@@ -594,7 +594,7 @@ export default function LivestockScreen() {
             }}
             style={[s.addBtn, { backgroundColor: colors.primary }]}
           >
-            <Plus size={20} color="#000" />
+            <Plus size={20} color="#fff" />
           </TouchableOpacity>
         }
       >

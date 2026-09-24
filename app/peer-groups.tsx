@@ -259,7 +259,7 @@ export default function PeerGroupsScreen() {
                       {g.joined ? (
                         <LogOut size={12} color="#ef4444" />
                       ) : (
-                        <LogIn size={12} color="#000" />
+                        <LogIn size={12} color="#fff" />
                       )}
                       <Text style={[s.joinText, { color: g.joined ? '#ef4444' : '#000' }]}>
                         {g.joined ? 'Leave' : 'Join'}
@@ -431,7 +431,7 @@ export default function PeerGroupsScreen() {
                           { backgroundColor: colors.primary, opacity: draft.trim() ? 1 : 0.4 },
                         ]}
                       >
-                        <Send size={16} color="#000" />
+                        <Send size={16} color="#fff" />
                       </TouchableOpacity>
                     </GlassCard>
                   ) : (
@@ -592,7 +592,7 @@ export default function PeerGroupsScreen() {
                                 style={{
                                   fontSize: 11.5,
                                   fontFamily: 'Inter_700Bold',
-                                  color: '#000',
+                                  color: '#fff',
                                 }}
                               >
                                 Shiriki · Volunteer
@@ -732,7 +732,7 @@ export default function PeerGroupsScreen() {
                                 style={{
                                   fontSize: 11.5,
                                   fontFamily: 'Inter_700Bold',
-                                  color: '#000',
+                                  color: '#fff',
                                 }}
                               >
                                 Nitakuja · Attend

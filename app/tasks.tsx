@@ -876,7 +876,7 @@ export default function TasksScreen() {
                         }
                         accessibilityState={{ checked: isDone }}
                       >
-                        {isDone && <Check size={12} color="#000" strokeWidth={3} />}
+                        {isDone && <Check size={12} color="#fff" strokeWidth={3} />}
                       </TouchableOpacity>
                       <Text
                         style={[

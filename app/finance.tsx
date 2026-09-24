@@ -1135,7 +1135,7 @@ export default function FinanceScreen() {
                   : 'Generate contract invoice and save'
               }
             >
-              <Text style={{ color: '#000', fontSize: 14, fontFamily: 'Inter_700Bold' }}>
+              <Text style={{ color: '#fff', fontSize: 14, fontFamily: 'Inter_700Bold' }}>
                 {language === 'sw' ? 'Tengeneza Ankara' : 'Generate & Save'}
               </Text>
             </TouchableOpacity>

@@ -266,7 +266,7 @@ const TrackRecords = ({ colors, isDark, language, router: _router }: any) => {
                   ]}
                 >
                   {isCompleted ? (
-                    <Check size={11} color="#000" strokeWidth={3} />
+                    <Check size={11} color="#fff" strokeWidth={3} />
                   ) : isNext ? (
                     <View
                       style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#f59e0b' }}

@@ -2260,7 +2260,7 @@ export default function IOTSystems() {
                 accessibilityRole="button"
                 accessibilityLabel={language === 'sw' ? 'Ongeza njia' : 'Add waypoint'}
               >
-                <Plus size={16} color="#000" />
+                <Plus size={16} color="#fff" />
               </TouchableOpacity>
             </View>
 
@@ -2476,7 +2476,7 @@ export default function IOTSystems() {
                           >
                             <View style={[styles.stepItemNum, { backgroundColor: colors.primary }]}>
                               <Text
-                                style={{ color: '#000', fontFamily: 'Inter_700Bold', fontSize: 12 }}
+                                style={{ color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 12 }}
                               >
                                 {idx + 1}
                               </Text>
@@ -2509,7 +2509,7 @@ export default function IOTSystems() {
                           >
                             <View style={[styles.stepItemNum, { backgroundColor: colors.primary }]}>
                               <Text
-                                style={{ color: '#000', fontFamily: 'Inter_700Bold', fontSize: 12 }}
+                                style={{ color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 12 }}
                               >
                                 {idx + 1}
                               </Text>
@@ -2546,7 +2546,7 @@ export default function IOTSystems() {
                               >
                                 <Text
                                   style={{
-                                    color: '#000',
+                                    color: '#fff',
                                     fontFamily: 'Inter_700Bold',
                                     fontSize: 12,
                                   }}
@@ -2582,7 +2582,7 @@ export default function IOTSystems() {
                           >
                             <View style={[styles.stepItemNum, { backgroundColor: colors.primary }]}>
                               <Text
-                                style={{ color: '#000', fontFamily: 'Inter_700Bold', fontSize: 12 }}
+                                style={{ color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 12 }}
                               >
                                 {idx + 1}
                               </Text>
@@ -3286,7 +3286,7 @@ const styles = StyleSheet.create({
   saveBtnText: {
     fontSize: 14,
     fontFamily: 'Inter_700Bold',
-    color: '#000',
+    color: '#fff',
   },
   successWrapper: {
     alignItems: 'center',
@@ -3383,7 +3383,7 @@ const styles = StyleSheet.create({
   buyBtnText: {
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
-    color: '#000',
+    color: '#fff',
   },
   toolsCard: {
     padding: 16,

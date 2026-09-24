@@ -1348,7 +1348,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   primaryBtnText: {
-    color: '#000',
+    color: '#fff',
     fontSize: 18,
     fontFamily: 'InstrumentSerif_400Regular',
     marginRight: 12,

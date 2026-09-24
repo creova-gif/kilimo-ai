@@ -636,8 +636,8 @@ export default function ConsultationsScreen() {
                         onPress={() => handleRequest(e, 'video')}
                         style={[s.actBtn, { backgroundColor: colors.primary }]}
                       >
-                        <Video size={12} color="#000" />
-                        <Text style={[s.actText, { color: '#000' }]}>Video</Text>
+                        <Video size={12} color="#fff" />
+                        <Text style={[s.actText, { color: '#fff' }]}>Video</Text>
                       </TouchableOpacity>
                     </View>
                   </View>

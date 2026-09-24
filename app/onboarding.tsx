@@ -1034,7 +1034,13 @@ function RoleStep({ t, role, setRole }: any) {
                     active && { backgroundColor: meta.color, borderColor: meta.color },
                   ]}
                 >
-                  {active && <Check size={12} color="#000" strokeWidth={3} />}
+                  {active && (
+                    <Check
+                      size={12}
+                      color={meta.color === '#3C4A2A' ? '#fff' : '#000'}
+                      strokeWidth={3}
+                    />
+                  )}
                 </View>
               </View>
             </TouchableOpacity>

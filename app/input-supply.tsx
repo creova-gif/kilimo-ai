@@ -94,7 +94,7 @@ function DeliveryTimeline({ status }: { status: string }) {
           <React.Fragment key={i}>
             <View style={tl.step}>
               <View style={[tl.dot, { backgroundColor: color, borderColor: color }]}>
-                {done && <CheckCircle2 size={9} color="#000" />}
+                {done && <CheckCircle2 size={9} color="#fff" />}
               </View>
               <Text
                 style={[tl.label, { color: done || active ? '#3C4A2A' : '#475569' }]}
@@ -218,7 +218,7 @@ function OrderCard({
             style={oc.confirmBtn}
             activeOpacity={0.8}
           >
-            <CheckCircle2 size={15} color="#000" />
+            <CheckCircle2 size={15} color="#fff" />
             <Text style={oc.confirmText}>Thibitisha Uwasilishaji</Text>
           </TouchableOpacity>
         )}
@@ -269,7 +269,7 @@ const oc = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#3C4A2A',
   },
-  confirmText: { fontSize: 13, fontFamily: 'Inter_700Bold', color: '#000' },
+  confirmText: { fontSize: 13, fontFamily: 'Inter_700Bold', color: '#fff' },
 });
 
 // ─── Supplier card ────────────────────────────────────────────────────────────

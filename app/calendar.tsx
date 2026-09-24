@@ -272,7 +272,7 @@ const CompletionBurst = ({ onDone }: { onDone: () => void }) => {
       ]}
     >
       <View style={{ backgroundColor: '#3C4A2A', borderRadius: 20, padding: 10 }}>
-        <Check size={20} color="#000" strokeWidth={3} />
+        <Check size={20} color="#fff" strokeWidth={3} />
       </View>
     </Animated.View>
   );
@@ -768,7 +768,7 @@ If suggesting task changes, be specific. Max 3 sentences.`;
               onPress={() => openAdd()}
               style={[styles.emptyDayBtn, { backgroundColor: colors.primary }]}
             >
-              <Plus size={13} color="#000" />
+              <Plus size={13} color="#fff" />
               <Text style={styles.emptyDayBtnText}>
                 {language === 'sw' ? 'Ongeza Kazi' : 'Add a Task'}
               </Text>
@@ -1086,10 +1086,10 @@ If suggesting task changes, be specific. Max 3 sentences.`;
                 ]}
               >
                 {saving ? (
-                  <ActivityIndicator size="small" color="#000" />
+                  <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <>
-                    <Check size={14} color="#000" strokeWidth={3} />
+                    <Check size={14} color="#fff" strokeWidth={3} />
                     <Text style={styles.saveBtnText}>{language === 'sw' ? 'Hifadhi' : 'Save'}</Text>
                   </>
                 )}
@@ -1340,7 +1340,7 @@ If suggesting task changes, be specific. Max 3 sentences.`;
             onPress={() => openAdd()}
             style={[styles.addHeaderBtn, { backgroundColor: colors.primary }]}
           >
-            <Plus size={16} color="#000" strokeWidth={2.5} />
+            <Plus size={16} color="#fff" strokeWidth={2.5} />
           </TouchableOpacity>
         </View>
 
@@ -1360,7 +1360,7 @@ If suggesting task changes, be specific. Max 3 sentences.`;
         style={[styles.fab, { backgroundColor: colors.primary }]}
         activeOpacity={0.85}
       >
-        <Plus size={24} color="#000" strokeWidth={2.5} />
+        <Plus size={24} color="#fff" strokeWidth={2.5} />
       </TouchableOpacity>
 
       {/* Modals */}
@@ -1465,7 +1465,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 14,
   },
-  emptyDayBtnText: { fontSize: 12, fontFamily: 'Inter_700Bold', color: '#000' },
+  emptyDayBtnText: { fontSize: 12, fontFamily: 'Inter_700Bold', color: '#fff' },
 
   taskRow: {
     flexDirection: 'row',
@@ -1598,7 +1598,7 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: 14,
   },
-  saveBtnText: { fontSize: 13, fontFamily: 'Inter_700Bold', color: '#000' },
+  saveBtnText: { fontSize: 13, fontFamily: 'Inter_700Bold', color: '#fff' },
 
   // ── AI panel ──────────────────────────────────────────────────────────────
   aiOverlay: { flex: 1, justifyContent: 'flex-end' },

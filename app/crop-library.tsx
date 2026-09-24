@@ -492,7 +492,7 @@ function CropCard({ crop, index, onPress }: { crop: any; index: number; onPress:
             <LinearGradient colors={['transparent', 'rgba(0,0,0,0.6)']} style={cc.imgGrad} />
             {isHighProfit && (
               <View style={cc.hotChip}>
-                <Zap size={8} color="#000" />
+                <Zap size={8} color="#fff" />
                 <Text style={cc.hotText}>HOT</Text>
               </View>
             )}
@@ -564,7 +564,7 @@ const cc = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: '#3C4A2A',
   },
-  hotText: { fontSize: 7, fontFamily: 'Inter_700Bold', color: '#000' },
+  hotText: { fontSize: 7, fontFamily: 'Inter_700Bold', color: '#fff' },
   body: { padding: 10, gap: 3 },
   name: { fontSize: 13.5, fontFamily: 'Inter_700Bold' },
   sub: { fontSize: 10, fontFamily: 'Inter_600SemiBold', fontStyle: 'italic' },

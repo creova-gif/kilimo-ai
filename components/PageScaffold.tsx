@@ -349,5 +349,5 @@ const scStyles = StyleSheet.create({
     maxWidth: 260,
   },
   emptyCta: { marginTop: 18, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 14 },
-  emptyCtaText: { color: '#000', fontSize: 13, fontFamily: 'Inter_900Black', letterSpacing: 0.5 },
+  emptyCtaText: { color: '#fff', fontSize: 13, fontFamily: 'Inter_900Black', letterSpacing: 0.5 },
 });

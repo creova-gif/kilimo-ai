@@ -49,7 +49,7 @@ export default function VerificationIntro() {
 
         <Button
           label="Start Verification"
-          icon={<ArrowRight size={18} color="#000" />}
+          icon={<ArrowRight size={18} color="#fff" />}
           disabled={!consent}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
