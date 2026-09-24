@@ -2113,31 +2113,14 @@ export default function HomeScreen() {
         const reply = await chat([{ role: 'user', content: promptText }]);
         setChatReply(reply);
       } else {
-        await new Promise((r) => setTimeout(r, 1000));
-        const queryLower = query.toLowerCase();
-        if (queryLower.includes('nitrogen') || queryLower.includes('nitrojeni')) {
-          setChatReply(
-            language === 'sw'
-              ? 'Nitrojeni iko chini kwa sababu ya kilimo cha mfululizo. Kupanda maharage au kuweka mbolea ya Urea kutarudisha rutuba.'
-              : 'Low nitrogen is usually caused by repeated mono-cropping. Intercropping with beans or applying Urea fertilizer will restore soil nutrients.'
-          );
-        } else if (
-          queryLower.includes('bei') ||
-          queryLower.includes('market') ||
-          queryLower.includes('price')
-        ) {
-          setChatReply(
-            language === 'sw'
-              ? 'Bei ya Mahindi soko la Tandale imepanda hadi TZS 85,000 kwa gunia la kilo 100 leo. Hii ni ongezeko la 2.4%.'
-              : 'Maize prices at Tandale market increased to TZS 85,000 per 100kg bag today. That is a 2.4% increase.'
-          );
-        } else {
-          setChatReply(
-            language === 'sw'
-              ? 'Sankofa AI imepokea swali lako. Mwagilia mmea asubuhi kabla ya jua kali na uhakikishe mifereji iko wazi shambani.'
-              : 'Sankofa AI has received your query. Please irrigate your crops early in the morning and verify field drainage is optimal.'
-          );
-        }
+        // No AI backend configured: say so instead of inventing an answer.
+        // (This used to return canned replies — including a made-up Tandale
+        // maize price — labelled as "Kilimo AI".)
+        setChatReply(
+          language === 'sw'
+            ? 'Kilimo AI haipatikani kwa sasa. Jaribu tena ukiwa na mtandao, au muulize afisa ugani.'
+            : 'Kilimo AI is not available right now. Try again when connected, or ask an extension officer.'
+        );
       }
     } catch {
       setChatReply(
