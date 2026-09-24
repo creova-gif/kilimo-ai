@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { Home, User, Map, Leaf, TrendingUp } from 'lucide-react-native';
 import { useTheme } from '../../constants/Theme';
 import { useKilimoStore } from '../../store/useKilimoStore';
+import { useCan } from '../../lib/access';
 import { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import Animated from 'react-native-reanimated';
 
@@ -69,6 +70,7 @@ export default function TabLayout() {
   const { colors, isDark } = useTheme();
   const language = useKilimoStore((s) => s.language);
   const sw = language === 'sw';
+  const canMarket = useCan('marketplace');
 
   const tabBarBg = isDark ? '#111827' : '#ffffff';
   const iconInactive = isDark ? '#6B7280' : '#9CA3AF';
@@ -169,6 +171,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="market"
         options={{
+          href: canMarket ? undefined : null,
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused} label={sw ? 'Soko' : 'Market'}>
               <TrendingUp color={color} size={24} strokeWidth={focused ? 2.5 : 2} />

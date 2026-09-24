@@ -60,6 +60,8 @@ import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../constants/Theme';
 import { useKilimoStore } from '../../store/useKilimoStore';
+import { Gate } from '../../lib/access';
+import { EmptyState } from '../../components/ui/EmptyState';
 import { GlassCard } from '../../components/PageScaffold';
 import { useMarketIntelligence } from '../../hooks/useMarketIntelligence';
 import { getSupabase } from '../../lib/supabase';
@@ -451,7 +453,33 @@ const NeuralSparkline = ({ data, positive }: { data: number[]; positive: boolean
 };
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
+// Market is a primary tab (Figma nav) but not every role may use it
+// (lib/access.tsx: extension_officer has marketplace 'none'). The tab bar
+// hides it for those roles; this guard covers deep links.
 export default function MarketScreen() {
+  const language = useKilimoStore((s) => s.language);
+  return (
+    <Gate
+      feature="marketplace"
+      fallback={
+        <View style={{ flex: 1, justifyContent: 'center', padding: 24 }}>
+          <EmptyState
+            title={language === 'sw' ? 'Soko halipatikani' : 'Market not available'}
+            description={
+              language === 'sw'
+                ? 'Soko halipatikani kwa jukumu lako.'
+                : 'The marketplace is not available for your role.'
+            }
+          />
+        </View>
+      }
+    >
+      <MarketContent />
+    </Gate>
+  );
+}
+
+function MarketContent() {
   const { colors, isDark } = useTheme();
   const router = useRouter();
   const addNotification = useKilimoStore((s) => s.addNotification);
