@@ -13,6 +13,7 @@ import { useEffect, useState, useCallback } from 'react';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { Platform } from 'react-native';
 import { useKilimoStore, AgroID } from '../store/useKilimoStore';
+import { acceptMockOtp, mockAuthAllowed, mockOtpDebugMessage } from '../lib/auth/mockAuthPolicy';
 
 const SESSION_KEY = 'kilimo_session_token';
 
@@ -138,14 +139,14 @@ export function useAgroAuth() {
     setLoading(true);
     try {
       if (!supabase) {
+        if (!mockAuthAllowed(__DEV__)) {
+          throw new Error('Authentication is not configured');
+        }
         if (__DEV__) console.log('[AgroAuth MOCK] Simulating phone OTP send for:', phone);
         await new Promise((r) => setTimeout(r, 1000));
         await SecureStore.setItemAsync('kilimo_phone', phone);
         const { Alert } = require('react-native');
-        Alert.alert(
-          'Kilimo AI (Mock Auth)',
-          `[DEBUG MOCK] Nambari ya siri (OTP) ya majaribio ni: 123456\n\n[DEBUG MOCK] Your test OTP verification code is: 123456`
-        );
+        Alert.alert('Kilimo AI (Mock Auth)', mockOtpDebugMessage('phone'));
         return;
       }
       const { error } = await supabase.auth.signInWithOtp({
@@ -165,14 +166,14 @@ export function useAgroAuth() {
     setLoading(true);
     try {
       if (!supabase) {
+        if (!mockAuthAllowed(__DEV__)) {
+          throw new Error('Authentication is not configured');
+        }
         if (__DEV__) console.log('[AgroAuth MOCK] Simulating email OTP send for:', email);
         await new Promise((r) => setTimeout(r, 1000));
         await SecureStore.setItemAsync('kilimo_email', email);
         const { Alert } = require('react-native');
-        Alert.alert(
-          'Kilimo AI (Mock Auth)',
-          `[DEBUG MOCK] Nambari ya siri (OTP) ya barua pepe ni: 123456\n\n[DEBUG MOCK] Your test email OTP verification code is: 123456`
-        );
+        Alert.alert('Kilimo AI (Mock Auth)', mockOtpDebugMessage('email'));
         return { success: true };
       }
       if (__DEV__) console.log('[AgroAuth] Calling Supabase signInWithOtp for email...');
@@ -200,6 +201,9 @@ export function useAgroAuth() {
       const isEmail = normalized.includes('@');
       try {
         if (!supabase) {
+          if (!mockAuthAllowed(__DEV__)) {
+            throw new Error('Authentication is not configured');
+          }
           if (__DEV__)
             console.log(
               '[AgroAuth MOCK] Simulating OTP verification for:',
@@ -208,7 +212,7 @@ export function useAgroAuth() {
               token
             );
           await new Promise((r) => setTimeout(r, 800));
-          if (token === '123456') {
+          if (acceptMockOtp(token, __DEV__)) {
             await SecureStore.setItemAsync(SESSION_KEY, 'mock-access-token');
             const mockUserId = 'mock-user-' + normalized.replace(/[^a-zA-Z0-9]/g, '');
             const currentAgroId = useKilimoStore.getState().agroId;

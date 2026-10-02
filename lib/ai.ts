@@ -3,8 +3,9 @@
  *
  * All model calls go through the Supabase `openai-proxy` edge function so that
  * the provider API key NEVER ships inside the mobile bundle. The proxy is
- * JWT-verified (see supabase/config.toml) and enforces the Sankofa system
- * prompt server-side.
+ * JWT-verified (see supabase/config.toml), enforces the Sankofa system
+ * prompt server-side, and owns the crop-vision prompt. Clients cannot
+ * replace that prompt or select a model outside the server allowlist.
  *
  * Falls back to demo mode (see callers + lib/ai-demo.ts) when no Supabase
  * backend is configured — `aiConfigured()` reflects backend availability,
@@ -87,32 +88,19 @@ export function normalizeSeverity(input: unknown): Severity | undefined {
 
 export async function diagnoseCropPhoto(
   imageBase64: string,
-  opts: { mimeType?: string; prompt?: string } = {}
+  opts: { mimeType?: string; cropHint?: string; regionHint?: string } = {}
 ): Promise<VisionDiagnosis> {
   if (!aiConfigured()) throw new AIError('AI backend not configured', 'not_configured');
 
   const mimeType = opts.mimeType ?? 'image/jpeg';
-  const prompt =
-    opts.prompt ??
-    `Chunguza picha hii ya mmea kwa makini na toa uchambuzi wa kitaalamu.
-Jibu LAZIMA kwa JSON iliyosafi tu:
-{
-  "crop": "jina la mmea kwa Kiswahili",
-  "disease": "jina la ugonjwa/tatizo",
-  "severity": "low|medium|high|critical",
-  "confidence": "high|medium|low",
-  "imageQuality": "good|poor|unusable",
-  "consultExpert": true|false,
-  "actions": ["hatua 1", "hatua 2"]
-}
-HAKIKISHA JSON YAKO NI SAHIHI.`;
 
   try {
     const { content } = await invokeAI<{ content: string }>({
       action: 'vision',
       imageBase64,
       mimeType,
-      prompt,
+      cropHint: opts.cropHint,
+      regionHint: opts.regionHint,
     });
 
     let parsed: Partial<VisionDiagnosis> = {};

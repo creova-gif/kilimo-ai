@@ -27,6 +27,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useKilimoStore } from '../store/useKilimoStore';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { initSentry, Sentry } from '../lib/sentry';
+// Runs the production mock-auth assertion as soon as the app loads.
+import '../lib/auth/mockAuthPolicy';
 
 // Initialise crash reporting as early as possible (no-op without a DSN).
 initSentry();
