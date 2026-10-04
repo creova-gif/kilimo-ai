@@ -53,3 +53,4 @@ mobile/dist/
 *.key
 *.mobileprovision
 supabase/.temp
+.claude/skills/gstack/
