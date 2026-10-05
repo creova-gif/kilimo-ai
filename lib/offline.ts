@@ -2,6 +2,8 @@ import NetInfo from '@react-native-community/netinfo';
 import { useKilimoStore } from '../store/useKilimoStore';
 import { supabase } from './supabase';
 import { listingToDbRow } from '../hooks/useMarketIntelligence';
+import { diagnoseCropPhoto, aiConfigured } from './ai';
+import { sendSms } from './sms';
 
 export function initializeOfflineManager() {
   if (__DEV__) console.log('[OfflineManager] Initializing network listener...');
@@ -85,12 +87,68 @@ export async function processSyncQueue() {
           });
           if (error) throw error;
         }
+      } else if (item.type === 'scan_result') {
+        // Real sync: app/scan.tsx queues here when diagnoseCropPhoto() fails
+        // with a network error mid-scan — the photo was already captured and
+        // base64-encoded, so re-run the same real vision call now that
+        // connectivity is back, instead of discarding it.
+        if (!aiConfigured()) throw new Error('AI backend not configured');
+        const payload = item.payload as {
+          base64: string;
+          mimeType: string;
+          language: 'sw' | 'en';
+        };
+        const diagnosis = await diagnoseCropPhoto(payload.base64, { mimeType: payload.mimeType });
+        const sw = payload.language === 'sw';
+        const disease = diagnosis.disease ?? (sw ? 'Tatizo halijatambulika' : 'Issue not identified');
+
+        // Persisted so the farmer can find the answer later, not just in a
+        // transient notification (components/diseaseModal.tsx already uses
+        // this same log for its own diagnoses).
+        useKilimoStore.getState().addCropHealthLog({
+          id: `log_${Date.now()}`,
+          source: 'queued_scan',
+          crop: diagnosis.crop,
+          disease,
+          severity: diagnosis.severity,
+          confidence: diagnosis.confidence,
+          actions: diagnosis.actions,
+          date: new Date().toLocaleDateString(),
+        });
+
+        store.addNotification({
+          title: sw ? `Uchunguzi wa Picha Umekamilika` : `Photo Diagnosis Ready`,
+          body: sw
+            ? `Picha uliyopiga ukiwa nje ya mtandao imechunguzwa: ${disease}.`
+            : `Your offline photo scan has been analyzed: ${disease}.`,
+          type: diagnosis.severity === 'critical' ? 'warning' : 'info',
+        });
+
+        // Mirrors fireCriticalSideEffects' SMS escalation in scan.tsx — the
+        // task-creation/reminder half of that flow needs hook-bound state
+        // (useTasks/useNotifications) this module can't call outside a
+        // component, so only the SMS channel is replicated here.
+        if (diagnosis.severity === 'critical') {
+          const agroId = useKilimoStore.getState().agroId;
+          if (agroId?.phoneNumber) {
+            sendSms({
+              to: agroId.phoneNumber,
+              event: 'critical_diagnosis',
+              body: sw
+                ? `KILIMO AI: ${disease} imegunduliwa kwenye picha uliyopiga nje ya mtandao. Angalia app.`
+                : `KILIMO AI: ${disease} detected in your offline photo scan. Check the app.`,
+              meta: { disease },
+            }).catch(() => {
+              /* stub may log but never throws */
+            });
+          }
+        }
       } else {
-        // scan_result / irrigation_log / voice_note: no code path in this
-        // app currently enqueues these types (grep confirms zero producers),
-        // so this is unreachable today. Left as a simulated no-op rather
-        // than guessing at a schema for data nothing yet generates; wire a
-        // real backend call here if/when a producer for these types ships.
+        // irrigation_log / voice_note: no code path in this app currently
+        // enqueues these types (grep confirms zero producers), so this is
+        // unreachable today. Left as a simulated no-op rather than guessing
+        // at a schema for data nothing yet generates; wire a real backend
+        // call here if/when a producer for these types ships.
         await new Promise((resolve) => setTimeout(resolve, 800));
       }
 
