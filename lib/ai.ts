@@ -3,8 +3,9 @@
  *
  * All model calls go through the Supabase `openai-proxy` edge function so that
  * the provider API key NEVER ships inside the mobile bundle. The proxy is
- * JWT-verified (see supabase/config.toml) and enforces the Sankofa system
- * prompt server-side.
+ * JWT-verified (see supabase/config.toml), enforces the Sankofa system
+ * prompt server-side, and owns the crop-vision prompt. Clients cannot
+ * replace that prompt or select a model outside the server allowlist.
  *
  * Falls back to demo mode (see callers + lib/ai-demo.ts) when no Supabase
  * backend is configured — `aiConfigured()` reflects backend availability,
@@ -16,7 +17,7 @@
  */
 
 import { FunctionsFetchError, FunctionsRelayError } from '@supabase/supabase-js';
-import { supabase } from './supabase';
+import { getSupabase, invokeAuthedFunction } from './supabase';
 
 const AI_FN = 'openai-proxy';
 
@@ -30,7 +31,7 @@ export class AIError extends Error {
 }
 
 export function aiConfigured(): boolean {
-  return !!supabase;
+  return !!getSupabase();
 }
 
 export interface ChatMessage {
@@ -38,11 +39,24 @@ export interface ChatMessage {
   content: string;
 }
 
+function isUnauthorizedInvokeError(error: any): boolean {
+  if (!error) return false;
+  if (error.status === 401) return true;
+  if (error.message === 'not_authenticated') return true;
+  if (error?.context?.status === 401) return true;
+  return false;
+}
+
 /** Invoke the AI proxy edge function with an action discriminator. */
 async function invokeAI<T = any>(body: Record<string, unknown>): Promise<T> {
-  if (!supabase) throw new AIError('AI backend not configured', 'not_configured');
-  const { data, error } = await supabase.functions.invoke(AI_FN, { body });
+  if (!getSupabase()) throw new AIError('AI backend not configured', 'not_configured');
+  // Always attach the caller's JWT. The edge gate uses auth.getUser() and
+  // rejects anon-key-only invokes with 401.
+  const { data, error } = await invokeAuthedFunction<T>(AI_FN, { body });
   if (error) {
+    if (isUnauthorizedInvokeError(error)) {
+      throw new AIError(error.message ?? 'Not authenticated', 'unauthorized');
+    }
     // FunctionsClient.invoke() (@supabase/functions-js) never rejects for a
     // connectivity failure — its own internals catch the fetch() rejection,
     // wrap it as FunctionsFetchError, and *return* it here as `error`, same
@@ -59,7 +73,11 @@ async function invokeAI<T = any>(body: Record<string, unknown>): Promise<T> {
     throw new AIError(error.message ?? 'AI proxy error', 'server');
   }
   if (data && (data as any).error) {
-    throw new AIError(String((data as any).error), 'server');
+    const errMsg = String((data as any).error);
+    if (errMsg === 'not_authenticated') {
+      throw new AIError(errMsg, 'unauthorized');
+    }
+    throw new AIError(errMsg, 'server');
   }
   return data as T;
 }
@@ -100,32 +118,19 @@ export function normalizeSeverity(input: unknown): Severity | undefined {
 
 export async function diagnoseCropPhoto(
   imageBase64: string,
-  opts: { mimeType?: string; prompt?: string } = {}
+  opts: { mimeType?: string; cropHint?: string; regionHint?: string } = {}
 ): Promise<VisionDiagnosis> {
   if (!aiConfigured()) throw new AIError('AI backend not configured', 'not_configured');
 
   const mimeType = opts.mimeType ?? 'image/jpeg';
-  const prompt =
-    opts.prompt ??
-    `Chunguza picha hii ya mmea kwa makini na toa uchambuzi wa kitaalamu.
-Jibu LAZIMA kwa JSON iliyosafi tu:
-{
-  "crop": "jina la mmea kwa Kiswahili",
-  "disease": "jina la ugonjwa/tatizo",
-  "severity": "low|medium|high|critical",
-  "confidence": "high|medium|low",
-  "imageQuality": "good|poor|unusable",
-  "consultExpert": true|false,
-  "actions": ["hatua 1", "hatua 2"]
-}
-HAKIKISHA JSON YAKO NI SAHIHI.`;
 
   try {
     const { content } = await invokeAI<{ content: string }>({
       action: 'vision',
       imageBase64,
       mimeType,
-      prompt,
+      cropHint: opts.cropHint,
+      regionHint: opts.regionHint,
     });
 
     let parsed: Partial<VisionDiagnosis> = {};

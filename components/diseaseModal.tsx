@@ -200,11 +200,10 @@ export default function DiseaseModal({ visible, onClose, preselectedCrop }: Dise
       const activeRegion = selectedRegion;
       const activeCropName = CROPS_LIST.find((c) => c.key === selectedCrop)?.nameEn || 'crop';
 
-      const regionPrompt = `The farmer is located in the region of ${activeRegion} in East Africa. Consider typical local diseases like Maize Streak Virus, Cassava Mosaic Disease, or Rice Blast. The crop is ${activeCropName}.`;
-
       if (aiConfigured()) {
         diagnosis = await diagnoseCropPhoto(base64, {
-          prompt: `Chunguza picha hii ya mmea wa ${activeCropName} kutoka eneo la ${activeRegion}. Jibu kwa JSON ya Kiswahili pekee kama ilivyoelekezwa katika mfumo.`,
+          cropHint: activeCropName,
+          regionHint: activeRegion,
         });
       } else {
         // Fallback to demo database
