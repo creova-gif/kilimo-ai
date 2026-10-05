@@ -100,6 +100,22 @@ describe('invokeAuthedFunction JWT propagation', () => {
     expect(result.error).toMatchObject({ message: 'not_authenticated', status: 401 });
     expect(mockInvoke).not.toHaveBeenCalled();
   });
+
+  it('attaches the session JWT for rag-chat (same path as AI/SMS)', async () => {
+    mockGetSession.mockResolvedValue({
+      data: { session: { access_token: 'user-jwt-rag' } },
+    });
+    mockInvoke.mockResolvedValue({ data: { answer: 'ok' }, error: null });
+
+    await invokeAuthedFunction('rag-chat', { body: { query: 'maize' } });
+
+    expect(mockInvoke).toHaveBeenCalledWith(
+      'rag-chat',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer user-jwt-rag' },
+      })
+    );
+  });
 });
 
 describe('authenticated AI / SMS callers', () => {
@@ -133,6 +149,26 @@ describe('authenticated AI / SMS callers', () => {
       kind: 'unauthorized',
     });
     expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('chat() maps a server 401 (invalid/expired JWT) to unauthorized', async () => {
+    mockGetSession.mockResolvedValue({
+      data: { session: { access_token: 'stale-or-wrong-jwt' } },
+    });
+    mockInvoke.mockResolvedValue({
+      data: null,
+      error: { message: 'not_authenticated', status: 401, context: { status: 401 } },
+    });
+
+    await expect(chat([{ role: 'user', content: 'hi' }])).rejects.toMatchObject({
+      kind: 'unauthorized',
+    });
+    expect(mockInvoke).toHaveBeenCalledWith(
+      'openai-proxy',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer stale-or-wrong-jwt' },
+      })
+    );
   });
 
   it('sendSms() returns not_authenticated without a JWT', async () => {

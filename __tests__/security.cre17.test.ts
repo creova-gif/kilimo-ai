@@ -119,4 +119,15 @@ describe('mock auth gate', () => {
   it('passes the build-time source assertion', () => {
     expect(() => require('../scripts/assert-mock-auth-gated')).not.toThrow();
   });
+
+  it('broadened OTP comparison regex catches both operand orders without placeholders', () => {
+    const re =
+      /(?:\b[A-Za-z_$][\w$]*\s*===?\s*['"`]123456['"`]|['"`]123456['"`]\s*===?\s*[A-Za-z_$][\w$]*)/;
+    expect(re.test('token === "123456"')).toBe(true);
+    expect(re.test('"123456" === token')).toBe(true);
+    expect(re.test('code == `123456`')).toBe(true);
+    expect(re.test("otp === '123456'")).toBe(true);
+    expect(re.test("placeholder=\"123456\"")).toBe(false);
+    expect(re.test("const x = '123456'")).toBe(false);
+  });
 });
