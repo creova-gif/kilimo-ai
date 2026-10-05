@@ -237,11 +237,10 @@ export default function TransactionsScreen() {
     >
       <PageScaffold
         title="Daftari la Miamala"
-        // useWalletAdminStore.transactions is seeded, in-memory sample data —
-        // there is no Supabase-backed transaction ledger behind this screen
-        // yet. Label it so the seed rows are never mistaken for a real,
-        // synced ledger (same issue fixed in app/mobile-money.tsx).
-        subtitle="Ledger · Data ya Mfano"
+        // useWalletAdminStore no longer seeds fake members/transactions
+        // (see the store's own header comment) — this now genuinely starts
+        // empty and only shows real entries an admin has recorded.
+        subtitle="Ledger"
         badge="ENTERPRISE"
       >
         {/* ── Filter pills ── */}
