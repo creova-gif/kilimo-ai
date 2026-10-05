@@ -26,6 +26,10 @@ import { pingActivity } from '../hooks/useIdleTimeout';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useKilimoStore } from '../store/useKilimoStore';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { initSentry, Sentry } from '../lib/sentry';
+
+// Initialise crash reporting as early as possible (no-op without a DSN).
+initSentry();
 
 // ── Kilimo AI Global Services ─────────────────────────────────────────────
 import { useSyncEngine } from '../hooks/useSyncEngine';
@@ -235,7 +239,7 @@ function OnboardingGate({ hydrated }: { hydrated: boolean }) {
   return null;
 }
 
-export default function RootLayout() {
+function RootLayout() {
   const colorScheme = useColorScheme();
   const themePreference = useKilimoStore((s) => s.themePreference);
   const hydrated = usePersistHydrated();
@@ -445,3 +449,6 @@ export default function RootLayout() {
     </ErrorBoundary>
   );
 }
+
+// Wrap the root so Sentry captures render errors / performance (no-op w/o DSN).
+export default Sentry.wrap(RootLayout);
