@@ -49,8 +49,9 @@ import {
 import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '../constants/Theme';
 import { useKilimoStore } from '../store/useKilimoStore';
-import { chat as aiChat, transcribeAudio, aiConfigured, AIError } from '../lib/ai';
+import { transcribeAudio, aiConfigured, AIError } from '../lib/ai';
 import { demoChat } from '../lib/ai-demo';
+import { askAgriExpert, formatAgriReply } from '../lib/agri-ai';
 
 const { width: SW } = Dimensions.get('window');
 const PRIMARY = '#2E6F40';
@@ -318,6 +319,7 @@ export default function AiVoiceScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const language = useKilimoStore((s) => s.language);
+  const agroId = useKilimoStore((s) => s.agroId);
   // Real pipeline throughout — this screen used to fake everything (no
   // microphone, no transcription, a 3-entry canned-answer table covering
   // only 2 of the 6 quick phrases, with the other 4 dead-ending into a
@@ -354,7 +356,7 @@ export default function AiVoiceScreen() {
     setVoiceState('PROCESSING');
     try {
       const answer = aiConfigured()
-        ? await aiChat([{ role: 'user', content: question }])
+        ? formatAgriReply(await askAgriExpert(question, { userId: agroId?.id, language }), language)
         : await demoChat(question);
       appendExchange(
         question,
@@ -467,9 +469,9 @@ export default function AiVoiceScreen() {
         return;
       }
 
-      const answer = await aiChat([{ role: 'user', content: transcript }]);
+      const advice = await askAgriExpert(transcript, { userId: agroId?.id, language });
       if (stale()) return;
-      appendExchange(transcript, answer);
+      appendExchange(transcript, formatAgriReply(advice, language));
       setVoiceState('IDLE');
     } catch (err) {
       if (stale()) return;
