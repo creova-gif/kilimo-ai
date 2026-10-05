@@ -1595,6 +1595,23 @@ const getCropMetadata = (cropName: string, language: 'en' | 'sw') => {
 
 // ─── Weather Widget Card ──────────────────────────────────────────────────────
 function WeatherWidget({ weather, language, colors, isDark, router }: any) {
+  if (!weather.configured || !weather.current) {
+    return (
+      <Animated.View entering={FadeInDown.delay(50).duration(500).springify()} style={{ marginVertical: 8 }}>
+        <Text style={[styles.bentoSectionTitle, { color: colors.textMute, marginLeft: 4, marginBottom: 8 }]}>
+          {language === 'sw' ? 'HALI YA HEWA' : 'WEATHER'}
+        </Text>
+        <Card variant="solid" style={[styles.wxCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.wxCond, { color: colors.textMute }]}>
+            {language === 'sw'
+              ? 'Data ya hali ya hewa haipatikani kwa sasa.'
+              : 'Weather data is not available right now.'}
+          </Text>
+        </Card>
+      </Animated.View>
+    );
+  }
+
   const hourlyData = React.useMemo(() => {
     const currentHour = new Date().getHours();
     const baseTemp = weather.current?.temp ?? 24;
@@ -1613,12 +1630,11 @@ function WeatherWidget({ weather, language, colors, isDark, router }: any) {
     });
   }, [weather.current?.temp, weather.current?.condition]);
 
-  const displayTemp = Math.round(weather.current?.temp ?? 24);
-  const humidity = weather.current?.humidity ?? 78;
-  const feelsLike = Math.round((weather.current as any)?.feelsLike ?? displayTemp + 1);
-  const conditionLabel =
-    weather.current?.conditionLabel ?? (language === 'sw' ? 'Mawingu kidogo' : 'Partly cloudy');
-  const condition = weather.current?.condition ?? 'cloud';
+  const displayTemp = Math.round(weather.current.temp);
+  const humidity = weather.current.humidity;
+  const feelsLike = Math.round((weather.current as any).feelsLike ?? displayTemp);
+  const conditionLabel = weather.current.conditionLabel;
+  const condition = weather.current.condition;
   const thumbPct = Math.max(8, Math.min(88, ((displayTemp - 14) / 22) * 100));
   const conditionColor =
     condition === 'rain'
@@ -1751,16 +1767,10 @@ function WeatherWidget({ weather, language, colors, isDark, router }: any) {
               val: `${humidity}%`,
               lbl: language === 'sw' ? 'Unyevu' : 'Humidity',
             },
-            { icon: <Sun size={13} color="#F59E0B" />, val: '05', lbl: 'UV Index' },
             {
               icon: <Thermometer size={13} color={colors.primary} />,
               val: `${feelsLike}°`,
               lbl: language === 'sw' ? 'Hisi' : 'Feels like',
-            },
-            {
-              icon: <Wind size={13} color="#94a3b8" />,
-              val: '12 km/h',
-              lbl: language === 'sw' ? 'Upepo' : 'Wind',
             },
           ].map((s, i) => (
             <React.Fragment key={i}>
@@ -2626,8 +2636,7 @@ export default function HomeScreen() {
                       },
                     ]}
                   >
-                    <PulsingDot />
-                    <Text style={styles.liveText}>LIVE</Text>
+                    <Text style={styles.liveText}>{language === 'sw' ? 'DATA YA APP' : 'APP DATA'}</Text>
                   </View>
                 </View>
 
@@ -2905,12 +2914,6 @@ export default function HomeScreen() {
             )}
           </Animated.View>
 
-          {/* Horizontal Track Records timeline stepper */}
-          <TrackRecords colors={colors} isDark={isDark} language={language} />
-
-          {/* Crop Value Dashboard — est. yield, market value, harvest countdown */}
-          <CropValueCard colors={colors} isDark={isDark} language={language} />
-
           {/* Weather Widget */}
           <WeatherWidget
             weather={weather}
@@ -3005,9 +3008,6 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </Animated.View>
 
-          {/* Growth Rate Chart */}
-          <GrowthChart colors={colors} isDark={isDark} language={language} />
-
           {/* Wallet Card - Replaced with Olive Premium card */}
           <Animated.View entering={FadeInDown.delay(200).springify()}>
             <Card
@@ -3087,7 +3087,7 @@ export default function HomeScreen() {
           <View style={styles.bentoSection}>
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                {language === 'sw' ? 'Afya ya Shamba' : 'Farm Vitals'}
+                {language === 'sw' ? 'Taarifa za Shamba' : 'Farm Data'}
               </Text>
               <TouchableOpacity
                 onPress={() => {
@@ -3095,10 +3095,10 @@ export default function HomeScreen() {
                   router.push('/analytics' as any);
                 }}
                 accessibilityRole="button"
-                accessibilityLabel="View farm sensors"
+                accessibilityLabel="View farm data"
               >
                 <Text style={{ color: colors.primary, fontFamily: 'Inter_700Bold', fontSize: 12 }}>
-                  {language === 'sw' ? 'DENSORI →' : 'SENSORS →'}
+                  {language === 'sw' ? 'DATA →' : 'DATA →'}
                 </Text>
               </TouchableOpacity>
             </View>
