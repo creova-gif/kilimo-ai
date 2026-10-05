@@ -347,13 +347,6 @@ function AnimalCard({
   const vacUrgency =
     vacDays !== null ? Math.min(1, Math.max(0, vacDays < 0 ? 1 : (90 - vacDays) / 90)) : 0;
 
-  // Mock LoRaEarTag Vitals derived from ID
-  const tagSerialNumber = `RIFT-HT-${a.tag.replace(/[^0-9]/g, '') || '82'}`;
-  const batteryPct = 95 - ((idx * 3) % 15);
-  const bodyTemp = a.healthStatus === 'sick' ? 40.2 : a.healthStatus === 'attention' ? 39.4 : 38.6;
-  const ruminationIndex = a.healthStatus === 'sick' ? 42 : a.healthStatus === 'attention' ? 50 : 64; // min/day
-  const movementActivity = a.healthStatus === 'sick' ? 'Lying down' : 'Grazing';
-
   function cycleHealth() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const i = HEALTH.findIndex((h) => h.key === a.healthStatus);
@@ -451,62 +444,6 @@ function AnimalCard({
               </TouchableOpacity>
             </View>
 
-            {/* RIFT HerdTag Vital Overview */}
-            <View
-              style={{
-                marginTop: 10,
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                backgroundColor: colors.background,
-                padding: 8,
-                borderRadius: 10,
-                borderWidth: StyleSheet.hairlineWidth,
-                borderColor: colors.border,
-              }}
-            >
-              <View style={{ alignItems: 'center', flex: 1 }}>
-                <Text style={{ fontSize: 8, color: colors.textMute, fontFamily: 'Inter_700Bold' }}>
-                  BODY TEMP
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    color: bodyTemp > 39 ? '#ef4444' : colors.text,
-                    fontFamily: 'Inter_800ExtraBold',
-                  }}
-                >
-                  {bodyTemp}°C
-                </Text>
-              </View>
-              <View style={{ width: 1, backgroundColor: colors.border }} />
-              <View style={{ alignItems: 'center', flex: 1 }}>
-                <Text style={{ fontSize: 8, color: colors.textMute, fontFamily: 'Inter_700Bold' }}>
-                  RUMINATION
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    color: ruminationIndex < 45 ? '#f59e0b' : colors.text,
-                    fontFamily: 'Inter_800ExtraBold',
-                  }}
-                >
-                  {ruminationIndex}m/d
-                </Text>
-              </View>
-              <View style={{ width: 1, backgroundColor: colors.border }} />
-              <View style={{ alignItems: 'center', flex: 1 }}>
-                <Text style={{ fontSize: 8, color: colors.textMute, fontFamily: 'Inter_700Bold' }}>
-                  ACTIVITY
-                </Text>
-                <Text
-                  style={{ fontSize: 10, color: colors.text, fontFamily: 'Inter_700Bold' }}
-                  numberOfLines={1}
-                >
-                  {movementActivity}
-                </Text>
-              </View>
-            </View>
-
             {/* Vaccine section */}
             {a.nextVaccineDue && (
               <View style={{ marginTop: 12 }}>
@@ -576,125 +513,6 @@ function AnimalCard({
               },
             ]}
           >
-            {/* RIFT HerdTag System Overlay Info */}
-            <View
-              style={{
-                marginBottom: 12,
-                padding: 10,
-                backgroundColor: colors.primary + '0D',
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor: colors.primary + '33',
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                <Cpu size={14} color={colors.primary} />
-                <Text
-                  style={{ fontSize: 11, fontFamily: 'Inter_800ExtraBold', color: colors.text }}
-                >
-                  RIFT HerdTag LoRa ear tag
-                </Text>
-              </View>
-              <Detail label="Serial Number" value={tagSerialNumber} />
-              <Detail label="Ear Tag Battery" value={`${batteryPct}% (Solar-Charged)`} />
-              <Detail label="Last Ping" value="2 minutes ago" />
-
-              {/* Abnormal vitals alert triggers */}
-              {bodyTemp > 39.5 && (
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                    marginTop: 8,
-                    padding: 8,
-                    backgroundColor: '#ef444415',
-                    borderRadius: 8,
-                    borderWidth: 0.5,
-                    borderColor: '#ef444444',
-                  }}
-                >
-                  <ShieldAlert size={14} color="#ef4444" />
-                  <Text
-                    style={{
-                      fontSize: 9.5,
-                      fontFamily: 'Inter_800ExtraBold',
-                      color: '#ef4444',
-                      flex: 1,
-                    }}
-                  >
-                    ALERT: Heat Stress or Fever detected! Body Temp: {bodyTemp}°C
-                  </Text>
-                </View>
-              )}
-              {ruminationIndex < 45 && (
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                    marginTop: 6,
-                    padding: 8,
-                    backgroundColor: '#f59e0b15',
-                    borderRadius: 8,
-                    borderWidth: 0.5,
-                    borderColor: '#f59e0b44',
-                  }}
-                >
-                  <ShieldAlert size={14} color="#f59e0b" />
-                  <Text
-                    style={{
-                      fontSize: 9.5,
-                      fontFamily: 'Inter_800ExtraBold',
-                      color: '#f59e0b',
-                      flex: 1,
-                    }}
-                  >
-                    WARNING: Rumination index down 35%! Possible digestive issue.
-                  </Text>
-                </View>
-              )}
-
-              {/* Visual chart overlay */}
-              <Text
-                style={{
-                  fontSize: 9,
-                  fontFamily: 'Inter_800ExtraBold',
-                  color: colors.textMute,
-                  marginTop: 10,
-                  letterSpacing: 0.5,
-                }}
-              >
-                RUMINATION PATTERN (PAST 6 HOURS)
-              </Text>
-              <VitalTrendChart
-                data={
-                  a.healthStatus === 'sick' ? [45, 43, 40, 42, 41, 42] : [62, 65, 60, 61, 63, 64]
-                }
-                color={colors.primary}
-              />
-
-              <Text
-                style={{
-                  fontSize: 9,
-                  fontFamily: 'Inter_800ExtraBold',
-                  color: colors.textMute,
-                  marginTop: 6,
-                  letterSpacing: 0.5,
-                }}
-              >
-                HEAT STRESS PROFILE (BODY TEMP TREND)
-              </Text>
-              <VitalTrendChart
-                data={
-                  a.healthStatus === 'sick'
-                    ? [38.6, 38.9, 39.2, 39.7, 40.1, 40.2]
-                    : [38.5, 38.6, 38.5, 38.6, 38.7, 38.6]
-                }
-                color="#ef4444"
-              />
-            </View>
-
             {a.birthDate && (
               <Detail
                 label="Tarehe ya kuzaliwa"
@@ -919,8 +737,6 @@ export default function LivestockScreen() {
           </View>
         )}
 
-        {/* ── RIFT HerdTag IoT Section ─────────────────────── */}
-        <RIFTHerdTagSection animals={animals} />
       </PageScaffold>
     </Gate>
   );
