@@ -20,7 +20,7 @@
 // @ts-nocheck — Deno runtime.
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders } from '../_shared/cors.ts';
+import { corsHeadersFor } from '../_shared/cors.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -33,10 +33,10 @@ const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-function json(body: unknown, status = 200) {
+function json(req: Request, body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeadersFor(req), 'Content-Type': 'application/json' },
   });
 }
 
@@ -49,8 +49,8 @@ const USER_TABLES = [
 ];
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeadersFor(req) });
+  if (req.method !== 'POST') return json(req, { error: 'method_not_allowed' }, 405);
 
   try {
     // Resolve the caller from their JWT (verify_jwt guarantees one is present).
@@ -60,23 +60,23 @@ serve(async (req) => {
     });
     const { data: auth } = await userClient.auth.getUser();
     const userId = auth?.user?.id;
-    if (!userId) return json({ error: 'not_authenticated' }, 401);
+    if (!userId) return json(req, { error: 'not_authenticated' }, 401);
 
     // Explicit data purge (cascade also covers this on auth-user deletion).
     for (const table of USER_TABLES) {
       const { error } = await admin.from(table).delete().eq('user_id', userId);
       // A missing table or already-empty result is not fatal; keep going.
       if (error && !/does not exist/i.test(error.message ?? '')) {
-        return json({ error: `purge_failed:${table}`, detail: error.message }, 500);
+        return json(req, { error: `purge_failed:${table}`, detail: error.message }, 500);
       }
     }
 
     // Remove the auth identity itself.
     const { error: delErr } = await admin.auth.admin.deleteUser(userId);
-    if (delErr) return json({ error: 'auth_delete_failed', detail: delErr.message }, 500);
+    if (delErr) return json(req, { error: 'auth_delete_failed', detail: delErr.message }, 500);
 
-    return json({ ok: true });
+    return json(req, { ok: true });
   } catch (err) {
-    return json({ error: 'unexpected', detail: String(err?.message ?? err) }, 500);
+    return json(req, { error: 'unexpected', detail: String(err?.message ?? err) }, 500);
   }
 });
