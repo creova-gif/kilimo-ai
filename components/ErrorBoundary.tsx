@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Appearance } from 'react-native';
 import { AlertTriangle } from 'lucide-react-native';
+import { captureError } from '../lib/sentry';
 
 interface Props {
   children: React.ReactNode;
@@ -23,6 +24,8 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('[KILIMO AI] Unhandled error caught by boundary:', error, info);
+    // Report to Sentry (no-op unless a DSN is configured).
+    captureError(error, { componentStack: info.componentStack });
   }
 
   handleReset = () => {

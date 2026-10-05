@@ -31,7 +31,11 @@ import Svg, {
 } from 'react-native-svg';
 import { useKilimoStore } from '../store/useKilimoStore';
 
-const { width: SW } = Dimensions.get('window');
+// `|| 360` guards against Dimensions.get('window').width reading 0 on first
+// web hydration (0 is never a real device width, and a destructure default
+// wouldn't catch it since 0 is defined) — an unguarded 0 here flowed into
+// negative <Svg>/<Rect> widths downstream (real console error + broken flash).
+const SW = Dimensions.get('window').width || 360;
 
 // ─── Soil pH Trend SVG Chart ───────────────────────────────────────────────────
 function SoilPHTrendChart({
@@ -43,7 +47,9 @@ function SoilPHTrendChart({
   months: string[];
   colors: any;
 }) {
-  const chartW = SW - 80;
+  // Clamp: window width can read 0 on first web hydration, which fed a
+  // negative width into the SVG chart (console error + broken flash).
+  const chartW = Math.max(1, SW - 80);
   const chartH = 80;
   const max = 7.5;
   const min = 4.5;

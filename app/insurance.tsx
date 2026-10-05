@@ -41,6 +41,7 @@ import { useKilimoStore } from '../store/useKilimoStore';
 import { Gate } from '../lib/access';
 
 const fmt = (n: number) => new Intl.NumberFormat('en-US').format(n);
+const INSURANCE_INTEGRATION_LIVE = false;
 
 const STATUS_META = {
   browse: { color: '#94a3b8', label: 'Available' },
@@ -146,6 +147,15 @@ export default function InsuranceScreen() {
   // Prefill helper
   function openEnrollment(p: InsurancePolicy) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!INSURANCE_INTEGRATION_LIVE) {
+      Alert.alert(
+        language === 'sw' ? 'Bado Haipatikani' : 'Coming Soon',
+        language === 'sw'
+          ? 'Usajili wa bima haujaunganishwa na mtoa bima. Hakuna sera au malipo yatakayoundwa.'
+          : 'Insurance enrollment is not connected to a provider yet. No policy or payment will be created.'
+      );
+      return;
+    }
     setSelectedEnrollPolicy(p);
     setEnrollStep(1);
 
@@ -181,6 +191,15 @@ export default function InsuranceScreen() {
 
   function openClaimModal(p: InsurancePolicy) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (!INSURANCE_INTEGRATION_LIVE) {
+      Alert.alert(
+        language === 'sw' ? 'Bado Haipatikani' : 'Coming Soon',
+        language === 'sw'
+          ? 'Uwasilishaji wa madai haujaunganishwa na mtoa bima. Usipakie ushahidi kwenye onyesho hili.'
+          : 'Claims submission is not connected to a provider yet. Do not upload evidence through this preview.'
+      );
+      return;
+    }
     setSelectedClaimPolicy(p);
     setClaimStep(1);
     setClaimReason('');
