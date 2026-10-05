@@ -12,6 +12,7 @@
     "tunnel": "expo start --tunnel",
     "prebuild": "expo prebuild --clean",
     "test": "jest",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "eas:login": "eas whoami",
     "eas:build:preview": "eas build --platform android --profile preview --non-interactive",
