@@ -402,9 +402,27 @@ export default function MobileMoneyScreen() {
           {/* Transactions */}
           <View style={s.section}>
             <View style={s.sectionRow}>
-              <Text style={[s.sectionTitle, { color: colors.textMute }]}>
-                {language === 'sw' ? 'MIAMALA YA HIVI KARIBUNI' : 'RECENT TRANSACTIONS'}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={[s.sectionTitle, { color: colors.textMute }]}>
+                  {language === 'sw' ? 'MIAMALA YA HIVI KARIBUNI' : 'RECENT TRANSACTIONS'}
+                </Text>
+                {/* No transaction backend exists yet (WalletState only tracks
+                    balanceTZS/mpesaPhone/lastTransaction, no ledger) — SAMPLE_TXNS
+                    below is illustrative only and must never be mistaken for the
+                    user's real M-Pesa/Airtel history. */}
+                <View
+                  style={{
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    borderRadius: 6,
+                    backgroundColor: '#f59e0b22',
+                  }}
+                >
+                  <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: '#b45309' }}>
+                    {language === 'sw' ? 'MFANO' : 'SAMPLE'}
+                  </Text>
+                </View>
+              </View>
               <TouchableOpacity onPress={() => router.push('/wallet-admin/transactions' as any)}>
                 <Text style={[s.seeAll, { color: colors.primary }]}>
                   {language === 'sw' ? 'Zote →' : 'See all →'}

@@ -38,6 +38,7 @@ import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../constants/Theme';
 import { useKilimoStore } from '../store/useKilimoStore';
+import { processSyncQueue } from '../lib/offline';
 
 type QueueItem = {
   id: string;
@@ -111,7 +112,7 @@ export default function OfflineQueueScreen() {
   // Estimate 1KB per payload
   const totalKB = queue.length * 1.5;
 
-  const handleSync = () => {
+  const handleSync = async () => {
     if (!online) {
       Alert.alert(
         language === 'sw' ? 'Hakuna Mtandao' : 'No Connection',
@@ -121,23 +122,24 @@ export default function OfflineQueueScreen() {
     }
     setSyncing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    let idx = 0;
-    const syncNext = () => {
-      if (idx >= queue.length) {
-        setSyncing(false);
-        return;
-      }
-      const id = queue[idx].id;
-      setTimeout(
-        () => {
-          setSynced((prev) => [...prev, id]);
-          idx++;
-          setTimeout(syncNext, 400);
-        },
-        600 + idx * 200
-      );
-    };
-    syncNext();
+    // Calls the same real sync processor the app runs automatically when
+    // connectivity returns (lib/offline.ts). Previously this button ran its
+    // own separate fake timer loop that never called dequeueAction or wrote
+    // anything to a backend — every item showed a success checkmark while
+    // silently remaining un-synced (and reappearing as "pending" on next
+    // visit, since the checkmark state was only ever local component state).
+    const beforeIds = new Set(queue.map((q) => q.id));
+    await processSyncQueue();
+    const afterIds = new Set(useKilimoStore.getState().syncQueue.map((q) => q.id));
+    const nowSynced = [...beforeIds].filter((id) => !afterIds.has(id));
+    if (nowSynced.length > 0) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setSynced((prev) => [...prev, ...nowSynced]);
+    }
+    if (nowSynced.length < beforeIds.size) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    }
+    setSyncing(false);
   };
 
   const handleDelete = (id: string) => {

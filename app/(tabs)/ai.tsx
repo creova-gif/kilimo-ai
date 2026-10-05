@@ -66,7 +66,6 @@ import {
 } from '../../lib/ai';
 import { demoChat } from '../../lib/ai-demo';
 import { useKilimoStore } from '../../store/useKilimoStore';
-import { RequireVerification } from '../../components/RequireVerification';
 import {
   useAudioRecorder,
   RecordingPresets,
@@ -460,7 +459,6 @@ export default function SankofaScreen() {
   };
 
   return (
-    <RequireVerification>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
@@ -507,11 +505,23 @@ export default function SankofaScreen() {
                   <View
                     style={[
                       styles.statusDot,
-                      { backgroundColor: isOffline ? '#ef4444' : colors.primary },
+                      {
+                        backgroundColor: isOffline
+                          ? '#ef4444'
+                          : !aiConfigured()
+                            ? '#f59e0b'
+                            : colors.primary,
+                      },
                     ]}
                   />
                   <Text style={styles.statusLabel}>
-                    {isOffline ? 'SMS Fallback' : 'Neural Link Active'}
+                    {isOffline
+                      ? 'SMS Fallback'
+                      : !aiConfigured()
+                        ? language === 'sw'
+                          ? 'Hali ya Onyesho'
+                          : 'Demo Mode'
+                        : 'Neural Link Active'}
                   </Text>
                 </View>
               </View>
@@ -631,7 +641,7 @@ export default function SankofaScreen() {
                   <LinearGradient
                     colors={
                       voiceState === 'LISTENING'
-                        ? [colors.primary, '#16a34a']
+                        ? [colors.primary, '#3A8D52']
                         : voiceState === 'PROCESSING'
                           ? ['rgba(139,92,246,0.4)', 'rgba(139,92,246,0.1)']
                           : [colors.primary + '33', colors.primary + '0D']
@@ -915,7 +925,6 @@ export default function SankofaScreen() {
           </View>
         )}
       </View>
-    </RequireVerification>
   );
 }
 

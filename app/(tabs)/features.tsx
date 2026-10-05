@@ -51,7 +51,10 @@ import { useTheme } from '../../constants/Theme';
 import { useKilimoStore } from '../../store/useKilimoStore';
 import { useAccess, useCan, Feature, roleLabel } from '../../lib/access';
 
-const { width: SW } = Dimensions.get('window');
+// `|| 360` guards against Dimensions.get('window').width reading 0 on first
+// web hydration — an unguarded 0 here flowed into a negative <Svg> chart
+// width downstream (real console error + broken chart flash).
+const SW = Dimensions.get('window').width || 360;
 const CARD_PAD = 20;
 const CHART_W = SW - CARD_PAD * 2 - 8;
 const CHART_H = 54;
