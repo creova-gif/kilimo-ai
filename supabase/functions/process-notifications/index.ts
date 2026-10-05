@@ -2,7 +2,19 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import OpenAI from 'https://esm.sh/openai@4.0.0'
 
-const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') })
+// Lazily construct the OpenAI client INSIDE the handler. Building it at module
+// load with a missing OPENAI_API_KEY throws at cold start, which crashes the
+// whole function (500) before the auth guard below can run. Lazy init keeps the
+// endpoint locked (401) even when the key isn't configured yet.
+let _openai: OpenAI | null = null
+function getOpenAI(): OpenAI {
+  if (!_openai) {
+    const apiKey = Deno.env.get('OPENAI_API_KEY')
+    if (!apiKey) throw new Error('OPENAI_API_KEY is not configured')
+    _openai = new OpenAI({ apiKey })
+  }
+  return _openai
+}
 
 // This function runs with verify_jwt = false (pg_cron has no user JWT), so the
 // gateway does NOT authenticate callers — the function MUST do it itself, or the
@@ -33,7 +45,7 @@ serve(async (req) => {
     // E.g., haven't received one in the last 24 hours, and allow_push is true
     const { data: users, error } = await supabase
       .from('user_notification_preferences')
-      .select('user_id, allow_push, allow_sms, weather_alerts, market_alerts')
+      .select('user_id, allow_push, allow_sms, weather_alerts, market_alerts, push_token')
       .eq('allow_push', true)
       .is('last_insight_sent_at', null) // Simplified for scaffold. In production: < NOW() - INTERVAL '1 day'
       .limit(50)
@@ -43,6 +55,7 @@ serve(async (req) => {
     }
 
     const notificationsToSend = []
+    const pushMessages = [] // Expo push payloads for users with a registered token
 
     // 2. Generate and Send Notifications
     for (const user of users) {
@@ -51,7 +64,7 @@ serve(async (req) => {
       const triggerContext = "Heavy rain expected tomorrow in your registered farm area."
 
       // Generate localized, non-spammy message
-      const completion = await openai.chat.completions.create({
+      const completion = await getOpenAI().chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
           { role: "system", content: "You are a helpful agronomist sending a brief SMS/Push notification to a farmer. Keep it under 100 characters. Use Swahili." },
@@ -62,17 +75,48 @@ serve(async (req) => {
 
       const messageBody = completion.choices[0].message.content
 
+      const title = 'Taarifa ya Hali ya Hewa'
+
       // Prepare notification log
       notificationsToSend.push({
         user_id: user.user_id,
-        title: 'Taarifa ya Hali ya Hewa',
+        title,
         body: messageBody,
         type: 'weather_alert',
         delivery_method: 'push',
       })
 
-      // TODO: Actually send the push via Expo Push API
-      // await fetch('https://exp.host/--/api/v2/push/send', { ... })
+      // Queue an Expo push if the user has a registered token.
+      if (user.push_token) {
+        pushMessages.push({
+          to: user.push_token,
+          sound: 'default',
+          title,
+          body: messageBody,
+          data: { type: 'weather_alert' },
+        })
+      }
+    }
+
+    // 2b. Deliver via the Expo Push API (batched, max 100 per request).
+    let pushSent = 0
+    for (let i = 0; i < pushMessages.length; i += 100) {
+      const batch = pushMessages.slice(i, i + 100)
+      try {
+        const res = await fetch('https://exp.host/--/api/v2/push/send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'Accept-Encoding': 'gzip, deflate',
+          },
+          body: JSON.stringify(batch),
+        })
+        if (res.ok) pushSent += batch.length
+        else console.error('Expo push batch failed:', res.status, await res.text())
+      } catch (e) {
+        console.error('Expo push batch error:', e)
+      }
     }
 
     // 3. Log to database to prevent spam
@@ -88,7 +132,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ status: 'success', processed: notificationsToSend.length }),
+      JSON.stringify({ status: 'success', processed: notificationsToSend.length, pushSent }),
       { headers: { "Content-Type": "application/json" } }
     )
 

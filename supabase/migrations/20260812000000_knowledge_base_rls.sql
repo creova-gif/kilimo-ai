@@ -1,0 +1,49 @@
+-- KILIMO AI — close an open RLS gap on public.knowledge_base.
+--
+-- knowledge_base (added in 20260527000000_ai_rag_notifications.sql) was
+-- created WITHOUT row level security. No client code reads or writes this
+-- table directly — the only consumer is the rag-chat edge function, which
+-- uses the service role key (bypasses RLS entirely) to run match_knowledge
+-- and the ILIKE keyword fallback. But EXPO_PUBLIC_SUPABASE_ANON_KEY ships
+-- inside the app bundle by design (see lib/ai.ts's own security note), so
+-- with RLS off, anyone holding that key could INSERT/UPDATE/DELETE rows in
+-- this table directly via the standard Supabase client/REST API — no app,
+-- no edge function, no review required.
+--
+-- That's a real content-integrity risk specific to this table: rag-chat's
+-- system prompt explicitly instructs the model to "base your advice on the
+-- provided Local Knowledge. Do not hallucinate treatments," so a poisoned
+-- row (e.g. a fake "treatment" entry recommending a harmful chemical) would
+-- be surfaced to real farmers as AI-endorsed agronomic advice.
+--
+-- Fix: enable RLS with zero policies. This is a hard default-deny for every
+-- client-facing role (anon, authenticated) while leaving the service role
+-- — and therefore rag-chat — completely unaffected, since service-role
+-- Postgres connections bypass RLS. If a legitimate client-side read is ever
+-- needed here, add an explicit `for select using (true)` policy then; do
+-- not widen this without a specific reason.
+alter table public.knowledge_base enable row level security;
+
+-- KILIMO AI — close a live financial-privacy leak on agro_ledger_summary.
+--
+-- The view (20260625000000_agro_ledger.sql) is a plain `create view`, which
+-- Postgres defaults to SECURITY DEFINER semantics for RLS purposes: it runs
+-- as the view owner and bypasses agro_ledger's row-level security instead of
+-- applying the querying user's. The view itself has no per-user filter — it
+-- aggregates every user's income/expense/net totals in one result set. It
+-- was only ever intended for the verify-agro-id edge function's service-role
+-- connection (see the view's own comment), but Postgres' default grants on
+-- newly created objects extend SELECT/INSERT/UPDATE/DELETE/etc. to `anon`
+-- and `authenticated` too. Confirmed live: `anon` — the public, unauthenticated
+-- role backed by the key shipped in the app bundle — currently has SELECT on
+-- this view, meaning any unauthenticated request can read every farmer's
+-- aggregated financial ledger (entry_count, total_income_tzs,
+-- total_expense_tzs, net_tzs, verified_net_tzs) for every user.
+--
+-- Fix: revoke all privileges from anon/authenticated (service_role and
+-- postgres are unaffected — service-role connections bypass grants
+-- entirely), and switch the view to security_invoker so that even if a
+-- future migration re-grants client access, agro_ledger's own RLS ("own
+-- rows: select") applies to the querying user instead of being bypassed.
+revoke all on public.agro_ledger_summary from anon, authenticated;
+alter view public.agro_ledger_summary set (security_invoker = true);

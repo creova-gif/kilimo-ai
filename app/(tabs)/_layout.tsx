@@ -6,15 +6,12 @@ import { Home, User, Bot, Tractor, Plus } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../constants/Theme';
 import { useKilimoStore } from '../../store/useKilimoStore';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  interpolateColor,
-} from 'react-native-reanimated';
+import { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 
-const ICON_ACTIVE = '#10b981';
+// Brand forest green (DESIGN.md) — replaces the generic emerald so the nav
+// matches the rest of the product.
+const ICON_ACTIVE = '#2E6F40';
 
 function TabIcon({
   focused,
@@ -26,39 +23,46 @@ function TabIcon({
   children: React.ReactNode;
 }) {
   const { colors, isDark } = useTheme();
-  const scale = useSharedValue(focused ? 1 : 0);
-  const iconScale = useSharedValue(focused ? 1.1 : 1);
+  const progress = useSharedValue(focused ? 1 : 0);
 
   useEffect(() => {
-    scale.value = withSpring(focused ? 1 : 0, { damping: 15, stiffness: 150 });
-    iconScale.value = withSpring(focused ? 1.15 : 1, { damping: 12, stiffness: 200 });
+    progress.value = withSpring(focused ? 1 : 0, { damping: 16, stiffness: 220 });
   }, [focused]);
 
-  const pillStyle = useAnimatedStyle(() => ({
-    transform: [{ scaleX: scale.value }],
-    opacity: scale.value,
+  const iconAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 + progress.value * 0.06 }] as any,
   }));
 
-  const iconAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: iconScale.value }, { translateY: focused ? -4 : 0 }] as any,
+  // Soft pill highlight behind the active tab — replaces the old
+  // color-only active state, which had nothing to visually anchor the
+  // selection at a glance.
+  const pillAnimStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [{ scale: 0.85 + progress.value * 0.15 }] as any,
   }));
 
   return (
-    <View style={{ alignItems: 'center', justifyContent: 'center', width: 60 }}>
-      <Animated.View style={iconAnimStyle}>{children}</Animated.View>
+    <View style={styles.tabIconWrap}>
       <Animated.View
         style={[
-          {
-            position: 'absolute',
-            bottom: -14,
-            width: 4,
-            height: 4,
-            borderRadius: 2,
-            backgroundColor: ICON_ACTIVE,
-          },
-          pillStyle,
+          styles.activePill,
+          pillAnimStyle,
+          { backgroundColor: isDark ? ICON_ACTIVE + '2A' : ICON_ACTIVE + '14' },
         ]}
       />
+      <Animated.View style={iconAnimStyle}>{children}</Animated.View>
+      <Text
+        numberOfLines={1}
+        style={[
+          styles.tabLabel,
+          {
+            fontFamily: focused ? 'Inter_700Bold' : 'Inter_500Medium',
+            color: focused ? ICON_ACTIVE : colors.textMute,
+          },
+        ]}
+      >
+        {label}
+      </Text>
     </View>
   );
 }
@@ -80,18 +84,19 @@ export default function TabLayout() {
         tabBarStyle: {
           position: 'absolute',
           bottom: Platform.OS === 'ios' ? 24 : 16,
-          left: 20,
-          right: 20,
-          height: 64,
-          borderRadius: 20,
-          borderTopWidth: 1,
+          left: 16,
+          right: 16,
+          height: 80,
+          borderRadius: 28,
+          paddingBottom: 0,
+          borderWidth: 1,
           borderColor: borderColor,
           backgroundColor: tabBarBg,
           elevation: 10,
           shadowColor: '#000',
-          shadowOpacity: isDark ? 0.4 : 0.08,
-          shadowRadius: 16,
-          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: isDark ? 0.35 : 0.06,
+          shadowRadius: 20,
+          shadowOffset: { width: 0, height: 10 },
         },
       }}
     >
@@ -129,15 +134,17 @@ export default function TabLayout() {
               }}
               style={{
                 position: 'relative',
-                top: -24,
+                top: -26,
                 width: 60,
                 height: 60,
                 justifyContent: 'center',
                 alignItems: 'center',
               }}
+              accessibilityRole="button"
+              accessibilityLabel="Ongeza"
             >
               <LinearGradient
-                colors={['#34d399', '#059669']}
+                colors={['#3A8D52', '#2E6F40']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={{
@@ -146,16 +153,16 @@ export default function TabLayout() {
                   borderRadius: 28,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  shadowColor: '#10b981',
-                  shadowOpacity: 0.4,
-                  shadowRadius: 12,
-                  shadowOffset: { width: 0, height: 6 },
+                  shadowColor: '#2E6F40',
+                  shadowOpacity: 0.35,
+                  shadowRadius: 14,
+                  shadowOffset: { width: 0, height: 8 },
                   elevation: 8,
-                  borderWidth: 4,
+                  borderWidth: 3,
                   borderColor: tabBarBg,
                 }}
               >
-                <Plus color="#ffffff" size={28} strokeWidth={3} />
+                <Plus color="#ffffff" size={26} strokeWidth={2.75} />
               </LinearGradient>
             </TouchableOpacity>
           ),
@@ -165,7 +172,7 @@ export default function TabLayout() {
         name="ai"
         options={{
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon focused={focused} label="Sankofa AI">
+            <TabIcon focused={focused} label="Sankofa">
               <Bot color={color} size={24} strokeWidth={focused ? 2.5 : 2} />
             </TabIcon>
           ),
@@ -189,3 +196,24 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabIconWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 68,
+    gap: 4,
+    paddingTop: 10,
+  },
+  activePill: {
+    position: 'absolute',
+    top: 2,
+    width: 52,
+    height: 34,
+    borderRadius: 17,
+  },
+  tabLabel: {
+    fontSize: 11,
+    letterSpacing: 0.1,
+  },
+});

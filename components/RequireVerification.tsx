@@ -21,8 +21,20 @@ export function RequireVerification({ children }: { children: React.ReactNode })
 
   const handleGoHome = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    // Navigate back to the home tab where the activation scanner card is visible.
-    router.replace('/(tabs)');
+    // 'pending' means a real KYC submission is already under backend review
+    // (see supabase/functions/submit-verification + app/verification/pending.tsx)
+    // — send the user to that status screen, not Home. Home's activation card
+    // is a *different* flow (minting the Agro-ID itself via mintAgroId); its
+    // retry button can round-trip successfully even while KYC is still under
+    // review, which would let the client mark itself "verified" without the
+    // backend's real verification_status agreeing. Only route to Home for the
+    // genuinely-unverified case, where that activation flow is the correct
+    // next step.
+    if (status === 'pending') {
+      router.replace('/verification/pending');
+    } else {
+      router.replace('/(tabs)');
+    }
   };
 
   const title =
@@ -34,16 +46,26 @@ export function RequireVerification({ children }: { children: React.ReactNode })
         ? 'Verification Pending'
         : 'Verification Required';
 
+  // Pending copy mirrors app/verification/pending.tsx (the actual KYC status
+  // screen) so the two surfaces never disagree about what "pending" means or
+  // how long it takes.
   const body =
     language === 'sw'
       ? status === 'pending'
-        ? 'Kitambulisho chako kinakaguliwa kwa sasa. Kipengele hiki kitafunguliwa kiotomatiki mara kitakapothibitishwa shambani.'
+        ? 'Hati zako za utambulisho zimewasilishwa na sasa zinakaguliwa. Kwa kawaida huchukua saa 24–48. Utaarifiwa mara zitakapothibitishwa.'
         : 'Ili kulinda jamii na kufuata kanuni za Kilimo AI, lazima uhakiki kitambulisho chako ili kupata huduma hii.'
       : status === 'pending'
-        ? 'Your identity is currently under review. This feature will unlock automatically once approved.'
+        ? 'Your identity documents have been submitted and are currently under review. This usually takes 24-48 hours. You will be notified once approved.'
         : 'To protect the community and comply with Kilimo AI guidelines, you must verify your identity to access this feature.';
 
-  const btnLabel = language === 'sw' ? 'Nenda Nyumbani Kuwezesha' : 'Go to Home to Activate';
+  const btnLabel =
+    status === 'pending'
+      ? language === 'sw'
+        ? 'Angalia Hali ya Uhakiki'
+        : 'Check Verification Status'
+      : language === 'sw'
+        ? 'Nenda Nyumbani Kuwezesha'
+        : 'Go to Home to Activate';
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
