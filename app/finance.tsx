@@ -211,7 +211,10 @@ function MonthlyChart({
   months: { label: string; income: number; expense: number }[];
   colors: any;
 }) {
-  const CW = Dimensions.get('window').width - 64;
+  // `|| 360` guards against Dimensions.get('window').width reading 0 on
+  // first web hydration — an unguarded 0 here flowed into a negative SVG
+  // chart width downstream (real console error + broken chart flash).
+  const CW = Math.max(100, (Dimensions.get('window').width || 360) - 64);
   const H = 110;
   const PAD_LEFT = 42;
   const PAD_BOT = 24;
@@ -248,7 +251,7 @@ function MonthlyChart({
         <SvgDefs>
           <SvgGrad id="incGrad" x1="0" y1="0" x2="0" y2="1">
             <SvgStop offset="0%" stopColor={colors.primary} stopOpacity="1" />
-            <SvgStop offset="100%" stopColor="#16a34a" stopOpacity="0.9" />
+            <SvgStop offset="100%" stopColor="#3A8D52" stopOpacity="0.9" />
           </SvgGrad>
           <SvgGrad id="expGrad" x1="0" y1="0" x2="0" y2="1">
             <SvgStop offset="0%" stopColor="#ef4444" stopOpacity="0.85" />

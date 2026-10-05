@@ -9,6 +9,7 @@ import {
   StatusBar,
   Platform,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import {
   ChevronLeft,
@@ -17,8 +18,10 @@ import {
   AlertTriangle,
   Info,
   CheckCircle2,
-  Zap,
+  Sparkles,
+  TrendingUp,
   Trash2,
+  RefreshCw,
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,12 +31,20 @@ import { useTheme } from '../constants/Theme';
 import { getSupabase } from '../lib/supabase';
 import { useKilimoStore } from '../store/useKilimoStore';
 
-const TYPE_CONFIG = {
-  alert: { icon: AlertTriangle, color: '#ef4444', bg: 'rgba(239, 68, 68, 0.12)' },
-  warning: { icon: Zap, color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.12)' },
-  info: { icon: Info, color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)' },
-  success: { icon: CheckCircle2, color: '#2E6F40', bg: 'rgba(46, 111, 64, 0.12)' },
+// Keyed on user_notifications.type exactly as written by process-notifications
+// (supabase/migrations/20260527000000_ai_rag_notifications.sql's check
+// constraint: 'insight' | 'weather_alert' | 'task_reminder' | 'market_alert').
+// Previously this was guessed from keywords in the notification's title text
+// ("hatari"/"alert"/"okoa"), which never matched the real column at all —
+// every notification silently fell through to the same generic "info" look
+// regardless of its actual type.
+const TYPE_CONFIG: Record<string, { icon: any; color: string; bg: string }> = {
+  weather_alert: { icon: AlertTriangle, color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.12)' },
+  market_alert: { icon: TrendingUp, color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)' },
+  task_reminder: { icon: CheckCircle2, color: '#2E6F40', bg: 'rgba(46, 111, 64, 0.12)' },
+  insight: { icon: Sparkles, color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.12)' },
 };
+const DEFAULT_TYPE_CONFIG = { icon: Info, color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)' };
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -57,13 +68,7 @@ function NotificationItem({
   colors: any;
 }) {
   const language = useKilimoStore((s) => s.language);
-  const typeKey =
-    item.title.toLowerCase().includes('hatari') || item.title.toLowerCase().includes('alert')
-      ? 'alert'
-      : item.title.toLowerCase().includes('okoa')
-        ? 'success'
-        : 'info';
-  const cfg = TYPE_CONFIG[typeKey];
+  const cfg = TYPE_CONFIG[item.type] ?? DEFAULT_TYPE_CONFIG;
   const Icon = cfg.icon;
   const isRead = item.status === 'read';
 
@@ -145,18 +150,35 @@ export default function NotificationsScreen() {
 
   const [dbNotifications, setDbNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
 
   useEffect(() => {
     fetchNotifications();
   }, []);
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = async (isRefresh = false) => {
     const sb = getSupabase();
-    if (!sb) return setLoading(false);
+    if (!sb) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
 
-    // Fallback to anonymous user for testing if no auth session
+    setFetchError(false);
     const { data: sessionData } = await sb.auth.getSession();
-    const userId = sessionData?.session?.user?.id || 'd3b07384-d9a2-4a0b-99f5-1b88e1a89c9c'; // Test user UUID
+    const userId = sessionData?.session?.user?.id;
+    // No real session: previously this fell back to a hardcoded test-user
+    // UUID, which — if it were ever a real row owner — would have leaked
+    // that user's notifications into whoever hit this screen unauthenticated.
+    // RLS ("own rows: select") would still block it in practice, but the
+    // right behavior is to never construct a query against a fake identity
+    // in the first place. Treat "no session" as "no notifications to show."
+    if (!userId) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
 
     const { data, error } = await sb
       .from('user_notifications')
@@ -165,35 +187,66 @@ export default function NotificationsScreen() {
       .order('created_at', { ascending: false })
       .limit(50);
 
-    if (data) {
-      setDbNotifications(data);
+    if (error) {
+      console.warn('[Notifications] fetch failed:', error.message);
+      if (!isRefresh) setFetchError(true);
+      setLoading(false);
+      setRefreshing(false);
+      return;
     }
+    setDbNotifications(data ?? []);
     setLoading(false);
+    setRefreshing(false);
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    Haptics.selectionAsync();
+    fetchNotifications(true);
   };
 
   const markNotificationRead = async (id: string) => {
     const sb = getSupabase();
+    const prevSnapshot = dbNotifications;
     setDbNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, status: 'read' } : n)));
     if (sb) {
-      await sb.from('user_notifications').update({ status: 'read' }).eq('id', id);
+      const { error } = await sb.from('user_notifications').update({ status: 'read' }).eq('id', id);
+      if (error) {
+        console.warn('[Notifications] mark-read failed, reverting:', error.message);
+        setDbNotifications(prevSnapshot);
+      }
     }
   };
 
   const removeNotification = async (id: string) => {
     const sb = getSupabase();
+    const prevSnapshot = dbNotifications;
     setDbNotifications((prev) => prev.filter((n) => n.id !== id));
     if (sb) {
-      await sb.from('user_notifications').delete().eq('id', id);
+      const { error } = await sb.from('user_notifications').delete().eq('id', id);
+      if (error) {
+        console.warn('[Notifications] delete failed, reverting:', error.message);
+        setDbNotifications(prevSnapshot);
+      }
     }
   };
 
   const markAllRead = async () => {
     const sb = getSupabase();
+    const prevSnapshot = dbNotifications;
     setDbNotifications((prev) => prev.map((n) => ({ ...n, status: 'read' })));
     if (sb) {
       const { data: sessionData } = await sb.auth.getSession();
-      const userId = sessionData?.session?.user?.id || 'd3b07384-d9a2-4a0b-99f5-1b88e1a89c9c';
-      await sb.from('user_notifications').update({ status: 'read' }).eq('user_id', userId);
+      const userId = sessionData?.session?.user?.id;
+      if (!userId) return;
+      const { error } = await sb
+        .from('user_notifications')
+        .update({ status: 'read' })
+        .eq('user_id', userId);
+      if (error) {
+        console.warn('[Notifications] mark-all-read failed, reverting:', error.message);
+        setDbNotifications(prevSnapshot);
+      }
     }
   };
 
@@ -240,20 +293,58 @@ export default function NotificationsScreen() {
 
           <TouchableOpacity
             onPress={markAllRead}
+            disabled={unreadCount === 0}
             style={styles.actionBtn}
             accessibilityRole="button"
+            accessibilityState={{ disabled: unreadCount === 0 }}
             accessibilityLabel={language === 'sw' ? 'Soma zote' : 'Mark all as read'}
           >
-            <CheckCheck size={20} color={colors.primary} />
+            <CheckCheck size={20} color={unreadCount === 0 ? colors.textMute : colors.primary} />
           </TouchableOpacity>
         </View>
 
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+            />
+          }
         >
           {loading ? (
             <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
+          ) : fetchError ? (
+            <Animated.View entering={FadeInDown} style={styles.emptyState}>
+              <View style={[styles.emptyIcon, { backgroundColor: '#ef444415' }]}>
+                <AlertTriangle size={36} color="#ef4444" />
+              </View>
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                {language === 'sw' ? 'Imeshindwa Kupakia' : 'Failed to Load'}
+              </Text>
+              <Text style={[styles.emptySubtitle, { color: colors.textMute }]}>
+                {language === 'sw'
+                  ? 'Hakikisha una mtandao kisha jaribu tena.'
+                  : 'Check your connection and try again.'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setLoading(true);
+                  fetchNotifications();
+                }}
+                style={[styles.retryBtn, { backgroundColor: colors.primary }]}
+                accessibilityRole="button"
+                accessibilityLabel={language === 'sw' ? 'Jaribu tena' : 'Retry'}
+              >
+                <RefreshCw size={16} color={isDark ? '#000' : '#fff'} />
+                <Text style={[styles.retryBtnText, { color: isDark ? '#000' : '#fff' }]}>
+                  {language === 'sw' ? 'Jaribu Tena' : 'Retry'}
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
           ) : dbNotifications.length === 0 ? (
             <Animated.View entering={FadeInDown} style={styles.emptyState}>
               <View style={[styles.emptyIcon, { backgroundColor: colors.primary + '15' }]}>
@@ -347,4 +438,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
   },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    minHeight: 44,
+  },
+  retryBtnText: { fontSize: 14, fontFamily: 'Inter_700Bold' },
 });
