@@ -38,11 +38,20 @@ import {
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../constants/Theme';
 import { Gate } from '../lib/access';
 import { useFarmDataStore, InputOrder, InputSupplier } from '../store/useFarmDataStore';
+import { useKilimoStore } from '../store/useKilimoStore';
+
+// No real supplier-ordering backend exists anywhere in this codebase — no
+// order-placement edge function, no email/SMS/API call to any supplier.
+// Before this fix, tapping "Order Sample" on a real named company (YARA,
+// Bayer, Syngenta, etc. — see SEED_SUPPLIERS) silently created a fake
+// order with a hardcoded price and immediately showed a "Placed" status,
+// implying a real commercial transaction with that real business. Flip
+// this to true only once a real supplier-ordering integration exists.
+const SUPPLIER_ORDERING_LIVE = false;
 
 const fmt = (n: number) => `TSh ${new Intl.NumberFormat('en-US').format(n)}`;
 
@@ -144,7 +153,7 @@ function OrderCard({
     : null;
 
   return (
-    <Animated.View entering={FadeInDown.delay(index * 60).springify()}>
+    <View>
       <View
         style={[
           oc.wrap,
@@ -214,7 +223,7 @@ function OrderCard({
           </TouchableOpacity>
         )}
       </View>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -277,7 +286,7 @@ function SupplierCard({
   const accent = CAT_COLOR[supplier.category] ?? '#2E6F40';
 
   return (
-    <Animated.View entering={FadeInDown.delay(index * 55).springify()}>
+    <View>
       <View
         style={[
           sc.wrap,
@@ -372,7 +381,7 @@ function SupplierCard({
           </LinearGradient>
         </TouchableOpacity>
       </View>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -450,6 +459,8 @@ export default function InputSupplyScreen() {
   const orders = useFarmDataStore((s) => s.orders);
   const placeOrder = useFarmDataStore((s) => s.placeOrder);
   const advanceOrder = useFarmDataStore((s) => s.advanceOrder);
+  const language = useKilimoStore((s) => s.language);
+  const addNotification = useKilimoStore((s) => s.addNotification);
 
   const [catFilter, setCatFilter] = useState('all');
 
@@ -460,6 +471,19 @@ export default function InputSupplyScreen() {
   const deliveredOrders = orders.filter((o) => o.status === 'delivered');
 
   function handleOrderSample(supplierId: string) {
+    if (!SUPPLIER_ORDERING_LIVE) {
+      const supplier = suppliers.find((s) => s.id === supplierId);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      addNotification({
+        title: language === 'sw' ? 'Bado Haipatikani' : 'Coming Soon',
+        body:
+          language === 'sw'
+            ? `Kuagiza moja kwa moja kutoka ${supplier?.name ?? 'muuzaji'} bado hakujawezeshwa.`
+            : `Direct ordering from ${supplier?.name ?? 'this supplier'} isn't live yet.`,
+        type: 'warning',
+      });
+      return;
+    }
     const supplier = suppliers.find((s) => s.id === supplierId);
     placeOrder({
       supplierId,
@@ -532,7 +556,7 @@ export default function InputSupplyScreen() {
             contentContainerStyle={{ padding: 16, gap: 20, paddingBottom: 100 }}
           >
             {/* Summary banner */}
-            <Animated.View entering={FadeInDown.springify()}>
+            <View>
               <View
                 style={[
                   s.summaryCard,
@@ -564,7 +588,7 @@ export default function InputSupplyScreen() {
                   <Text style={[s.summaryLbl, { color: colors.textMute }]}>Zilizofika</Text>
                 </View>
               </View>
-            </Animated.View>
+            </View>
 
             {/* Active orders */}
             {pendingOrders.length > 0 && (

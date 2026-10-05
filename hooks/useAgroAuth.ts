@@ -278,6 +278,36 @@ export function useAgroAuth() {
     }
   }, [clearAgroId]);
 
+  // ── Delete account ─────────────────────────────────────────────────────────
+  // Permanently removes the user's auth identity and all their data via the
+  // `delete-account` edge function (service role + cascade), then clears the
+  // local session. Required by App Store 5.1.1(v) / Google Play data deletion.
+  const deleteAccount = useCallback(async (): Promise<{ ok: boolean; error?: string }> => {
+    setLoading(true);
+    try {
+      if (supabase) {
+        const { data, error } = await supabase.functions.invoke('delete-account', { body: {} });
+        if (error) return { ok: false, error: error.message ?? 'delete_failed' };
+        if (data?.error) return { ok: false, error: String(data.error) };
+      }
+      // Clear local session regardless (also covers offline/mock mode).
+      await SecureStore.deleteItemAsync(SESSION_KEY);
+      if (supabase) {
+        try {
+          await supabase.auth.signOut();
+        } catch {
+          /* session already gone after deletion */
+        }
+      }
+      clearAgroId();
+      return { ok: true };
+    } catch (err: any) {
+      return { ok: false, error: err?.message ?? 'delete_failed' };
+    } finally {
+      setLoading(false);
+    }
+  }, [clearAgroId]);
+
   return {
     agroId,
     isAuthenticated,
@@ -287,6 +317,7 @@ export function useAgroAuth() {
     signInWithEmail,
     verifyOtp,
     signOut,
+    deleteAccount,
     authenticateWithBiometric,
   };
 }
