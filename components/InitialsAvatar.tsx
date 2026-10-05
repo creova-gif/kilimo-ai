@@ -11,14 +11,14 @@ interface Props {
 
 function nameToColor(name: string): string {
   const COLORS = [
-    '#2E6F40',
+    '#3C4A2A',
     '#3b82f6',
     '#f59e0b',
     '#8b5cf6',
     '#ec4899',
     '#06b6d4',
     '#ef4444',
-    '#2E6F40',
+    '#3C4A2A',
   ];
   let hash = 0;
   for (let i = 0; i < name.length; i++) {

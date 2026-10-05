@@ -658,7 +658,7 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 10,
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.3)',
+    borderColor: 'rgba(60, 74, 42,0.3)',
     backgroundColor: 'rgba(10,26,11,0.75)',
   },
   voiceGuidanceText: { color: '#fff', fontSize: 11, fontFamily: 'Inter_600SemiBold', flex: 1 },

@@ -447,7 +447,7 @@ const s = StyleSheet.create({
   },
   dotActive: {
     width: 20,
-    backgroundColor: '#2E6F40',
+    backgroundColor: '#3C4A2A',
     borderRadius: 3,
   },
 });

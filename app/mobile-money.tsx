@@ -110,7 +110,7 @@ const SAMPLE_TXNS: Txn[] = [
 
 const QUICK_ACTIONS = [
   { id: 'send', icon: ArrowUpRight, label: 'Tuma Pesa', labelEn: 'Send', color: '#ef4444' },
-  { id: 'receive', icon: ArrowDownLeft, label: 'Pokea Pesa', labelEn: 'Receive', color: '#2E6F40' },
+  { id: 'receive', icon: ArrowDownLeft, label: 'Pokea Pesa', labelEn: 'Receive', color: '#3C4A2A' },
   { id: 'airtime', icon: Smartphone, label: 'Nunua Airtime', labelEn: 'Airtime', color: '#8b5cf6' },
   { id: 'bills', icon: Receipt, label: 'Lipa Bili', labelEn: 'Pay Bills', color: '#f59e0b' },
 ];
@@ -438,11 +438,11 @@ export default function MobileMoneyScreen() {
                     <View
                       style={[
                         s.txnDot,
-                        { backgroundColor: t.direction === 'in' ? '#2E6F4022' : '#ef444422' },
+                        { backgroundColor: t.direction === 'in' ? '#3C4A2A22' : '#ef444422' },
                       ]}
                     >
                       {t.direction === 'in' ? (
-                        <ArrowDownLeft size={16} color="#2E6F40" />
+                        <ArrowDownLeft size={16} color="#3C4A2A" />
                       ) : (
                         <ArrowUpRight size={16} color="#ef4444" />
                       )}
@@ -461,7 +461,7 @@ export default function MobileMoneyScreen() {
                       </View>
                     </View>
                     <Text
-                      style={[s.txnAmount, { color: t.direction === 'in' ? '#2E6F40' : '#ef4444' }]}
+                      style={[s.txnAmount, { color: t.direction === 'in' ? '#3C4A2A' : '#ef4444' }]}
                     >
                       {t.direction === 'in' ? '+' : '-'}
                       {fmtTZS(t.amount)}

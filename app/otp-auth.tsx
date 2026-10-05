@@ -209,7 +209,7 @@ export function OtpAuthFlow({ onSuccess, onSkip, embedded = false }: Props) {
               accessibilityLabel={isSw ? 'Tuma OTP' : 'Send OTP'}
             >
               {loading ? (
-                <ActivityIndicator color="#000" />
+                <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={s.btnText}>{isSw ? 'Tuma Nambari' : 'Send Code'}</Text>
               )}
@@ -263,7 +263,7 @@ export function OtpAuthFlow({ onSuccess, onSkip, embedded = false }: Props) {
               accessibilityLabel={isSw ? 'Thibitisha' : 'Verify'}
             >
               {loading ? (
-                <ActivityIndicator color="#000" />
+                <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={s.btnText}>{isSw ? 'Thibitisha' : 'Verify'}</Text>
               )}

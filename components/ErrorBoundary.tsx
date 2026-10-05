@@ -91,6 +91,6 @@ const s = StyleSheet.create({
     marginBottom: 24,
     width: '100%',
   },
-  btn: { backgroundColor: '#2E6F40', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 14 },
+  btn: { backgroundColor: '#3C4A2A', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 14 },
   btnText: { fontSize: 15, fontFamily: 'Inter_800ExtraBold' },
 });

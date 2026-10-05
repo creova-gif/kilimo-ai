@@ -4,11 +4,13 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import {
-  InstrumentSans_400Regular,
-  InstrumentSans_500Medium,
-  InstrumentSans_600SemiBold,
-  InstrumentSans_700Bold,
-} from '@expo-google-fonts/instrument-sans';
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  Inter_800ExtraBold,
+  Inter_900Black,
+} from '@expo-google-fonts/inter';
 import { InstrumentSerif_400Regular } from '@expo-google-fonts/instrument-serif';
 import { ThemeProvider, DarkTheme, DefaultTheme } from '@react-navigation/native';
 import {
@@ -255,12 +257,14 @@ function RootLayout() {
   }
 
   const [loaded, error] = useFonts({
-    Inter_400Regular: InstrumentSans_400Regular,
-    Inter_500Medium: InstrumentSans_500Medium,
-    Inter_600SemiBold: InstrumentSans_600SemiBold,
-    Inter_700Bold: InstrumentSans_700Bold,
-    Inter_800ExtraBold: InstrumentSans_700Bold,
-    Inter_900Black: InstrumentSans_700Bold,
+    // Real Inter, as used throughout the Figma design (these names were
+    // previously aliased to Instrument Sans).
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    Inter_800ExtraBold,
+    Inter_900Black,
     InstrumentSerif_400Regular: InstrumentSerif_400Regular,
   });
 

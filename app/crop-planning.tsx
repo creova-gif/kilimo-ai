@@ -133,7 +133,7 @@ const CROP_DATA: Record<Season, CropRec[]> = {
       priceNum: 210,
       water: 'Wastani',
       risk: 'Chini',
-      color: '#2E6F40',
+      color: '#3C4A2A',
       plantWeeks: 1,
       growWeeks: 9,
       harvestWeeks: 1,
@@ -245,7 +245,7 @@ const CROP_DATA: Record<Season, CropRec[]> = {
       priceNum: 15,
       water: 'Wastani',
       risk: 'Chini',
-      color: '#2E6F40',
+      color: '#3C4A2A',
       plantWeeks: 2,
       growWeeks: 9,
       harvestWeeks: 2,
@@ -267,7 +267,7 @@ const CROP_DATA: Record<Season, CropRec[]> = {
       priceNum: 210,
       water: 'Chini',
       risk: 'Chini',
-      color: '#2E6F40',
+      color: '#3C4A2A',
       plantWeeks: 1,
       growWeeks: 9,
       harvestWeeks: 1,
@@ -353,7 +353,7 @@ const CROP_DATA: Record<Season, CropRec[]> = {
       priceNum: 55,
       water: 'Chini',
       risk: 'Chini',
-      color: '#2E6F40',
+      color: '#3C4A2A',
       plantWeeks: 1,
       growWeeks: 10,
       harvestWeeks: 2,
@@ -414,7 +414,7 @@ const yc = StyleSheet.create({
     alignItems: 'flex-end',
   },
   col: { flex: 1, alignItems: 'center', gap: 3 },
-  val: { fontSize: 12, fontFamily: 'Inter_700Bold', color: '#2E6F40' },
+  val: { fontSize: 12, fontFamily: 'Inter_700Bold', color: '#3C4A2A' },
   trackWrap: { flex: 1, width: '100%', justifyContent: 'flex-end' },
   track: {
     width: '100%',
@@ -512,7 +512,7 @@ function PlantingTimeline({ crop }: { crop: CropRec }) {
             }}
           >
             <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: ph.color }} />
-            <Text style={[pt.phaseLbl, activePhase === ph.key && { color: '#2E6F40' }]}>
+            <Text style={[pt.phaseLbl, activePhase === ph.key && { color: '#3C4A2A' }]}>
               {ph.label} ({ph.weeks}w)
             </Text>
           </TouchableOpacity>
@@ -538,9 +538,9 @@ const pt = StyleSheet.create({
   infoBox: {
     padding: 12,
     borderRadius: 12,
-    backgroundColor: 'rgba(46, 111, 64,0.06)',
+    backgroundColor: 'rgba(60, 74, 42,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.12)',
+    borderColor: 'rgba(60, 74, 42,0.12)',
     gap: 4,
   },
   infoTitle: { fontSize: 12, fontFamily: 'Inter_700Bold', letterSpacing: 0.6 },
@@ -624,7 +624,7 @@ export default function CropPlanningScreen() {
           </TouchableOpacity>
           <View style={{ alignItems: 'center' }}>
             <View style={st.aiBadge}>
-              <Sparkles size={10} color="#2E6F40" />
+              <Sparkles size={10} color="#3C4A2A" />
               <Text style={st.aiBadgeText}>KIELELEZO</Text>
             </View>
             <Text style={[st.headerTitle, { color: colors.text }]}>Upangaji Mazao</Text>
@@ -635,7 +635,7 @@ export default function CropPlanningScreen() {
             onPress={() => router.push('/tasks')}
             style={st.iconBtn}
           >
-            <Calendar size={19} color="#2E6F40" />
+            <Calendar size={19} color="#3C4A2A" />
           </TouchableOpacity>
         </View>
 
@@ -761,7 +761,7 @@ export default function CropPlanningScreen() {
               <View
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}
               >
-                <BarChart3 size={16} color="#2E6F40" />
+                <BarChart3 size={16} color="#3C4A2A" />
                 <Text style={[st.chartTitle, { color: colors.text }]}>Ulinganisho wa Mavuno ya Kielelezo</Text>
                 <Text style={[st.chartSub, { color: colors.textMute }]}>tani/eka</Text>
               </View>
@@ -771,7 +771,7 @@ export default function CropPlanningScreen() {
 
           {/* ── Crop cards ── */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-            <Leaf size={17} color="#2E6F40" />
+            <Leaf size={17} color="#3C4A2A" />
             <Text style={[st.sectionTitle, { color: colors.text }]}>Mazao ya Kielelezo</Text>
           </View>
 
@@ -858,7 +858,7 @@ export default function CropPlanningScreen() {
                         />
                         <View style={st.stat}>
                           <Text style={[st.statLbl, { color: colors.textMute }]}>Bei ya Mfano</Text>
-                          <Text style={[st.statVal, { color: '#2E6F40' }]}>{crop.price}</Text>
+                          <Text style={[st.statVal, { color: '#3C4A2A' }]}>{crop.price}</Text>
                         </View>
                         <View
                           style={[
@@ -943,7 +943,7 @@ export default function CropPlanningScreen() {
                               </View>
                             ) : (
                               <LinearGradient
-                                colors={['#2E6F40', '#1C4A29']}
+                                colors={['#3C4A2A', '#1C4A29']}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 0 }}
                                 style={st.planBtn}
@@ -969,19 +969,19 @@ export default function CropPlanningScreen() {
                 st.tipCard,
                 {
                   backgroundColor: isDark ? 'rgba(9,20,11,0.97)' : colors.card,
-                  borderColor: 'rgba(46, 111, 64,0.18)',
+                  borderColor: 'rgba(60, 74, 42,0.18)',
                 },
               ]}
             >
               <LinearGradient
-                colors={['rgba(46, 111, 64,0.1)', 'transparent']}
+                colors={['rgba(60, 74, 42,0.1)', 'transparent']}
                 style={StyleSheet.absoluteFill}
                 pointerEvents="none"
               />
               <View
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 10 }}
               >
-                <Target size={17} color="#2E6F40" />
+                <Target size={17} color="#3C4A2A" />
                 <Text style={[st.tipCardTitle, { color: colors.text }]}>Dokezo la Kielelezo</Text>
               </View>
               <Text style={[st.tipCardBody, { color: colors.textMute }]}>
@@ -998,7 +998,7 @@ export default function CropPlanningScreen() {
                 . Tembelea Soko la KILIMO AI kupata bei za sasa hivi.
               </Text>
               <TouchableOpacity onPress={() => router.push('/tasks')} style={st.tipCardBtn}>
-                <TrendingUp size={13} color="#2E6F40" />
+                <TrendingUp size={13} color="#3C4A2A" />
                 <Text style={st.tipCardBtnText}>Enda kwenye Ratiba</Text>
               </TouchableOpacity>
             </View>
@@ -1019,7 +1019,7 @@ const st = StyleSheet.create({
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: 'rgba(46, 111, 64,0.07)',
+    backgroundColor: 'rgba(60, 74, 42,0.07)',
   },
   glowBL: {
     position: 'absolute',
@@ -1028,7 +1028,7 @@ const st = StyleSheet.create({
     width: 220,
     height: 220,
     borderRadius: 110,
-    backgroundColor: 'rgba(46, 111, 64,0.04)',
+    backgroundColor: 'rgba(60, 74, 42,0.04)',
   },
   header: {
     flexDirection: 'row',
@@ -1054,10 +1054,10 @@ const st = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 3,
     borderRadius: 8,
-    backgroundColor: 'rgba(46, 111, 64,0.1)',
+    backgroundColor: 'rgba(60, 74, 42,0.1)',
     marginBottom: 4,
   },
-  aiBadgeText: { fontSize: 12, fontFamily: 'Inter_700Bold', color: '#2E6F40', letterSpacing: 1 },
+  aiBadgeText: { fontSize: 12, fontFamily: 'Inter_700Bold', color: '#3C4A2A', letterSpacing: 1 },
   headerTitle: { fontSize: 20, fontFamily: 'InstrumentSerif_400Regular', letterSpacing: -0.4 },
 
   seasonTab: {
@@ -1202,8 +1202,8 @@ const st = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(46, 111, 64,0.3)',
-    backgroundColor: 'rgba(46, 111, 64,0.08)',
+    borderColor: 'rgba(60, 74, 42,0.3)',
+    backgroundColor: 'rgba(60, 74, 42,0.08)',
   },
-  tipCardBtnText: { fontSize: 12, fontFamily: 'Inter_700Bold', color: '#2E6F40' },
+  tipCardBtnText: { fontSize: 12, fontFamily: 'Inter_700Bold', color: '#3C4A2A' },
 });

@@ -953,7 +953,7 @@ const s = StyleSheet.create({
     paddingVertical: 18,
   },
   saveText: {
-    color: '#000',
+    color: '#fff',
     fontSize: 16,
     fontFamily: 'InstrumentSerif_400Regular',
     letterSpacing: 0.3,

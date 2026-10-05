@@ -34,7 +34,7 @@ const TYPE_LABELS: Record<TxnType, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  completed: '#2E6F40',
+  completed: '#3C4A2A',
   pending: '#f59e0b',
   failed: '#ef4444',
   reversed: '#94a3b8',
@@ -364,7 +364,7 @@ const bn = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 8,
-    backgroundColor: 'rgba(46, 111, 64,0.12)',
+    backgroundColor: 'rgba(60, 74, 42,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },

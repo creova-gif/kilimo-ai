@@ -60,20 +60,20 @@ const ORDER_STATUS: Record<string, { color: string; label: string; step: number 
   cart: { color: '#94a3b8', label: 'Kikapu', step: 0 },
   placed: { color: '#3b82f6', label: 'Imewekwa', step: 1 },
   dispatched: { color: '#f59e0b', label: 'Inasafirishwa', step: 2 },
-  delivered: { color: '#2E6F40', label: 'Imefika', step: 3 },
+  delivered: { color: '#3C4A2A', label: 'Imefika', step: 3 },
   cancelled: { color: '#ef4444', label: 'Imefutwa', step: -1 },
 };
 
 const CAT_FILTERS = [
   { key: 'all', label: 'Yote', icon: <Box size={13} color="#94a3b8" /> },
-  { key: 'Fertilizer', label: 'Mbolea', icon: <Leaf size={13} color="#2E6F40" /> },
+  { key: 'Fertilizer', label: 'Mbolea', icon: <Leaf size={13} color="#3C4A2A" /> },
   { key: 'Seed', label: 'Mbegu', icon: <Sprout size={13} color="#f59e0b" /> },
   { key: 'Pesticide', label: 'Dawa', icon: <FlaskConical size={13} color="#ef4444" /> },
   { key: 'General', label: 'Jumla', icon: <Wrench size={13} color="#a855f7" /> },
 ];
 
 const CAT_COLOR: Record<string, string> = {
-  Fertilizer: '#2E6F40',
+  Fertilizer: '#3C4A2A',
   Seed: '#f59e0b',
   Pesticide: '#ef4444',
   General: '#a855f7',
@@ -89,15 +89,15 @@ function DeliveryTimeline({ status }: { status: string }) {
       {steps.map((label, i) => {
         const done = i < current;
         const active = i === current - 1;
-        const color = done || active ? '#2E6F40' : '#334155';
+        const color = done || active ? '#3C4A2A' : '#334155';
         return (
           <React.Fragment key={i}>
             <View style={tl.step}>
               <View style={[tl.dot, { backgroundColor: color, borderColor: color }]}>
-                {done && <CheckCircle2 size={9} color="#000" />}
+                {done && <CheckCircle2 size={9} color="#fff" />}
               </View>
               <Text
-                style={[tl.label, { color: done || active ? '#2E6F40' : '#475569' }]}
+                style={[tl.label, { color: done || active ? '#3C4A2A' : '#475569' }]}
                 numberOfLines={1}
               >
                 {label}
@@ -105,7 +105,7 @@ function DeliveryTimeline({ status }: { status: string }) {
             </View>
             {i < 2 && (
               <View
-                style={[tl.line, { backgroundColor: i < current - 1 ? '#2E6F40' : '#1e293b' }]}
+                style={[tl.line, { backgroundColor: i < current - 1 ? '#3C4A2A' : '#1e293b' }]}
               />
             )}
           </React.Fragment>
@@ -218,7 +218,7 @@ function OrderCard({
             style={oc.confirmBtn}
             activeOpacity={0.8}
           >
-            <CheckCircle2 size={15} color="#000" />
+            <CheckCircle2 size={15} color="#fff" />
             <Text style={oc.confirmText}>Thibitisha Uwasilishaji</Text>
           </TouchableOpacity>
         )}
@@ -267,9 +267,9 @@ const oc = StyleSheet.create({
     marginTop: 10,
     paddingVertical: 11,
     borderRadius: 12,
-    backgroundColor: '#2E6F40',
+    backgroundColor: '#3C4A2A',
   },
-  confirmText: { fontSize: 13, fontFamily: 'Inter_700Bold', color: '#000' },
+  confirmText: { fontSize: 13, fontFamily: 'Inter_700Bold', color: '#fff' },
 });
 
 // ─── Supplier card ────────────────────────────────────────────────────────────
@@ -283,7 +283,7 @@ function SupplierCard({
   onOrder: (id: string) => void;
 }) {
   const { colors, isDark } = useTheme();
-  const accent = CAT_COLOR[supplier.category] ?? '#2E6F40';
+  const accent = CAT_COLOR[supplier.category] ?? '#3C4A2A';
 
   return (
     <View>
@@ -297,7 +297,7 @@ function SupplierCard({
         ]}
       >
         <LinearGradient
-          colors={['rgba(46, 111, 64,0.06)', 'transparent']}
+          colors={['rgba(60, 74, 42,0.06)', 'transparent']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={StyleSheet.absoluteFill}
@@ -317,7 +317,7 @@ function SupplierCard({
               </Text>
               {supplier.vetted && (
                 <View style={sc.vetBadge}>
-                  <ShieldCheck size={9} color="#2E6F40" />
+                  <ShieldCheck size={9} color="#3C4A2A" />
                   <Text style={sc.vetText}>VERIFIED</Text>
                 </View>
               )}
@@ -370,7 +370,7 @@ function SupplierCard({
           style={sc.orderBtn}
         >
           <LinearGradient
-            colors={['#2E6F40', '#1C4A29']}
+            colors={['#3C4A2A', '#1C4A29']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={sc.orderBtnGrad}
@@ -410,9 +410,9 @@ const sc = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
-    backgroundColor: 'rgba(46, 111, 64,0.12)',
+    backgroundColor: 'rgba(60, 74, 42,0.12)',
   },
-  vetText: { fontSize: 7, fontFamily: 'Inter_700Bold', color: '#2E6F40', letterSpacing: 0.5 },
+  vetText: { fontSize: 7, fontFamily: 'Inter_700Bold', color: '#3C4A2A', letterSpacing: 0.5 },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
   metaText: { fontSize: 10, fontFamily: 'Inter_500Medium' },
   catChip: {
@@ -543,7 +543,7 @@ export default function InputSupplyScreen() {
             </TouchableOpacity>
             <View style={{ alignItems: 'center' }}>
               <View style={s.commandBadge}>
-                <Zap size={10} color="#2E6F40" />
+                <Zap size={10} color="#3C4A2A" />
                 <Text style={s.commandText}>PEMBEJEO</Text>
               </View>
               <Text style={[s.headerTitle, { color: colors.text }]}>Hifadhi ya Pembejeo</Text>
@@ -562,12 +562,12 @@ export default function InputSupplyScreen() {
                   s.summaryCard,
                   {
                     backgroundColor: isDark ? 'rgba(9,20,11,0.97)' : colors.card,
-                    borderColor: 'rgba(46, 111, 64,0.15)',
+                    borderColor: 'rgba(60, 74, 42,0.15)',
                   },
                 ]}
               >
                 <LinearGradient
-                  colors={['rgba(46, 111, 64,0.1)', 'transparent']}
+                  colors={['rgba(60, 74, 42,0.1)', 'transparent']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={StyleSheet.absoluteFill}
@@ -584,7 +584,7 @@ export default function InputSupplyScreen() {
                 </View>
                 <View style={s.summaryDiv} />
                 <View style={s.summaryCol}>
-                  <Text style={[s.summaryVal, { color: '#2E6F40' }]}>{deliveredOrders.length}</Text>
+                  <Text style={[s.summaryVal, { color: '#3C4A2A' }]}>{deliveredOrders.length}</Text>
                   <Text style={[s.summaryLbl, { color: colors.textMute }]}>Zilizofika</Text>
                 </View>
               </View>
@@ -618,12 +618,12 @@ export default function InputSupplyScreen() {
                           s.filterPill,
                           {
                             backgroundColor: active
-                              ? 'rgba(46, 111, 64,0.12)'
+                              ? 'rgba(60, 74, 42,0.12)'
                               : isDark
                                 ? 'rgba(255,255,255,0.04)'
                                 : colors.card,
                             borderColor: active
-                              ? '#2E6F40'
+                              ? '#3C4A2A'
                               : isDark
                                 ? 'rgba(255,255,255,0.08)'
                                 : colors.border,
@@ -632,7 +632,7 @@ export default function InputSupplyScreen() {
                       >
                         {f.icon}
                         <Text
-                          style={[s.filterText, { color: active ? '#2E6F40' : colors.textMute }]}
+                          style={[s.filterText, { color: active ? '#3C4A2A' : colors.textMute }]}
                         >
                           {f.label}
                         </Text>
@@ -677,7 +677,7 @@ const s = StyleSheet.create({
     width: 280,
     height: 280,
     borderRadius: 140,
-    backgroundColor: 'rgba(46, 111, 64,0.07)',
+    backgroundColor: 'rgba(60, 74, 42,0.07)',
   },
   header: {
     flexDirection: 'row',
@@ -703,10 +703,10 @@ const s = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 3,
     borderRadius: 8,
-    backgroundColor: 'rgba(46, 111, 64,0.1)',
+    backgroundColor: 'rgba(60, 74, 42,0.1)',
     marginBottom: 4,
   },
-  commandText: { fontSize: 9, fontFamily: 'Inter_700Bold', color: '#2E6F40', letterSpacing: 1 },
+  commandText: { fontSize: 9, fontFamily: 'Inter_700Bold', color: '#3C4A2A', letterSpacing: 1 },
   headerTitle: { fontSize: 20, fontFamily: 'InstrumentSerif_400Regular', letterSpacing: -0.4 },
   sectionTitle: { fontSize: 18, fontFamily: 'InstrumentSerif_400Regular', letterSpacing: -0.3 },
   summaryCard: {

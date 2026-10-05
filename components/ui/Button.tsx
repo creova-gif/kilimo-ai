@@ -7,7 +7,6 @@ import {
   TouchableOpacityProps,
   View,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../constants/Theme';
 
@@ -43,13 +42,11 @@ export function Button({
   const isOutline = variant === 'outline';
   const isGhost = variant === 'ghost';
 
-  const textColor = isPrimary
-    ? '#000'
-    : isDestructive
-      ? '#fff'
-      : isSecondary || isOutline || isGhost
-        ? colors.text
-        : colors.text;
+  // Variants follow the Figma "Button" component set (node 32:97):
+  // primary = solid brand, secondary = white with brand outline,
+  // ghost = soft brand tint, destructive = solid red. `outline` is not in
+  // Figma; it stays a neutral bordered button.
+  const textColor = isPrimary || isDestructive ? '#fff' : isOutline ? colors.text : colors.primary;
 
   const btnContent = (
     <View style={[styles.inner, size === 'sm' && styles.innerSm, size === 'lg' && styles.innerLg]}>
@@ -84,63 +81,42 @@ export function Button({
       accessibilityState={{ disabled: Boolean(disabled || loading), busy: Boolean(loading) }}
       style={[
         styles.root,
-        isSecondary && { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+        isPrimary && { backgroundColor: colors.primary },
+        isDestructive && { backgroundColor: colors.error },
+        isSecondary && { backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.primary },
         isOutline && { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.border },
-        isGhost && { backgroundColor: 'transparent' },
+        isGhost && { backgroundColor: colors.primaryLight },
         (disabled || loading) && styles.disabled,
         style,
       ]}
       {...rest}
     >
-      {isPrimary ? (
-        <LinearGradient
-          colors={[colors.primary, colors.primaryDim]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.gradient}
-        >
-          {btnContent}
-        </LinearGradient>
-      ) : isDestructive ? (
-        <LinearGradient
-          colors={['#ef4444', '#dc2626']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.gradient}
-        >
-          {btnContent}
-        </LinearGradient>
-      ) : (
-        btnContent
-      )}
+      {btnContent}
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
-    borderRadius: 12,
+    borderRadius: 999, // Figma: pill (26 on a 52-high button)
     overflow: 'hidden',
-  },
-  gradient: {
-    width: '100%',
   },
   inner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    minHeight: 48,
+    paddingHorizontal: 24,
+    minHeight: 52, // Figma height; also above the 44/48 touch-target minimum
   },
-  innerSm: { paddingHorizontal: 12, minHeight: 44 },
-  innerLg: { paddingHorizontal: 24, minHeight: 56 },
+  innerSm: { paddingHorizontal: 16, minHeight: 44 },
+  innerLg: { paddingHorizontal: 28, minHeight: 56 },
   text: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 16,
   },
-  textSm: { fontSize: 13 },
+  textSm: { fontSize: 14 },
   textLg: { fontSize: 17 },
-  textPrimary: { fontFamily: 'Inter_700Bold' },
+  textPrimary: { fontFamily: 'Inter_600SemiBold' },
   disabled: { opacity: 0.5 },
   iconWrap: { marginRight: 8 },
 });
