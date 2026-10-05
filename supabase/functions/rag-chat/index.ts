@@ -19,29 +19,59 @@ serve(async (req) => {
     )
 
     // 2. Fetch User Profile/Digital Twin Context
-    // Example: get user's active crops and location
+    // Was querying `user_profiles`, a table that has never existed in any
+    // migration — this always silently returned nothing. The real farm
+    // profile (written by app/edit-profile.tsx's save()) lives in
+    // farmer_profiles (see supabase/migrations/20260814000000_farmer_profiles.sql).
     const { data: userContext } = await supabase
-      .from('user_profiles')
-      .select('location, farm_size, active_crops')
-      .eq('id', userId)
+      .from('farmer_profiles')
+      .select('region, farm_size_acres, primary_crops')
+      .eq('user_id', userId)
       .single()
 
-    // 3. Create Embedding for RAG Similarity Search
-    const embeddingResponse = await openai.embeddings.create({
-      model: "text-embedding-3-small",
-      input: query,
-    })
-    const queryEmbedding = embeddingResponse.data[0].embedding
-
-    // 4. Retrieve highly relevant local agricultural data from pgvector
-    const { data: ragKnowledge } = await supabase
-      .rpc('match_knowledge', {
+    // 3 & 4. Retrieve relevant local knowledge.
+    //   Primary: pgvector similarity via match_knowledge.
+    //   Fallback: keyword (ILIKE) search over knowledge_base — so RAG still
+    //   returns grounded context when the vector index is empty or the query
+    //   embedding can't be produced (keeps answers useful pre-embedding-backfill).
+    let ragKnowledge: any[] = []
+    try {
+      const embeddingResponse = await openai.embeddings.create({
+        model: "text-embedding-3-small",
+        input: query,
+      })
+      const queryEmbedding = embeddingResponse.data[0].embedding
+      const { data } = await supabase.rpc('match_knowledge', {
         query_embedding: queryEmbedding,
         match_threshold: 0.7,
         match_count: 3,
       })
+      ragKnowledge = data ?? []
+    } catch (e) {
+      console.warn('Vector retrieval unavailable; using keyword fallback.', e)
+    }
 
-    const knowledgeContext = ragKnowledge?.map((k: any) => k.content).join('\n\n') || "No specific local knowledge found."
+    if (!ragKnowledge.length) {
+      const keywords = String(query)
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((w) => w.length > 3)
+        .slice(0, 5)
+      if (keywords.length) {
+        const orFilter = keywords
+          .map((k) => `content.ilike.%${k}%,title.ilike.%${k}%`)
+          .join(',')
+        const { data } = await supabase
+          .from('knowledge_base')
+          .select('title, content, category')
+          .or(orFilter)
+          .limit(3)
+        ragKnowledge = data ?? []
+      }
+    }
+
+    const knowledgeContext =
+      ragKnowledge.map((k: any) => k.content).join('\n\n') || 'No specific local knowledge found.'
 
     // 5. Construct highly constrained prompt
     const systemPrompt = `
@@ -49,8 +79,8 @@ serve(async (req) => {
       You MUST base your advice on the provided Local Knowledge. Do not hallucinate treatments.
       
       User Profile:
-      - Location: ${userContext?.location || 'Unknown'}
-      - Active Crops: ${userContext?.active_crops?.join(', ') || 'None'}
+      - Location: ${userContext?.region || 'Unknown'}
+      - Active Crops: ${userContext?.primary_crops?.join(', ') || 'None'}
       
       Local Verified Knowledge:
       ${knowledgeContext}
