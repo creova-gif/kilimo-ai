@@ -29,73 +29,17 @@ export interface MarketListing {
   createdAt: string;
 }
 
-// Seeded mock data — replaced by Supabase query in production
-const SEED_LISTINGS: MarketListing[] = [
-  {
-    id: 'm1',
-    cropName: 'Maize',
-    cropNameSw: 'Mahindi',
-    quantityKg: 5000,
-    pricePerKg: 480,
-    currency: 'TZS',
-    location: 'Mbeya',
-    qualityGrade: 'A',
-    status: 'active',
-    smartContract: true,
-    escrowFunded: false,
-    trend: 'up',
-    changePercent: 12.4,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'm2',
-    cropName: 'Coffee',
-    cropNameSw: 'Kahawa',
-    quantityKg: 200,
-    pricePerKg: 8200,
-    currency: 'TZS',
-    location: 'Kilimanjaro',
-    qualityGrade: 'A',
-    status: 'active',
-    smartContract: true,
-    escrowFunded: true,
-    trend: 'stable',
-    changePercent: 0.8,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'm3',
-    cropName: 'Beans',
-    cropNameSw: 'Maharage',
-    quantityKg: 800,
-    pricePerKg: 1200,
-    currency: 'TZS',
-    location: 'Arusha',
-    qualityGrade: 'B',
-    status: 'active',
-    smartContract: false,
-    escrowFunded: false,
-    trend: 'down',
-    changePercent: -3.2,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'm4',
-    cropName: 'Rice',
-    cropNameSw: 'Mchele',
-    quantityKg: 2500,
-    pricePerKg: 1850,
-    currency: 'TZS',
-    location: 'Morogoro',
-    qualityGrade: 'A',
-    status: 'active',
-    smartContract: false,
-    escrowFunded: false,
-    trend: 'up',
-    changePercent: 5.1,
-    createdAt: new Date().toISOString(),
-  },
-];
+// Starts empty. This used to seed 4 fake "active" listings from fictional
+// sellers, each stamped with `createdAt: new Date().toISOString()` computed
+// at module-load time — meaning every time the app opened without a
+// configured backend, market.tsx's "Wanaouza Sasa" (Live Sell Listings)
+// section showed 4 offers from nobody that always looked like they were
+// posted seconds ago, with zero disclosure they weren't real. When Supabase
+// isn't configured, fetchListings() never runs its query branch and never
+// touches this initial state either, so whatever this array holds is what
+// silently stays on screen forever — market.tsx already has a real empty
+// state wired for listings.length === 0.
+const SEED_LISTINGS: MarketListing[] = [];
 
 let supabase: any = null;
 try {
