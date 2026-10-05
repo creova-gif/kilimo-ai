@@ -21,11 +21,8 @@ import {
   Smartphone,
   Receipt,
   RefreshCw,
-  Eye,
-  EyeOff,
   Sparkles,
   Clock,
-  CheckCircle2,
   AlertCircle,
   ChevronRight,
   Wallet,
@@ -38,6 +35,15 @@ import { useTheme } from '../constants/Theme';
 import { useKilimoStore } from '../store/useKilimoStore';
 
 const { width: SW } = Dimensions.get('window');
+
+// No real M-Pesa/Airtel Money API integration exists anywhere in this
+// codebase (wallet-admin's own real workflow is manual receipt entry, since
+// Daraja wiring is a separate, tracked follow-up). This used to fake an
+// instant "Imekamilika/Success" for Send/Receive/Pay Bills after collecting
+// a real phone number and amount — a farmer could believe they'd actually
+// sent money to someone. Matches the same class of finding already fixed
+// in insurance.tsx (fake enrollment) and finance.tsx (fake AUTO-SYNC).
+const MOBILE_MONEY_LIVE = false;
 
 type Provider = 'mpesa' | 'airtel';
 
@@ -145,15 +151,29 @@ export default function MobileMoneyScreen() {
   const language = useKilimoStore((s) => s.language);
   const wallet = useKilimoStore((s) => s.wallet);
   const [provider, setProvider] = useState<Provider>('mpesa');
-  const [hideBalance, setHideBalance] = useState(false);
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
   const [phone, setPhone] = useState('');
 
-  const balance = wallet.balanceTZS;
+  // Provider balance is unavailable until a real account is linked.
+  // Do not surface wallet.balanceTZS here — it is not a linked M-Pesa/Airtel balance.
+
+  const showComingSoon = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    Alert.alert(
+      language === 'sw' ? 'Bado Haipatikani' : 'Coming Soon',
+      language === 'sw'
+        ? 'Huduma za pesa za simu kupitia app bado hazipatikani. Hakuna hatua iliyochukuliwa.'
+        : 'Mobile-money actions through the app aren’t available yet. No action was taken.'
+    );
+  };
 
   const handleAction = (id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (!MOBILE_MONEY_LIVE) {
+      showComingSoon();
+      return;
+    }
     setActiveAction((prev) => (prev === id ? null : id));
     setAmount('');
     setPhone('');
@@ -163,6 +183,11 @@ export default function MobileMoneyScreen() {
     const n = parseInt(amount.replace(/,/g, ''), 10);
     if (!phone || !n || n <= 0) {
       Alert.alert(language === 'sw' ? 'Tafadhali jaza fomu' : 'Please complete the form');
+      return;
+    }
+    if (!MOBILE_MONEY_LIVE) {
+      setActiveAction(null);
+      showComingSoon();
       return;
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -240,44 +265,38 @@ export default function MobileMoneyScreen() {
               <View style={s.balCardTop}>
                 <View>
                   <Text style={s.balLabel}>
-                    {language === 'sw' ? 'Salio Lako' : 'Your Balance'}
+                    {language === 'sw' ? 'Salio la Mtoa Huduma' : 'Provider Balance'}
                   </Text>
                   <Text style={s.balProvider}>
                     {provider === 'mpesa' ? 'M-PESA' : 'AIRTEL MONEY'}
                   </Text>
                 </View>
-                <TouchableOpacity
-                  accessibilityRole="button"
-                  accessibilityLabel="Toggle balance visibility"
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setHideBalance((v) => !v);
-                  }}
-                  style={s.eyeBtn}
-                >
-                  {hideBalance ? (
-                    <EyeOff size={18} color="rgba(255,255,255,0.7)" />
-                  ) : (
-                    <Eye size={18} color="rgba(255,255,255,0.7)" />
-                  )}
-                </TouchableOpacity>
+                {/* Balance is only meaningful once a real provider account is linked.
+                    wallet.mpesaPhone is never set today, so hide the eye toggle and
+                    do not render a fabricated TSh 0 balance. */}
               </View>
-              <Text style={s.balAmount}>{hideBalance ? '••••••' : fmtTZS(balance)}</Text>
+              <Text style={s.balAmount}>
+                {language === 'sw' ? 'Haijaunganishwa' : 'Not linked'}
+              </Text>
               <View style={s.balFooter}>
+                {/* No real M-Pesa/Airtel account linkage exists in this app
+                    (wallet.mpesaPhone is never set anywhere) — this used to
+                    unconditionally claim "Active Account" regardless. */}
                 <View style={[s.balBadge, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
-                  <CheckCircle2 size={11} color="rgba(255,255,255,0.9)" />
+                  <AlertCircle size={11} color="rgba(255,255,255,0.9)" />
                   <Text style={s.balBadgeTxt}>
-                    {language === 'sw' ? 'Akaunti Hai' : 'Active Account'}
+                    {language === 'sw' ? 'Haijaunganishwa' : 'Not Linked'}
                   </Text>
                 </View>
                 <TouchableOpacity
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                  }}
+                  disabled={!MOBILE_MONEY_LIVE}
+                  onPress={() => Haptics.selectionAsync()}
                   style={[s.balBadge, { backgroundColor: 'rgba(255,255,255,0.15)' }]}
                 >
                   <RefreshCw size={11} color="rgba(255,255,255,0.9)" />
-                  <Text style={s.balBadgeTxt}>{language === 'sw' ? 'Sasisha' : 'Refresh'}</Text>
+                  <Text style={s.balBadgeTxt}>
+                    {language === 'sw' ? 'Haipatikani' : 'Unavailable'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </LinearGradient>
