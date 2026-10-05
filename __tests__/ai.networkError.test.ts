@@ -13,27 +13,32 @@
  * the resolved error's class distinguishes them. These tests pin the real
  * behavior: FunctionsFetchError/FunctionsRelayError -> kind: 'network',
  * FunctionsHttpError (or any other resolved error) -> kind: 'server'.
+ *
+ * AI calls now go through invokeAuthedFunction (JWT-gated). This suite mocks
+ * that helper so classification stays independent of auth wiring.
  */
 import { FunctionsFetchError, FunctionsRelayError, FunctionsHttpError } from '@supabase/supabase-js';
 
+const mockInvokeAuthed = jest.fn();
+
 jest.mock('../lib/supabase', () => ({
-  supabase: {
-    functions: { invoke: jest.fn() },
-  },
+  getSupabase: () => ({}),
+  supabase: {},
+  invokeAuthedFunction: (...args: unknown[]) => mockInvokeAuthed(...args),
 }));
 
 import { chat, diagnoseCropPhoto, AIError } from '../lib/ai';
-import { supabase } from '../lib/supabase';
-
-const invoke = (supabase as any).functions.invoke as jest.Mock;
 
 describe('invokeAI network vs server error classification', () => {
   beforeEach(() => {
-    invoke.mockReset();
+    mockInvokeAuthed.mockReset();
   });
 
   it('classifies a resolved FunctionsFetchError (no connectivity) as kind: network', async () => {
-    invoke.mockResolvedValue({ data: null, error: new FunctionsFetchError(new TypeError('Failed to fetch')) });
+    mockInvokeAuthed.mockResolvedValue({
+      data: null,
+      error: new FunctionsFetchError(new TypeError('Failed to fetch')),
+    });
 
     await expect(chat([{ role: 'user', content: 'hi' }])).rejects.toMatchObject({
       kind: 'network',
@@ -41,7 +46,7 @@ describe('invokeAI network vs server error classification', () => {
   });
 
   it('classifies a resolved FunctionsRelayError as kind: network', async () => {
-    invoke.mockResolvedValue({ data: null, error: new FunctionsRelayError({}) });
+    mockInvokeAuthed.mockResolvedValue({ data: null, error: new FunctionsRelayError({}) });
 
     await expect(chat([{ role: 'user', content: 'hi' }])).rejects.toMatchObject({
       kind: 'network',
@@ -49,7 +54,10 @@ describe('invokeAI network vs server error classification', () => {
   });
 
   it('classifies a resolved FunctionsHttpError (valid non-2xx response) as kind: server', async () => {
-    invoke.mockResolvedValue({ data: null, error: new FunctionsHttpError({ status: 500 }) });
+    mockInvokeAuthed.mockResolvedValue({
+      data: null,
+      error: new FunctionsHttpError({ status: 500 }),
+    });
 
     await expect(chat([{ role: 'user', content: 'hi' }])).rejects.toMatchObject({
       kind: 'server',
@@ -57,15 +65,26 @@ describe('invokeAI network vs server error classification', () => {
   });
 
   it('falls back to kind: server for any other resolved error shape', async () => {
-    invoke.mockResolvedValue({ data: null, error: { message: 'boom' } });
+    mockInvokeAuthed.mockResolvedValue({ data: null, error: { message: 'boom' } });
 
     await expect(chat([{ role: 'user', content: 'hi' }])).rejects.toMatchObject({
       kind: 'server',
     });
   });
 
+  it('classifies not_authenticated as kind: unauthorized', async () => {
+    mockInvokeAuthed.mockResolvedValue({
+      data: null,
+      error: { message: 'not_authenticated', status: 401 },
+    });
+
+    await expect(chat([{ role: 'user', content: 'hi' }])).rejects.toMatchObject({
+      kind: 'unauthorized',
+    });
+  });
+
   it('diagnoseCropPhoto preserves kind: network instead of flattening to server', async () => {
-    invoke.mockResolvedValue({
+    mockInvokeAuthed.mockResolvedValue({
       data: null,
       error: new FunctionsFetchError(new TypeError('Network request failed')),
     });
