@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   Platform,
-  Dimensions,
   Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -22,120 +21,27 @@ import {
 import { useTheme } from '../constants/Theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, {
-  Polyline,
-  Circle as SvgCircle,
-  Rect,
-  Line as SvgLine,
-  Text as SvgText,
-} from 'react-native-svg';
 import { useKilimoStore } from '../store/useKilimoStore';
 
-// `|| 360` guards against Dimensions.get('window').width reading 0 on first
-// web hydration (0 is never a real device width, and a destructure default
-// wouldn't catch it since 0 is defined) — an unguarded 0 here flowed into
-// negative <Svg>/<Rect> widths downstream (real console error + broken flash).
-const SW = Dimensions.get('window').width || 360;
-
-// ─── Soil pH Trend SVG Chart ───────────────────────────────────────────────────
-function SoilPHTrendChart({
-  data,
-  months,
-  colors,
-}: {
-  data: number[];
-  months: string[];
-  colors: any;
-}) {
-  // Clamp: window width can read 0 on first web hydration, which fed a
-  // negative width into the SVG chart (console error + broken flash).
-  const chartW = Math.max(1, SW - 80);
-  const chartH = 80;
-  const max = 7.5;
-  const min = 4.5;
-  const points = data
-    .map((val, index) => {
-      const x = (index / (data.length - 1)) * (chartW - 20) + 10;
-      const y = chartH - ((val - min) / (max - min || 1)) * (chartH - 20) - 15;
-      return `${x},${y}`;
-    })
-    .join(' ');
-
-  return (
-    <View style={{ marginVertical: 12, height: chartH }}>
-      <Svg width={chartW} height={chartH}>
-        <Rect width={chartW} height={chartH} fill="rgba(0,0,0,0.02)" rx={8} />
-
-        {/* pH Reference Lines */}
-        <SvgLine
-          x1="10"
-          y1={chartH - ((6.5 - min) / (max - min)) * (chartH - 20) - 15}
-          x2={chartW - 10}
-          y2={chartH - ((6.5 - min) / (max - min)) * (chartH - 20) - 15}
-          stroke={colors.primary}
-          strokeDasharray="3,3"
-          strokeWidth="1"
-        />
-        <SvgText
-          x={chartW - 35}
-          y={chartH - ((6.5 - min) / (max - min)) * (chartH - 20) - 18}
-          fontSize="7"
-          fill={colors.primary}
-          fontFamily="Inter_700Bold"
-        >
-          Optimum (6.5)
-        </SvgText>
-
-        <Polyline fill="none" stroke="#ef4444" strokeWidth="2.5" points={points} />
-        {data.map((val, index) => {
-          const x = (index / (data.length - 1)) * (chartW - 20) + 10;
-          const y = chartH - ((val - min) / (max - min || 1)) * (chartH - 20) - 15;
-          return (
-            <React.Fragment key={index}>
-              <SvgCircle
-                cx={x}
-                cy={y}
-                r="3.5"
-                fill={val < 5.5 ? '#ef4444' : colors.primary}
-                stroke="#FFF"
-                strokeWidth="1.5"
-              />
-              <SvgText
-                x={x}
-                y={y - 6}
-                fontSize="7.5"
-                fontFamily="Inter_700Bold"
-                fill={colors.text}
-                textAnchor="middle"
-              >
-                {val}
-              </SvgText>
-              <SvgText
-                x={x}
-                y={chartH - 2}
-                fontSize="7"
-                fontFamily="Inter_600SemiBold"
-                fill={colors.textMute}
-                textAnchor="middle"
-              >
-                {months[index]}
-              </SvgText>
-            </React.Fragment>
-          );
-        })}
-      </Svg>
-    </View>
-  );
-}
+const PH_MIN_HEALTHY = 6.0;
+const PH_MAX_HEALTHY = 7.0;
 
 export default function SoilAnalysis() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const language = useKilimoStore((s) => s.language);
+  const farmVitals = useKilimoStore((s) => s.farmVitals);
 
-  // Mock pH historical readings (showing a drop)
-  const phTrendData = [6.8, 6.5, 6.4, 5.9, 5.5, 5.2];
-  const phTrendMonths = ['Des', 'Jan', 'Feb', 'Mac', 'Apr', 'Mei'];
+  // Real per-user reading — no historical soil-pH tracking exists anywhere
+  // in this app (no sensor/lab-report intake flow), so this page previously
+  // fabricated a fake 6-month "6.8 → 5.2" drop and an unconditional "CRITICAL
+  // pH ANOMALY" alert for every single user, regardless of their actual soil
+  // — including a prescriptive "apply 1.5 tonnes of lime" recommendation.
+  // Now grounded in the one real data point that does exist.
+  const soilPh = farmVitals.soilPh;
+  const isAcidic = soilPh < PH_MIN_HEALTHY;
+  const isAlkaline = soilPh > PH_MAX_HEALTHY;
+  const isOffOptimal = isAcidic || isAlkaline;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -191,8 +97,20 @@ export default function SoilAnalysis() {
                   {language === 'sw' ? 'Afya ya Udongo' : 'Overall Soil Health'}
                 </Text>
                 <View style={styles.statusRow}>
-                  <Text style={[styles.statusMain, { color: '#ef4444' }]}>
-                    {language === 'sw' ? 'Tishio la Asidi' : 'Acidic Alert'}
+                  <Text
+                    style={[styles.statusMain, { color: isOffOptimal ? '#ef4444' : colors.primary }]}
+                  >
+                    {isAcidic
+                      ? language === 'sw'
+                        ? 'Tishio la Asidi'
+                        : 'Acidic Alert'
+                      : isAlkaline
+                        ? language === 'sw'
+                          ? 'pH ya Juu'
+                          : 'Alkaline Alert'
+                        : language === 'sw'
+                          ? 'pH ni Sawa'
+                          : 'pH is Healthy'}
                   </Text>
                 </View>
               </View>
@@ -201,107 +119,173 @@ export default function SoilAnalysis() {
               </View>
             </View>
 
+            {/* Current pH reading — the one real per-user data point this
+                app has. N-P-K breakdown below is illustrative (no nutrient
+                sensor or lab-report intake exists yet), labeled honestly. */}
+            <View style={styles.phReadingRow}>
+              <Text style={[styles.phReadingValue, { color: colors.text }]}>
+                {soilPh.toFixed(1)}
+              </Text>
+              <Text style={[styles.phReadingLabel, { color: colors.textMute }]}>
+                {language === 'sw'
+                  ? 'pH ya sasa · lengo 6.0–7.0'
+                  : 'current pH · target 6.0–7.0'}
+              </Text>
+            </View>
+
             {/* Bars */}
             <View style={styles.barsContainer}>
+              <View style={styles.sampleTagRow}>
+                <Text style={[styles.sampleTag, { color: colors.textMute }]}>
+                  {language === 'sw'
+                    ? 'MFANO — hakuna kipimo cha virutubisho bado'
+                    : 'SAMPLE — no nutrient sensor data yet'}
+                </Text>
+              </View>
               <NutrientBar label="Nitrogen (N)" value={85} color={colors.primary} />
               <NutrientBar label="Phosphorus (P)" value={70} color="#F59E0B" />
               <NutrientBar label="Potassium (K)" value={60} color="#3b82f6" />
             </View>
           </View>
 
-          {/* Soil pH Anomaly Alert Banner */}
-          <View
-            style={[
-              styles.anomalyAlert,
-              { backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: 'rgba(239, 68, 68, 0.2)' },
-            ]}
-          >
-            <ShieldAlert size={20} color="#ef4444" />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.anomalyTitle}>
-                {language === 'sw' ? 'TAHADHARI YA pH YA UDONGO' : 'CRITICAL pH ANOMALY DETECTED'}
-              </Text>
-              <Text style={styles.anomalyDesc}>
-                {language === 'sw'
-                  ? 'pH ya udongo imeshuka kwa kasi kutoka 6.8 (Desemba) hadi 5.2 (Mwezi huu) katika Block A. Udongo ni asidi sana!'
-                  : 'pH levels dropped sharply from 6.8 (Dec) to 5.2 (This Month) in Block A. High soil acidification!'}
-              </Text>
+          {/* Soil pH Alert Banner — only shown when the real reading is
+              actually off the healthy range, referencing the real value. */}
+          {isOffOptimal && (
+            <View
+              style={[
+                styles.anomalyAlert,
+                {
+                  backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                  borderColor: 'rgba(239, 68, 68, 0.2)',
+                },
+              ]}
+            >
+              <ShieldAlert size={20} color="#ef4444" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.anomalyTitle}>
+                  {language === 'sw' ? 'TAHADHARI YA pH YA UDONGO' : 'SOIL pH OUT OF RANGE'}
+                </Text>
+                <Text style={styles.anomalyDesc}>
+                  {isAcidic
+                    ? language === 'sw'
+                      ? `pH ya udongo wako ni ${soilPh.toFixed(1)}, chini ya kiwango kinachopendekezwa (6.0–7.0). Udongo ni asidi.`
+                      : `Your soil pH is ${soilPh.toFixed(1)}, below the recommended range (6.0–7.0). Soil is acidic.`
+                    : language === 'sw'
+                      ? `pH ya udongo wako ni ${soilPh.toFixed(1)}, juu ya kiwango kinachopendekezwa (6.0–7.0). Udongo ni alkali.`
+                      : `Your soil pH is ${soilPh.toFixed(1)}, above the recommended range (6.0–7.0). Soil is alkaline.`}
+                </Text>
+              </View>
             </View>
-          </View>
+          )}
 
-          {/* Soil pH History Line Chart Section */}
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            {language === 'sw'
-              ? 'Mwenendo wa pH (Mwisho Miezi 6)'
-              : 'pH Level History (Past 6 Months)'}
-          </Text>
-          <View
-            style={[styles.chartCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-          >
-            <SoilPHTrendChart data={phTrendData} months={phTrendMonths} colors={colors} />
+          {!isOffOptimal && (
             <Text
               style={{
                 fontSize: 12,
                 fontFamily: 'Inter_500Medium',
                 color: colors.textMute,
-                textAlign: 'center',
                 marginTop: 4,
               }}
             >
               {language === 'sw'
-                ? 'Kiwango cha pH kinapaswa kuwa kati ya 6.0 na 7.0 kwa mazao mengi'
-                : 'pH levels should ideally range between 6.0 and 7.0 for most staple crops'}
+                ? 'Ufuatiliaji wa mwenendo wa pH kwa muda haujapatikana bado — thamani hii ni kipimo cha sasa pekee.'
+                : 'Historical pH trend tracking isn’t available yet — this is your current reading only.'}
             </Text>
-          </View>
+          )}
 
-          {/* Urgent Recommendations */}
+          {/* Recommendations */}
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            {language === 'sw' ? 'Mapendekezo ya Haraka' : 'Urgent Recommendations'}
+            {isOffOptimal
+              ? language === 'sw'
+                ? 'Mapendekezo ya Haraka'
+                : 'Urgent Recommendations'
+              : language === 'sw'
+                ? 'Endelea Kudumisha'
+                : 'Keep It Up'}
           </Text>
 
-          <RecommendationItem
-            title={
-              language === 'sw'
-                ? 'Weka Chokaa cha Kilimo (Agri-Lime)'
-                : 'Apply Agriculture Agri-Lime'
-            }
-            desc={
-              language === 'sw'
-                ? 'Weka tani 1.5 za Minjingu Agri-Lime kwa hekta ili kupunguza asidi na kupandisha pH.'
-                : 'Apply 1.5 Tonnes of Minjingu Agri-Lime per hectare to raise pH back to optimum.'
-            }
-            imageUri="https://images.unsplash.com/photo-1625246333195-78d9c38ad449?q=80&w=300&auto=format&fit=crop"
-            onPress={() => router.push('/tasks' as any)}
-            btnText={language === 'sw' ? 'Tengeneza Kazi' : 'Create Task'}
-          />
+          {isAcidic && (
+            <>
+              <RecommendationItem
+                title={
+                  language === 'sw'
+                    ? 'Weka Chokaa cha Kilimo (Agri-Lime)'
+                    : 'Apply Agriculture Agri-Lime'
+                }
+                desc={
+                  language === 'sw'
+                    ? 'Chokaa cha kilimo (agri-lime) hupunguza asidi ya udongo. Kiasi halisi kinachohitajika hutegemea kina cha udongo wako — muulize mtaalamu wa kilimo kabla ya kuweka.'
+                    : 'Agricultural lime reduces soil acidity. The exact rate needed depends on your specific soil — confirm with a local agronomist before applying.'
+                }
+                imageUri="https://images.unsplash.com/photo-1625246333195-78d9c38ad449?q=80&w=300&auto=format&fit=crop"
+                onPress={() => router.push('/consultations' as any)}
+                btnText={language === 'sw' ? 'Ongea na Mtaalamu' : 'Ask Agronomist'}
+              />
 
-          <RecommendationItem
-            title={
-              language === 'sw'
-                ? 'Badilisha Mazao yanayohimili Asidi'
-                : 'Shift to Acid-Tolerant Crops'
-            }
-            desc={
-              language === 'sw'
-                ? 'Hustawisha chai, muhogo, au viazi vitamu ambavyo vinaweza kuhimili pH ya chini hadi 5.0.'
-                : 'Plant acid-tolerant crops like tea, cassava, or sweet potatoes if soil pH remains low.'
-            }
-            imageUri="https://images.unsplash.com/photo-1590682680695-43b964a3ae17?q=80&w=300&auto=format&fit=crop"
-            onPress={() => router.push('/crop-library' as any)}
-            btnText={language === 'sw' ? 'Maktaba ya Mazao' : 'Crop Library'}
-          />
+              <RecommendationItem
+                title={
+                  language === 'sw'
+                    ? 'Badilisha Mazao yanayohimili Asidi'
+                    : 'Shift to Acid-Tolerant Crops'
+                }
+                desc={
+                  language === 'sw'
+                    ? 'Chai, muhogo, na viazi vitamu huvumilia udongo wenye asidi zaidi ya mazao mengine.'
+                    : 'Tea, cassava, and sweet potatoes tolerate acidic soil better than many staple crops.'
+                }
+                imageUri="https://images.unsplash.com/photo-1590682680695-43b964a3ae17?q=80&w=300&auto=format&fit=crop"
+                onPress={() => router.push('/crop-library' as any)}
+                btnText={language === 'sw' ? 'Maktaba ya Mazao' : 'Crop Library'}
+              />
 
-          <RecommendationItem
-            title={language === 'sw' ? 'Epuka Mbolea zenye Ammonium' : 'Avoid Ammonium Fertilizers'}
-            desc={
-              language === 'sw'
-                ? 'Mbolea zenye ammonium (e.g. Ammonium Sulphate) huongeza zaidi asidi kwenye udongo.'
-                : 'Avoid acidifying ammonium-based fertilizers. Prefer nitrate-based nitrogen sources.'
-            }
-            imageUri="https://images.unsplash.com/photo-1605000797499-95a51c5269ae?q=80&w=300&auto=format&fit=crop"
-            onPress={() => router.push('/consultations' as any)}
-            btnText={language === 'sw' ? 'Ongea na Mtaalamu' : 'Ask Agronomist'}
-          />
+              <RecommendationItem
+                title={
+                  language === 'sw' ? 'Epuka Mbolea zenye Ammonium' : 'Avoid Ammonium Fertilizers'
+                }
+                desc={
+                  language === 'sw'
+                    ? 'Mbolea zenye ammonium (mfano Ammonium Sulphate) huongeza zaidi asidi kwenye udongo.'
+                    : 'Ammonium-based fertilizers (e.g. Ammonium Sulphate) can further acidify soil that is already acidic.'
+                }
+                imageUri="https://images.unsplash.com/photo-1605000797499-95a51c5269ae?q=80&w=300&auto=format&fit=crop"
+                onPress={() => router.push('/consultations' as any)}
+                btnText={language === 'sw' ? 'Ongea na Mtaalamu' : 'Ask Agronomist'}
+              />
+            </>
+          )}
+
+          {isAlkaline && (
+            <RecommendationItem
+              title={language === 'sw' ? 'Punguza Alkali ya Udongo' : 'Lower Soil Alkalinity'}
+              desc={
+                language === 'sw'
+                  ? 'Kiwango cha pH kilicho juu kinaweza kuzuia mimea kunyonya baadhi ya virutubisho. Muulize mtaalamu wa kilimo kwa hatua zinazofaa eneo lako.'
+                  : 'A high pH can block plants from absorbing certain nutrients. Ask a local agronomist for corrective steps suited to your area.'
+              }
+              imageUri="https://images.unsplash.com/photo-1605000797499-95a51c5269ae?q=80&w=300&auto=format&fit=crop"
+              onPress={() => router.push('/consultations' as any)}
+              btnText={language === 'sw' ? 'Ongea na Mtaalamu' : 'Ask Agronomist'}
+            />
+          )}
+
+          {!isOffOptimal && (
+            <View
+              style={[styles.chartCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            >
+              <Text
+                style={{
+                  fontSize: 13,
+                  fontFamily: 'Inter_600SemiBold',
+                  color: colors.text,
+                  textAlign: 'center',
+                }}
+              >
+                {language === 'sw'
+                  ? 'pH ya udongo wako iko ndani ya kiwango kinachopendekezwa. Endelea kufuatilia mara kwa mara.'
+                  : 'Your soil pH is within the recommended range. Keep monitoring it periodically.'}
+              </Text>
+            </View>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -475,6 +459,29 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  phReadingRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+    marginBottom: 20,
+  },
+  phReadingValue: {
+    fontSize: 32,
+    fontFamily: 'InstrumentSerif_400Regular',
+  },
+  phReadingLabel: {
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+  },
+  sampleTagRow: {
+    marginBottom: 2,
+  },
+  sampleTag: {
+    fontSize: 10,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
   barsContainer: {
     gap: 16,
