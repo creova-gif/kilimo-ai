@@ -238,8 +238,14 @@ export default function FarmTwinList() {
           contentContainerStyle={{ paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Section: Live 2D Interactive Map */}
-          <SectionHeader title="Ramani ya Shamba · Live 2D Twin" />
+          {/* Section: 2D Interactive Map preview.
+              Was labeled "Live 2D Twin" — misleading, since gate/pump/moisture
+              state here is local-only useState with no persistence and no
+              real IoT/sensor connection anywhere in this codebase (unlike the
+              Scenarios section below, which runs a genuinely real, deterministic
+              agronomic model). Reworded to describe what this actually is: an
+              interactive preview of the farm layout, not a live device link. */}
+          <SectionHeader title="Ramani ya Shamba · Onyesho la 2D" />
           <View style={{ paddingHorizontal: 16 }}>
             <GlassCard style={s.twinMapCard}>
               <View style={s.mapContainer}>

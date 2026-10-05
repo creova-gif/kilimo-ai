@@ -37,7 +37,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../constants/Theme';
 import { useKilimoStore } from '../../store/useKilimoStore';
-import { RequireVerification } from '../../components/RequireVerification';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -167,7 +166,6 @@ export default function FarmHub() {
   };
 
   return (
-    <RequireVerification>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         <SafeAreaView style={styles.safe}>
@@ -697,7 +695,11 @@ export default function FarmHub() {
                           >
                             <LinearGradient
                               colors={
-                                n.data.color === colors.primary
+                                // Zone nutrient data (constants/FarmData.ts) marks "Optimal"
+                                // readings with '#22d15a', a green distinct from the theme's
+                                // colors.primary — matching against colors.primary here made
+                                // every optimal N/P/K bar fall through to the red gradient.
+                                n.data.color === '#22d15a' || n.data.color === colors.primary
                                   ? [colors.primary, '#1C4A29']
                                   : n.data.color === '#D97706'
                                     ? ['#FBBF24', '#D97706']
@@ -755,7 +757,6 @@ export default function FarmHub() {
           </TouchableOpacity>
         </SafeAreaView>
       </View>
-    </RequireVerification>
   );
 }
 

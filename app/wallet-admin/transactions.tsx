@@ -235,7 +235,15 @@ export default function TransactionsScreen() {
         </PageScaffold>
       }
     >
-      <PageScaffold title="Daftari la Miamala" subtitle="Ledger" badge="ENTERPRISE">
+      <PageScaffold
+        title="Daftari la Miamala"
+        // useWalletAdminStore.transactions is seeded, in-memory sample data —
+        // there is no Supabase-backed transaction ledger behind this screen
+        // yet. Label it so the seed rows are never mistaken for a real,
+        // synced ledger (same issue fixed in app/mobile-money.tsx).
+        subtitle="Ledger · Data ya Mfano"
+        badge="ENTERPRISE"
+      >
         {/* ── Filter pills ── */}
         <View style={s.filterRow}>
           {FILTERS.map((f) => {

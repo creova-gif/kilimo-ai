@@ -190,13 +190,20 @@ export default function AgroIdScreen() {
     );
   }
 
+  // Previously claimed every one of these fields was "verified... retrieved
+  // from your cooperative farm profile" — false for all five: Market Price /
+  // Highest Demand / Fertilization / Plant Age / Certification are static
+  // sample values (see MARKET_INFO_SAMPLE below), not pulled from any
+  // cooperative or real market/agronomy backend. Only the credit score is
+  // genuinely computed from the farmer's own ledger (see the honest
+  // footnote already shown under that card).
   const handleInfoPress = (label: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Alert.alert(
       label,
       language === 'sw'
-        ? 'Maelezo ya ziada kuhusu kitalu chako yaliyothibitishwa na Ushirika wako.'
-        : 'Verified details retrieved from your cooperative farm profile.'
+        ? 'Hii ni thamani ya mfano kwa onyesho — si data halisi ya ushirika au soko.'
+        : 'This is a sample value for preview — not real cooperative or market data.'
     );
   };
 
@@ -411,11 +418,22 @@ export default function AgroIdScreen() {
               </Text>
             </View>
 
-            {/* Section 1: Market Conditions */}
+            {/* Section 1: Market Conditions — sample data below (see comment
+                on handleInfoPress above); no live market-price backend is
+                wired anywhere in this app. */}
             <View style={styles.section}>
-              <Text style={[styles.sectionHeader, { color: colors.textMute }]}>
-                {sw ? 'HALI YA SOKO' : 'MARKET CONDITIONS'}
-              </Text>
+              <View
+                style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, marginBottom: 8 }}
+              >
+                <Text style={[styles.sectionHeader, { color: colors.textMute, marginBottom: 0 }]}>
+                  {sw ? 'HALI YA SOKO' : 'MARKET CONDITIONS'}
+                </Text>
+                <Text
+                  style={{ fontFamily: 'Inter_700Bold', fontSize: 9, color: colors.textMute + '99' }}
+                >
+                  {sw ? '· MFANO' : '· SAMPLE'}
+                </Text>
+              </View>
               <View style={[styles.cardBlock, { borderColor: colors.border }]}>
                 <View style={styles.detailRow}>
                   <Text style={[styles.detailLabel, { color: colors.textMute }]}>Market Price</Text>
@@ -457,7 +475,11 @@ export default function AgroIdScreen() {
               </View>
             </View>
 
-            {/* Section 2: Information */}
+            {/* Section 2: Information — Plant Age / Fertilization are sample
+                data (no per-crop growth or input-application tracking is
+                wired anywhere in this app yet — tapping the info icon now
+                honestly says so via the fixed handleInfoPress above).
+                Certification below uses the real agroId.verificationStatus. */}
             <View style={styles.section}>
               <Text style={[styles.sectionHeader, { color: colors.textMute }]}>INFORMATION</Text>
               <View style={[styles.cardBlock, { borderColor: colors.border }]}>
@@ -490,27 +512,43 @@ export default function AgroIdScreen() {
                 <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
                 <View style={styles.detailRow}>
                   <Text style={[styles.detailLabel, { color: colors.textMute }]}>
-                    Certification
+                    {sw ? 'Uthibitisho' : 'Verification'}
                   </Text>
                   <View style={styles.detailRight}>
-                    <Text style={[styles.detailValue, { color: colors.text }]}>
-                      Land and Fertilizer
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => handleInfoPress('Certification')}
-                      style={styles.infoCircle}
-                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                      accessibilityRole="button"
-                      accessibilityLabel={sw ? 'Maelezo zaidi' : 'More info'}
+                    <Text
+                      style={[
+                        styles.detailValue,
+                        {
+                          color:
+                            agroId.verificationStatus === 'verified'
+                              ? colors.primary
+                              : agroId.verificationStatus === 'pending'
+                                ? '#f59e0b'
+                                : colors.textMute,
+                        },
+                      ]}
                     >
-                      <Info size={12} color={colors.primary} />
-                    </TouchableOpacity>
+                      {agroId.verificationStatus === 'verified'
+                        ? sw
+                          ? 'Imethibitishwa'
+                          : 'Verified'
+                        : agroId.verificationStatus === 'pending'
+                          ? sw
+                            ? 'Inasubiri'
+                            : 'Pending'
+                          : sw
+                            ? 'Haijathibitishwa'
+                            : 'Unverified'}
+                    </Text>
                   </View>
                 </View>
               </View>
             </View>
 
-            {/* Section 3: Track Records — 2×2 card grid */}
+            {/* Section 3: Track Records — 2×2 card grid. Sample data: no
+                per-input application tracking is wired anywhere in this app
+                yet, so this is illustrative rather than this farmer's real
+                fertilizer/seed history. */}
             <View style={styles.section}>
               <View
                 style={{
@@ -521,7 +559,7 @@ export default function AgroIdScreen() {
                 }}
               >
                 <Text style={[styles.sectionHeader, { color: colors.textMute, marginBottom: 0 }]}>
-                  TRACK RECORDS
+                  TRACK RECORDS {sw ? '· MFANO' : '· SAMPLE'}
                 </Text>
                 <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: colors.primary }}>
                   {TRACK_RECORDS.filter((r) => r.completed).length}/{TRACK_RECORDS.length} Done
