@@ -1,0 +1,28 @@
+name: kilimo-ai
+owner: creova-gif
+
+stack:
+  language: ["typescript"]
+  framework: ["react", "expo", "hono"]
+
+skill_groups:
+  default: [engineering, product]
+  conditional:
+    design: [ui-ux]
+    security: [security]
+
+# null = no command detected -> agents must report NOT VERIFIED for that gate
+verification:
+  install: "npm install"
+  lint: "npm run lint"
+  typecheck: "npm run typecheck"
+  test: "npm run test"
+  build: null
+
+integrations:
+  github: true
+  linear: false   # set true once the Linear connector is authorized
+
+agent_runtime:
+  required: false
+  preferred: null
