@@ -194,83 +194,13 @@ interface FarmDataState {
 }
 
 // ─── Seeds ───────────────────────────────────────────────────────────────────
-const SEED_LIVESTOCK: LivestockAnimal[] = [
-  {
-    id: 'a1',
-    tag: 'TZ-0421',
-    species: 'cattle',
-    name: 'Sita',
-    birthDate: '2022-03-12',
-    weightKg: 380,
-    lastVaccineDate: '2026-03-05',
-    nextVaccineDue: '2026-09-05',
-    healthStatus: 'healthy',
-  },
-  {
-    id: 'a2',
-    tag: 'TZ-0422',
-    species: 'cattle',
-    name: 'Bahati',
-    birthDate: '2023-08-01',
-    weightKg: 290,
-    lastVaccineDate: '2026-02-10',
-    nextVaccineDue: '2026-08-10',
-    healthStatus: 'attention',
-    notes: 'Slight limp on rear leg',
-  },
-  {
-    id: 'a3',
-    tag: 'GT-118',
-    species: 'goat',
-    birthDate: '2024-11-20',
-    weightKg: 32,
-    lastVaccineDate: '2026-04-15',
-    nextVaccineDue: '2026-10-15',
-    healthStatus: 'healthy',
-  },
-];
+// Inventory starts empty — a hardcoded stock list showed every new user 4
+// items they never bought. inventory.tsx renders a real empty state.
+const SEED_INVENTORY: InventoryItem[] = [];
 
-const SEED_INVENTORY: InventoryItem[] = [
-  {
-    id: 'i1',
-    name: 'DAP Fertilizer',
-    category: 'fertilizer',
-    unit: 'bag',
-    qty: 4,
-    lowStockAt: 2,
-    costPerUnitTZS: 95_000,
-    supplier: 'YARA',
-  },
-  {
-    id: 'i2',
-    name: 'Maize Seed — DK 8033',
-    category: 'seed',
-    unit: 'kg',
-    qty: 15,
-    lowStockAt: 5,
-    costPerUnitTZS: 12_000,
-    supplier: 'East African Seed',
-  },
-  {
-    id: 'i3',
-    name: 'Bee Repellent',
-    category: 'pesticide',
-    unit: 'L',
-    qty: 1,
-    lowStockAt: 2,
-    costPerUnitTZS: 18_000,
-  },
-  {
-    id: 'i4',
-    name: 'Layer Mash',
-    category: 'feed',
-    unit: 'bag',
-    qty: 6,
-    lowStockAt: 3,
-    costPerUnitTZS: 64_000,
-  },
-];
-
+// Browsable catalog only. p2 used to be seeded as an 'active' policy, showing
+// every new user as covered by a policy they never bought and feeding a false
+// hasActiveInsurance into the credit score (lib/credit/score.ts).
 const SEED_INSURANCE: InsurancePolicy[] = [
   {
     id: 'p1',
@@ -290,9 +220,7 @@ const SEED_INSURANCE: InsurancePolicy[] = [
     premiumTZS: 80_000,
     payoutMaxTZS: 2_500_000,
     termMonths: 12,
-    status: 'active',
-    startedAt: new Date(Date.now() - 90 * 86400_000).toISOString(),
-    expiresAt: new Date(Date.now() + 275 * 86400_000).toISOString(),
+    status: 'browse',
   },
   {
     id: 'p3',
@@ -392,6 +320,7 @@ const SEED_SUPPLIERS: InputSupplier[] = [
 // fix to the "Order Sample" button.
 const SEED_ORDERS: InputOrder[] = [];
 
+// Public group directory; membership only comes from joinGroup().
 const SEED_GROUPS: PeerGroup[] = [
   {
     id: 'g1',
@@ -399,7 +328,7 @@ const SEED_GROUPS: PeerGroup[] = [
     topic: 'Maize · Arusha',
     region: 'Arusha',
     memberCount: 482,
-    joined: true,
+    joined: false,
     lastActivity: new Date(Date.now() - 30 * 60_000).toISOString(),
   },
   {
@@ -573,75 +502,57 @@ const SEED_EXPERTS: Expert[] = [
   },
 ];
 
-const SEED_CONSULTATIONS: Consultation[] = [
-  {
-    id: 'co1',
-    expertId: 'e1',
-    scheduledFor: new Date(Date.now() + 36 * 3600_000).toISOString(),
-    status: 'scheduled',
-    channel: 'video',
-    topic: 'Soil test review for Block B',
-  },
-];
+// No pre-booked consultation — the seed showed a video call with a real-named
+// expert the user never booked.
+const SEED_CONSULTATIONS: Consultation[] = [];
 
-const SEED_LEDGER: LedgerEntry[] = [
-  {
-    id: 'l1',
-    date: new Date(Date.now() - 60 * 86400_000).toISOString(),
-    category: 'Input · Seed',
-    description: 'Maize seed DK 8033 — 30kg',
-    amountTZS: -360_000,
-  },
-  {
-    id: 'l2',
-    date: new Date(Date.now() - 58 * 86400_000).toISOString(),
-    category: 'Input · Fertilizer',
-    description: 'DAP fertilizer — 8 bags',
-    amountTZS: -760_000,
-  },
-  {
-    id: 'l3',
-    date: new Date(Date.now() - 40 * 86400_000).toISOString(),
-    category: 'Labour',
-    description: 'Planting crew — 6 days',
-    amountTZS: -180_000,
-  },
-  {
-    id: 'l4',
-    date: new Date(Date.now() - 30 * 86400_000).toISOString(),
-    category: 'Sale · Beans',
-    description: 'Beans to local market — 200kg',
-    amountTZS: 460_000,
-  },
-  {
-    id: 'l5',
-    date: new Date(Date.now() - 10 * 86400_000).toISOString(),
-    category: 'Sale · Maize',
-    description: 'Maize harvest — 1,200kg @ TZS 850',
-    amountTZS: 1_020_000,
-  },
-  {
-    id: 'l6',
-    date: new Date(Date.now() - 7 * 86400_000).toISOString(),
-    category: 'Cooperative',
-    description: 'AMCOS milestone payout',
-    amountTZS: 540_000,
-  },
-  {
-    id: 'l7',
-    date: new Date(Date.now() - 3 * 86400_000).toISOString(),
-    category: 'Input · Pesticide',
-    description: 'Bee repellent — 4L',
-    amountTZS: -72_000,
-  },
-];
+// Ledger starts empty: it is the direct input to computeCreditScore() on the
+// Agro-ID screen, so seeded rows gave every new user a score built from
+// transactions that never happened.
+const SEED_LEDGER: LedgerEntry[] = [];
+
+const LEGACY_FIXTURE_IDS = {
+  livestock: ['a1', 'a2', 'a3'],
+  inventory: ['i1', 'i2', 'i3', 'i4'],
+  consultations: ['co1'],
+  ledger: ['l1', 'l2', 'l3', 'l4', 'l5', 'l6', 'l7'],
+} as const;
+
+const withoutIds = <T extends { id: string }>(arr: T[] | undefined, ids: readonly string[]) =>
+  Array.isArray(arr) ? arr.filter((x) => !ids.includes(x.id)) : [];
+
+/**
+ * Persist migration for `kilimo-farm-data` (v0/v1 → v2). Removes the fixture
+ * records older builds seeded (by exact id) and resets the seeded g1 group
+ * membership and p2 "active" policy. User-created records keep their
+ * uid()-style ids and pass through untouched. Idempotent.
+ */
+export function migrateFarmData(persistedState: unknown): Partial<FarmDataState> {
+  const state = (persistedState ?? {}) as Partial<FarmDataState>;
+  const next: Partial<FarmDataState> = {
+    ...state,
+    livestock: withoutIds(state.livestock, LEGACY_FIXTURE_IDS.livestock),
+    inventory: withoutIds(state.inventory, LEGACY_FIXTURE_IDS.inventory),
+    consultations: withoutIds(state.consultations, LEGACY_FIXTURE_IDS.consultations),
+    ledger: withoutIds(state.ledger, LEGACY_FIXTURE_IDS.ledger),
+  };
+  if (Array.isArray(state.groups)) {
+    next.groups = state.groups.map((g) => (g.id === 'g1' ? { ...g, joined: false } : g));
+  }
+  if (Array.isArray(state.insurance)) {
+    next.insurance = state.insurance.map((p) =>
+      p.id === 'p2' ? { ...p, status: 'browse', startedAt: undefined, expiresAt: undefined } : p
+    );
+  }
+  return next;
+}
 
 const uid = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 
 export const useFarmDataStore = create<FarmDataState>()(
   persist(
     (set, get) => ({
-      livestock: SEED_LIVESTOCK,
+      livestock: [],
       inventory: SEED_INVENTORY,
       insurance: SEED_INSURANCE,
       suppliers: SEED_SUPPLIERS,
@@ -754,6 +665,13 @@ export const useFarmDataStore = create<FarmDataState>()(
     {
       name: 'kilimo-farm-data',
       storage: createJSONStorage(() => AsyncStorage),
+      version: 2,
+      // Persist rehydration merges cached state over fresh defaults, so devices
+      // that ran older builds keep the old fixtures unless we strip them here.
+      // Only the known fixture ids are touched: real records always carry a
+      // uid()-style id (e.g. "l_1700000000000_ab12"), which no fixture shares.
+      // Every step is idempotent, so it is safe to re-run on v1 state.
+      migrate: (persistedState) => migrateFarmData(persistedState),
     }
   )
 );
