@@ -14,15 +14,15 @@
 // @ts-nocheck — Deno runtime.
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders } from '../_shared/cors.ts';
+import { corsHeadersFor } from '../_shared/cors.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const admin = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
 
-function json(body: unknown, status = 200) {
+function json(req: Request, body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeadersFor(req), 'Content-Type': 'application/json' },
   });
 }
 
@@ -38,7 +38,7 @@ function opaque(len = 16): string {
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeadersFor(req) });
 
   try {
     // Resolve the caller from their JWT (verify_jwt guarantees one is present).
@@ -48,7 +48,7 @@ serve(async (req) => {
     });
     const { data: auth } = await userClient.auth.getUser();
     const userId = auth?.user?.id;
-    if (!userId) return json({ error: 'not_authenticated' }, 401);
+    if (!userId) return json(req, { error: 'not_authenticated' }, 401);
 
     const { docTag } = await req.json().catch(() => ({}));
     const tag = VALID_TAGS.includes(docTag) ? docTag : 'REG';
@@ -59,8 +59,8 @@ serve(async (req) => {
       .select('agro_id')
       .eq('user_id', userId)
       .maybeSingle();
-    if (readErr) return json({ error: 'lookup_failed' }, 500);
-    if (existing?.agro_id) return json({ agroId: existing.agro_id });
+    if (readErr) return json(req, { error: 'lookup_failed' }, 500);
+    if (existing?.agro_id) return json(req, { agroId: existing.agro_id });
 
     const agroId = `AGRO-2026-${tag}-${opaque()}`;
     const { error: writeErr } = await admin
@@ -75,13 +75,13 @@ serve(async (req) => {
         .select('agro_id')
         .eq('user_id', userId)
         .maybeSingle();
-      if (raced?.agro_id) return json({ agroId: raced.agro_id });
-      return json({ error: 'mint_failed' }, 500);
+      if (raced?.agro_id) return json(req, { agroId: raced.agro_id });
+      return json(req, { error: 'mint_failed' }, 500);
     }
 
-    return json({ agroId });
+    return json(req, { agroId });
   } catch (err: any) {
     console.error('[mint-agro-id]', err);
-    return json({ error: 'internal_error' }, 500);
+    return json(req, { error: 'internal_error' }, 500);
   }
 });

@@ -15,17 +15,17 @@
 // @ts-nocheck — Deno runtime.
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders } from '../_shared/cors.ts';
+import { corsHeadersFor } from '../_shared/cors.ts';
 
 const admin = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
 );
 
-function json(body: unknown, status = 200) {
+function json(req: Request, body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeadersFor(req), 'Content-Type': 'application/json' },
   });
 }
 
@@ -37,12 +37,12 @@ function netBand(net: number): string {
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeadersFor(req) });
 
   const url = new URL(req.url);
   // Accept `token` (preferred) and fall back to `id` for older QR codes.
   const agroId = url.searchParams.get('token') ?? url.searchParams.get('id');
-  if (!agroId) return json({ verified: false, reason: 'missing_token' }, 400);
+  if (!agroId) return json(req, { verified: false, reason: 'missing_token' }, 400);
 
   try {
     // Map the public Agro-ID to a user. Select ONLY the join key — no PII
@@ -56,8 +56,8 @@ serve(async (req) => {
 
     // Distinguish a backend failure (500) from a genuinely missing ID (404);
     // never let an outage masquerade as a verification result.
-    if (profileErr) return json({ verified: false, reason: 'lookup_failed' }, 500);
-    if (!profile) return json({ verified: false, reason: 'not_found' }, 404);
+    if (profileErr) return json(req, { verified: false, reason: 'lookup_failed' }, 500);
+    if (!profile) return json(req, { verified: false, reason: 'not_found' }, 404);
 
     const { data: summary, error: summaryErr } = await admin
       .from('agro_ledger_summary')
@@ -65,10 +65,10 @@ serve(async (req) => {
       .eq('user_id', profile.user_id)
       .maybeSingle();
 
-    if (summaryErr) return json({ verified: false, reason: 'lookup_failed' }, 500);
+    if (summaryErr) return json(req, { verified: false, reason: 'lookup_failed' }, 500);
 
     // Non-PII attestation only: existence + aggregate, non-identifying history.
-    return json({
+    return json(req, {
       verified: true,
       history: summary
         ? {
@@ -82,6 +82,6 @@ serve(async (req) => {
     });
   } catch (err: any) {
     console.error('[verify-agro-id]', err);
-    return json({ verified: false, reason: 'internal_error' }, 500);
+    return json(req, { verified: false, reason: 'internal_error' }, 500);
   }
 });

@@ -6,7 +6,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Badge } from '../../components/ui/Badge';
 import { useKilimoStore } from '../../store/useKilimoStore';
-import { getSupabase } from '../../lib/supabase';
+import { invokeAuthedFunction } from '../../lib/supabase';
 import { useTheme } from '../../constants/Theme';
 
 export default function BusinessVerification() {
@@ -21,10 +21,7 @@ export default function BusinessVerification() {
   const handleSubmit = async () => {
     setIsLoading(true);
     try {
-      const supabase = getSupabase();
-      if (!supabase) throw new Error('Could not initialize Supabase client');
-
-      const { data, error } = await supabase.functions.invoke('submit-verification', {
+      const { error } = await invokeAuthedFunction('submit-verification', {
         body: {
           agroId: agroId,
           tin,
