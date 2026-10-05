@@ -19,11 +19,14 @@ serve(async (req) => {
     )
 
     // 2. Fetch User Profile/Digital Twin Context
-    // Example: get user's active crops and location
+    // Was querying `user_profiles`, a table that has never existed in any
+    // migration — this always silently returned nothing. The real farm
+    // profile (written by app/edit-profile.tsx's save()) lives in
+    // farmer_profiles (see supabase/migrations/20260814000000_farmer_profiles.sql).
     const { data: userContext } = await supabase
-      .from('user_profiles')
-      .select('location, farm_size, active_crops')
-      .eq('id', userId)
+      .from('farmer_profiles')
+      .select('region, farm_size_acres, primary_crops')
+      .eq('user_id', userId)
       .single()
 
     // 3 & 4. Retrieve relevant local knowledge.
@@ -76,8 +79,8 @@ serve(async (req) => {
       You MUST base your advice on the provided Local Knowledge. Do not hallucinate treatments.
       
       User Profile:
-      - Location: ${userContext?.location || 'Unknown'}
-      - Active Crops: ${userContext?.active_crops?.join(', ') || 'None'}
+      - Location: ${userContext?.region || 'Unknown'}
+      - Active Crops: ${userContext?.primary_crops?.join(', ') || 'None'}
       
       Local Verified Knowledge:
       ${knowledgeContext}
