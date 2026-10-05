@@ -1,14 +1,13 @@
 /**
  * Kilimo AI — Predictive Analytics Engine
  *
- * Client-side statistical models (no external ML library). These are designed
- * to give calibrated, useful signals to farmers without requiring server
- * round-trips or heavy dependencies.
+ * Client-side heuristic estimates (no external ML library). Results depend on
+ * the vitals supplied by the app and must not be represented as live sensor or
+ * market data.
  *
- * Three models:
- *  1. YieldForecast  — exponential smoothing over farm vitals + seasonal factors
+ * Two models:
+ *  1. YieldForecast  — weighted farm-vitals adjustment + seasonal factor
  *  2. PestRiskScore  — weighted threshold model (moisture × temp × crop sensitivity)
- *  3. PriceTrend     — linear regression over 6-month rolling price window
  */
 
 import { FarmVitals, FarmProfile } from '../../store/useKilimoStore';
@@ -26,8 +25,7 @@ export interface YieldForecast {
 }
 
 /**
- * Exponential smoothing with seasonal and vitals-derived adjustments.
- * α = 0.3 (smoothing coefficient — low value for slow-moving agricultural data)
+ * Heuristic estimate based on current farm vitals and a seasonal adjustment.
  */
 export function forecastYield(vitals: FarmVitals, profile: FarmProfile | null): YieldForecast {
   const base = vitals.yieldEstimate;
@@ -49,7 +47,7 @@ export function forecastYield(vitals: FarmVitals, profile: FarmProfile | null): 
   const inSeason = (month >= 2 && month <= 4) || (month >= 9 && month <= 11);
   const seasonalFactor = inSeason ? 1.1 : 0.9;
 
-  // Exponential smoothing: forecast = α×adjusted + (1−α)×base
+  // Blend the adjusted estimate with the stored yield estimate.
   const α = 0.3;
   const adjusted = base * soilAdj * moistAdj * tempAdj;
   const forecast = α * adjusted + (1 - α) * base;
@@ -155,97 +153,10 @@ export function scorePestRisk(vitals: FarmVitals, profile: FarmProfile | null): 
   return { score, level, color, primaryDrivers: drivers.slice(0, 3), recommendations: recs };
 }
 
-// ─── 3. Price Trend ───────────────────────────────────────────────────────────
-
-export interface PriceTrend {
-  crop: string;
-  currentPriceTZSkg: number;
-  forecast30dTZSkg: number;
-  forecast90dTZSkg: number;
-  trendDirection: 'up' | 'down' | 'flat';
-  trendStrength: 'strong' | 'moderate' | 'weak';
-  changePct30d: number;
-  signal: 'Uza sasa' | 'Subiri kidogo' | 'Subiri zaidi' | 'Hifadhi';
-  seasonalNote: string;
-}
-
-// Seed price series for 7 major crops (last 6 months, TZS/kg)
-// Values sourced from AMCOS/EWURA typical farmgate ranges (Tanzania 2024-25)
-const PRICE_HISTORY: Record<string, number[]> = {
-  Mahindi: [620, 640, 680, 710, 700, 650],
-  Mpunga: [1050, 1080, 1120, 1150, 1130, 1090],
-  Maharagwe: [2100, 2200, 2300, 2150, 2050, 2000],
-  Kahawa: [4800, 5000, 5200, 5100, 4950, 4900],
-  Nyanya: [300, 420, 480, 360, 290, 420],
-  Mihogo: [260, 270, 290, 310, 300, 280],
-  Alizeti: [1700, 1750, 1820, 1800, 1780, 1820],
-};
-
-/** Simple OLS linear regression over the 6-month series */
-function linearRegression(y: number[]): { slope: number; intercept: number } {
-  const n = y.length;
-  const xMean = (n - 1) / 2;
-  const yMean = y.reduce((a, b) => a + b, 0) / n;
-  let num = 0;
-  let den = 0;
-  y.forEach((yi, i) => {
-    num += (i - xMean) * (yi - yMean);
-    den += (i - xMean) ** 2;
-  });
-  const slope = den === 0 ? 0 : num / den;
-  return { slope, intercept: yMean - slope * xMean };
-}
-
-export function trendCropPrice(crop: string): PriceTrend {
-  const history = PRICE_HISTORY[crop] ?? PRICE_HISTORY['Mahindi'];
-  const { slope, intercept } = linearRegression(history);
-  const n = history.length;
-
-  const current = history[n - 1];
-  const forecast30 = Math.round(intercept + slope * (n + 0.5)); // ~1 month ahead
-  const forecast90 = Math.round(intercept + slope * (n + 2)); // ~3 months ahead
-
-  const changePct30d = current > 0 ? ((forecast30 - current) / current) * 100 : 0;
-  const trendDirection: PriceTrend['trendDirection'] =
-    changePct30d > 3 ? 'up' : changePct30d < -3 ? 'down' : 'flat';
-  const trendStrength: PriceTrend['trendStrength'] =
-    Math.abs(changePct30d) > 10 ? 'strong' : Math.abs(changePct30d) > 4 ? 'moderate' : 'weak';
-
-  // Signal: sell now vs wait
-  const month = new Date().getMonth();
-  const postHarvest = month === 3 || month === 4 || month === 10 || month === 11;
-  let signal: PriceTrend['signal'];
-  if (trendDirection === 'up' && trendStrength !== 'weak') signal = 'Subiri kidogo';
-  else if (trendDirection === 'up' && forecast90 > forecast30 * 1.05) signal = 'Subiri zaidi';
-  else if (postHarvest && trendDirection !== 'up') signal = 'Hifadhi';
-  else signal = 'Uza sasa';
-
-  const seasonalNote =
-    month >= 2 && month <= 4
-      ? 'Masika — bei zinashuka baada ya mavuno.'
-      : month >= 9 && month <= 11
-        ? 'Vuli — bei zinashuka; hifadhi kwa wiki 6–8 kwa faida bora.'
-        : 'Kipindi kati ya mavuno — bei zinabaki thabiti au kupanda kidogo.';
-
-  return {
-    crop,
-    currentPriceTZSkg: current,
-    forecast30dTZSkg: Math.max(50, forecast30),
-    forecast90dTZSkg: Math.max(50, forecast90),
-    trendDirection,
-    trendStrength,
-    changePct30d: Math.round(changePct30d * 10) / 10,
-    signal,
-    seasonalNote,
-  };
-}
-
-/** Run all three models and return a consolidated analytics snapshot */
+/** Run the available estimates and return a consolidated analytics snapshot. */
 export function runAnalytics(vitals: FarmVitals, profile: FarmProfile | null) {
-  const crops = profile?.primaryCrops?.slice(0, 3) ?? ['Mahindi'];
   return {
     yieldForecast: forecastYield(vitals, profile),
     pestRisk: scorePestRisk(vitals, profile),
-    priceTrends: crops.map(trendCropPrice),
   };
 }
