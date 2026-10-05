@@ -921,7 +921,10 @@ const DailyOrganizerStrip = ({ colors, isDark, language }: any) => {
 // Growth Rates vertical bar chart component
 const GrowthChart = ({ colors, isDark, language }: any) => {
   const [selectedRange, setSelectedRange] = useState('M');
-  const screenWidth = Dimensions.get('window').width;
+  // Dimensions.get('window').width can read 0 on first web hydration (before
+  // the window is measured). 0 is never a real device width, so fall back to
+  // a sane default rather than letting it flow into negative chart math.
+  const screenWidth = Dimensions.get('window').width || 360;
 
   const exportReport = async () => {
     try {
@@ -943,16 +946,19 @@ const GrowthChart = ({ colors, isDark, language }: any) => {
     }
   };
 
-  const chartW = screenWidth - 80;
+  const chartW = Math.max(100, screenWidth - 80);
   const chartH = 160;
   const padL = 8;
   const padR = 8;
   const padTop = 20;
   const padBot = 28;
-  const barAreaW = chartW - padL - padR;
+  const barAreaW = Math.max(0, chartW - padL - padR);
   const n = GROWTH_DATA.length;
-  const barW = Math.floor((barAreaW / n) * 0.55);
-  const gap = Math.floor(barAreaW / n);
+  // Defense in depth: even with chartW/barAreaW floored above, clamp the
+  // derived per-bar values too so a future edit upstream can't reintroduce a
+  // negative <Rect>/<Svg> width (a real bug this session — see git history).
+  const barW = Math.max(0, Math.floor((barAreaW / n) * 0.55));
+  const gap = Math.max(0, Math.floor(barAreaW / n));
   const maxVal = Math.max(...GROWTH_DATA.map((d) => d.value));
 
   return (
@@ -1589,6 +1595,23 @@ const getCropMetadata = (cropName: string, language: 'en' | 'sw') => {
 
 // ─── Weather Widget Card ──────────────────────────────────────────────────────
 function WeatherWidget({ weather, language, colors, isDark, router }: any) {
+  if (!weather.configured || !weather.current) {
+    return (
+      <Animated.View entering={FadeInDown.delay(50).duration(500).springify()} style={{ marginVertical: 8 }}>
+        <Text style={[styles.bentoSectionTitle, { color: colors.textMute, marginLeft: 4, marginBottom: 8 }]}>
+          {language === 'sw' ? 'HALI YA HEWA' : 'WEATHER'}
+        </Text>
+        <Card variant="solid" style={[styles.wxCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.wxCond, { color: colors.textMute }]}>
+            {language === 'sw'
+              ? 'Data ya hali ya hewa haipatikani kwa sasa.'
+              : 'Weather data is not available right now.'}
+          </Text>
+        </Card>
+      </Animated.View>
+    );
+  }
+
   const hourlyData = React.useMemo(() => {
     const currentHour = new Date().getHours();
     const baseTemp = weather.current?.temp ?? 24;
@@ -1607,12 +1630,11 @@ function WeatherWidget({ weather, language, colors, isDark, router }: any) {
     });
   }, [weather.current?.temp, weather.current?.condition]);
 
-  const displayTemp = Math.round(weather.current?.temp ?? 24);
-  const humidity = weather.current?.humidity ?? 78;
-  const feelsLike = Math.round((weather.current as any)?.feelsLike ?? displayTemp + 1);
-  const conditionLabel =
-    weather.current?.conditionLabel ?? (language === 'sw' ? 'Mawingu kidogo' : 'Partly cloudy');
-  const condition = weather.current?.condition ?? 'cloud';
+  const displayTemp = Math.round(weather.current.temp);
+  const humidity = weather.current.humidity;
+  const feelsLike = Math.round((weather.current as any).feelsLike ?? displayTemp);
+  const conditionLabel = weather.current.conditionLabel;
+  const condition = weather.current.condition;
   const thumbPct = Math.max(8, Math.min(88, ((displayTemp - 14) / 22) * 100));
   const conditionColor =
     condition === 'rain'
@@ -1745,16 +1767,10 @@ function WeatherWidget({ weather, language, colors, isDark, router }: any) {
               val: `${humidity}%`,
               lbl: language === 'sw' ? 'Unyevu' : 'Humidity',
             },
-            { icon: <Sun size={13} color="#F59E0B" />, val: '05', lbl: 'UV Index' },
             {
               icon: <Thermometer size={13} color={colors.primary} />,
               val: `${feelsLike}°`,
               lbl: language === 'sw' ? 'Hisi' : 'Feels like',
-            },
-            {
-              icon: <Wind size={13} color="#94a3b8" />,
-              val: '12 km/h',
-              lbl: language === 'sw' ? 'Upepo' : 'Wind',
             },
           ].map((s, i) => (
             <React.Fragment key={i}>
@@ -1792,6 +1808,10 @@ export default function HomeScreen() {
 
   const [activatingHome, setActivatingHome] = useState(false);
   const [activationFinished, setActivationFinished] = useState(false);
+  // Activation is a prompt, not a wall — the user can dismiss it and use the app.
+  // (Also prevents a permanent trap when the server mint can't complete, e.g. in
+  // the web simulator / offline, which would otherwise keep status != 'verified'.)
+  const [dismissedActivation, setDismissedActivation] = useState(false);
   const progress = useSharedValue(0);
   const sweepY = useSharedValue(-100);
 
@@ -1839,6 +1859,7 @@ export default function HomeScreen() {
       setTimeout(() => {
         setActivatingHome(false);
         setActivationFinished(false);
+        setDismissedActivation(true); // proceed into the app even if mint was provisional
         progress.value = 0;
         sweepY.value = -100;
       }, 1000);
@@ -2615,8 +2636,7 @@ export default function HomeScreen() {
                       },
                     ]}
                   >
-                    <PulsingDot />
-                    <Text style={styles.liveText}>LIVE</Text>
+                    <Text style={styles.liveText}>{language === 'sw' ? 'DATA YA APP' : 'APP DATA'}</Text>
                   </View>
                 </View>
 
@@ -2705,7 +2725,7 @@ export default function HomeScreen() {
                     >
                       {language === 'sw' ? 'KUVUNA' : 'HARVEST'} ·{' '}
                       {cropMeta.harvestDays - cropMeta.currentDay}{' '}
-                      {language === 'sw' ? 'SIKU ZILIZO' : 'DAYS LEFT'}
+                      {language === 'sw' ? 'SIKU ZILIZOBAKI' : 'DAYS LEFT'}
                     </Text>
                   </View>
 
@@ -2894,12 +2914,6 @@ export default function HomeScreen() {
             )}
           </Animated.View>
 
-          {/* Horizontal Track Records timeline stepper */}
-          <TrackRecords colors={colors} isDark={isDark} language={language} />
-
-          {/* Crop Value Dashboard — est. yield, market value, harvest countdown */}
-          <CropValueCard colors={colors} isDark={isDark} language={language} />
-
           {/* Weather Widget */}
           <WeatherWidget
             weather={weather}
@@ -2994,9 +3008,6 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </Animated.View>
 
-          {/* Growth Rate Chart */}
-          <GrowthChart colors={colors} isDark={isDark} language={language} />
-
           {/* Wallet Card - Replaced with Olive Premium card */}
           <Animated.View entering={FadeInDown.delay(200).springify()}>
             <Card
@@ -3076,7 +3087,7 @@ export default function HomeScreen() {
           <View style={styles.bentoSection}>
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                {language === 'sw' ? 'Afya ya Shamba' : 'Farm Vitals'}
+                {language === 'sw' ? 'Taarifa za Shamba' : 'Farm Data'}
               </Text>
               <TouchableOpacity
                 onPress={() => {
@@ -3084,10 +3095,10 @@ export default function HomeScreen() {
                   router.push('/analytics' as any);
                 }}
                 accessibilityRole="button"
-                accessibilityLabel="View farm sensors"
+                accessibilityLabel="View farm data"
               >
                 <Text style={{ color: colors.primary, fontFamily: 'Inter_700Bold', fontSize: 12 }}>
-                  {language === 'sw' ? 'DENSORI →' : 'SENSORS →'}
+                  {language === 'sw' ? 'DATA →' : 'DATA →'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -3735,7 +3746,7 @@ export default function HomeScreen() {
       </Modal>
 
       {/* Verification Gate Overlay */}
-      {agroId?.verificationStatus !== 'verified' && (
+      {agroId?.verificationStatus !== 'verified' && !dismissedActivation && (
         <View
           style={[
             StyleSheet.absoluteFill,
@@ -3915,6 +3926,26 @@ export default function HomeScreen() {
                   onPress={handleActivateHome}
                   style={{ width: '100%' }}
                 />
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setDismissedActivation(true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={language === 'sw' ? 'Baadaye' : 'Later'}
+                  style={{ marginTop: 14, paddingVertical: 8 }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: 'Inter_600SemiBold',
+                      fontSize: 14,
+                      color: colors.textMute,
+                      textAlign: 'center',
+                    }}
+                  >
+                    {language === 'sw' ? 'Baadaye' : 'Later'}
+                  </Text>
+                </TouchableOpacity>
               </View>
             )}
           </Card>

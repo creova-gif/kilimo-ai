@@ -48,6 +48,7 @@ import * as Haptics from 'expo-haptics';
 import { useKilimoStore, FarmProfile, AppLanguage, ThemePreference } from '../store/useKilimoStore';
 import { allRoles, roleLabel, CanonicalRole, normalizeRole } from '../lib/access';
 import { useTheme } from '../constants/Theme';
+import { getSupabase } from '../lib/supabase';
 
 const REGIONS = [
   'Arusha',
@@ -202,23 +203,87 @@ export default function EditProfileScreen() {
   }
 
   // ── Save ────────────────────────────────────────────────────────────────────
+  // Local Zustand state is the source of truth for instant, offline-first UX
+  // — save() always succeeds locally and navigates back immediately, same as
+  // before. What's new: a best-effort upsert to farmer_profiles so the
+  // profile actually survives a reinstall/new device, and so rag-chat (which
+  // reads this table for AI-personalization context) has real data to read.
+  // A failed remote sync does not block or roll back the local save — it's
+  // logged and surfaced via a distinct notification rather than silently
+  // swallowed or falsely folded into the "saved" success state.
+  async function syncProfileToBackend(payload: {
+    name: string;
+    role: CanonicalRole;
+    region: string;
+    primaryCrops: string[];
+    farmSizeAcres: number;
+    mainActivity: FarmProfile['mainActivity'];
+    hasLivestock: boolean;
+    hasIrrigation: boolean;
+    language: AppLanguage;
+  }) {
+    const sb = getSupabase();
+    if (!sb) return;
+    const { data: sessionData } = await sb.auth.getSession();
+    const userId = sessionData?.session?.user?.id;
+    if (!userId) return;
+
+    const { error } = await sb.from('farmer_profiles').upsert({
+      user_id: userId,
+      name: payload.name,
+      role: payload.role,
+      region: payload.region,
+      primary_crops: payload.primaryCrops,
+      farm_size_acres: payload.farmSizeAcres,
+      main_activity: payload.mainActivity,
+      has_livestock: payload.hasLivestock,
+      has_irrigation: payload.hasIrrigation,
+      language: payload.language,
+      updated_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      console.warn('[EditProfile] backend sync failed:', error.message);
+      addNotification({
+        title: lang === 'sw' ? 'Usawazishaji Umeshindikana' : 'Sync Failed',
+        body:
+          lang === 'sw'
+            ? 'Wasifu umehifadhiwa kwenye kifaa chako lakini haujasawazishwa mtandaoni.'
+            : 'Profile saved on this device but could not sync online.',
+        type: 'warning',
+      });
+    }
+  }
+
   function save() {
     if (!canSave) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const farmSizeAcres = parseFloat(acres) || 0;
     updateAgroId({ name: name.trim(), role, location: region });
     setFarmProfile({
       primaryCrops: crops,
       region,
-      farmSizeAcres: parseFloat(acres) || 0,
+      farmSizeAcres,
       mainActivity: activity,
       hasLivestock,
       hasIrrigation,
     });
     setLanguage(lang);
     setThemePreference(themePref);
+    syncProfileToBackend({
+      name: name.trim(),
+      role,
+      region,
+      primaryCrops: crops,
+      farmSizeAcres,
+      mainActivity: activity,
+      hasLivestock,
+      hasIrrigation,
+      language: lang,
+    });
     addNotification({
       title: lang === 'sw' ? 'Wasifu Umehifadhiwa' : 'Profile Saved',
       body:
