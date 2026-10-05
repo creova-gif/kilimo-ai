@@ -43,6 +43,9 @@ import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../constants/Theme';
 import { useKilimoStore } from '../store/useKilimoStore';
+import { useFarmDataStore, LedgerEntry } from '../store/useFarmDataStore';
+import { useContractsStore } from '../store/useContractsStore';
+import { pushLedgerEntry } from '../lib/credit/ledgerSync';
 import Svg, {
   Line as SvgLine,
   Text as SvgText,
@@ -52,90 +55,30 @@ import Svg, {
   Stop as SvgStop,
 } from 'react-native-svg';
 import { BlurView } from 'expo-blur';
-import { GlassCard } from '../components/PageScaffold';
+import { GlassCard, EmptyState } from '../components/PageScaffold';
 
 const fmt = (n: number) => new Intl.NumberFormat('en-US').format(Math.round(n));
 
 const { width: SW } = Dimensions.get('window');
 
-type EntryType = 'income' | 'expense';
+// No real invoice-generation/delivery pipeline exists (lib/pdf only builds
+// the P&L report). This used to fake success after a Simulate step.
+const INVOICE_GENERATION_LIVE = false;
+
 type Category = 'mazao' | 'mbolea' | 'usafirishaji' | 'umwagiliaji' | 'zana' | 'nyingine';
-
-type Entry = {
-  id: string;
-  type: EntryType;
-  category: Category;
-  label: string;
-  amount: number;
-  ts: number;
-};
-
-const INITIAL_ENTRIES: Entry[] = [
-  {
-    id: 'e1',
-    type: 'income',
-    category: 'mazao',
-    label: 'Uza Mahindi — Kg 200',
-    amount: 84000,
-    ts: Date.now() - 86400000,
-  },
-  {
-    id: 'e2',
-    type: 'expense',
-    category: 'mbolea',
-    label: 'Urea 50kg — Yara',
-    amount: 42500,
-    ts: Date.now() - 172800000,
-  },
-  {
-    id: 'e3',
-    type: 'income',
-    category: 'mazao',
-    label: 'Maharage — Sehemu 1',
-    amount: 62000,
-    ts: Date.now() - 259200000,
-  },
-  {
-    id: 'e4',
-    type: 'expense',
-    category: 'usafirishaji',
-    label: 'Lori — Dodoma–Mbeya',
-    amount: 18000,
-    ts: Date.now() - 345600000,
-  },
-  {
-    id: 'e5',
-    type: 'expense',
-    category: 'umwagiliaji',
-    label: 'Bomba Jipya — m 30',
-    amount: 9500,
-    ts: Date.now() - 432000000,
-  },
-  {
-    id: 'e6',
-    type: 'income',
-    category: 'mazao',
-    label: 'Alizeti — Kg 80',
-    amount: 168000,
-    ts: Date.now() - 518400000,
-  },
-  {
-    id: 'e7',
-    type: 'expense',
-    category: 'zana',
-    label: 'Jembe la trekta — serikali',
-    amount: 35000,
-    ts: Date.now() - 604800000,
-  },
-  {
-    id: 'e8',
-    type: 'income',
-    category: 'mazao',
-    label: 'Mbegu — Mauzo Ya Ziada',
-    amount: 21000,
-    ts: Date.now() - 691200000,
-  },
+const CATEGORY_KEYS: Category[] = [
+  'mazao',
+  'mbolea',
+  'usafirishaji',
+  'umwagiliaji',
+  'zana',
+  'nyingine',
 ];
+function categoryOf(entry: LedgerEntry): Category {
+  return (CATEGORY_KEYS as string[]).includes(entry.category)
+    ? (entry.category as Category)
+    : 'nyingine';
+}
 
 const CAT_META: Record<
   Category,
@@ -179,29 +122,11 @@ const CAT_META: Record<
   },
 };
 
-// Mock Contracts
-const CONTRACTS = [
-  {
-    id: 'c1',
-    title: 'Mkataba wa Mahindi - Tandale Co.',
-    buyer: 'Tandale Wholesalers',
-    value: 850000,
-    milestone: 'Uwasilishaji wa Kwanza',
-  },
-  {
-    id: 'c2',
-    title: 'Mkataba wa Mpunga - Mbeya Buyer',
-    buyer: 'Mbeya Millers',
-    value: 1200000,
-    milestone: 'Kukamilisha Upanzi',
-  },
-];
-
 function fmtTZS(n: number) {
   return `TSh ${new Intl.NumberFormat('en-US').format(Math.round(n))}`;
 }
-function fmtDate(ts: number) {
-  return new Date(ts).toLocaleDateString('sw-TZ', { month: 'short', day: 'numeric' });
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString('sw-TZ', { month: 'short', day: 'numeric' });
 }
 
 function MonthlyChart({
@@ -365,95 +290,129 @@ export default function FinanceScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const language = useKilimoStore((s) => s.language);
-  const [entries, setEntries] = useState<Entry[]>(INITIAL_ENTRIES);
+  const entries = useFarmDataStore((s) => s.ledger);
+  const addLedgerEntry = useFarmDataStore((s) => s.addLedgerEntry);
+  const contracts = useContractsStore((s) => s.contracts);
   const [filter, setFilter] = useState<'all' | 'income' | 'expense'>('all');
   const [showAdd, setShowAdd] = useState(false);
   const [newLabel, setNewLabel] = useState('');
   const [newAmount, setNewAmount] = useState('');
-  const [newType, setNewType] = useState<EntryType>('income');
+  const [newType, setNewType] = useState<'income' | 'expense'>('income');
   const [newCat, setNewCat] = useState<Category>('mazao');
 
   // Budget state
   const budgetLimit = 200000; // Monthly limit
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
-  const [selectedContractId, setSelectedContractId] = useState('c1');
+  const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
 
   const totalIncome = useMemo(
-    () => entries.filter((e) => e.type === 'income').reduce((a, b) => a + b.amount, 0),
+    () => entries.filter((e) => e.amountTZS > 0).reduce((a, b) => a + b.amountTZS, 0),
     [entries]
   );
   const totalExpense = useMemo(
-    () => entries.filter((e) => e.type === 'expense').reduce((a, b) => a + b.amount, 0),
+    () =>
+      entries.filter((e) => e.amountTZS < 0).reduce((a, b) => a + Math.abs(b.amountTZS), 0),
     [entries]
   );
   const profit = totalIncome - totalExpense;
 
+  // Real month bucketing from the ledger's own dates — not a projection.
   const currentMonthExpense = useMemo(() => {
-    // Simulated current month expenses from entries list
-    return entries.filter((e) => e.type === 'expense').reduce((a, b) => a + b.amount, 0);
+    const now = new Date();
+    return entries
+      .filter((e) => {
+        const d = new Date(e.date);
+        return (
+          e.amountTZS < 0 && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+        );
+      })
+      .reduce((a, b) => a + Math.abs(b.amountTZS), 0);
   }, [entries]);
 
   const budgetProgressPct = Math.min(1, currentMonthExpense / budgetLimit);
 
   const filtered = useMemo(
-    () => (filter === 'all' ? entries : entries.filter((e) => e.type === filter)),
+    () =>
+      filter === 'all'
+        ? entries
+        : entries.filter((e) => (filter === 'income' ? e.amountTZS > 0 : e.amountTZS < 0)),
     [entries, filter]
   );
 
   const catTotals = useMemo(() => {
     const map: Partial<Record<Category, number>> = {};
     entries.forEach((e) => {
-      map[e.category] = (map[e.category] ?? 0) + (e.type === 'income' ? e.amount : -e.amount);
+      const cat = categoryOf(e);
+      map[cat] = (map[cat] ?? 0) + e.amountTZS;
     });
     return Object.entries(map)
       .sort((a, b) => Math.abs(b[1]!) - Math.abs(a[1]!))
       .slice(0, 4) as [Category, number][];
   }, [entries]);
 
+  // Real per-month income/expense totals from the ledger's own dates, for
+  // the last 6 months — replaces a previous version that generated a
+  // sine/cosine "trend" with no relationship to any real transaction.
   const months = useMemo(() => {
-    const labels = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun'];
-    return labels.map((label, i) => ({
-      label,
-      income:
-        40000 + Math.sin(i * 1.3 + 0.5) * 20000 + (i === labels.length - 1 ? totalIncome * 0.1 : 0),
-      expense:
-        20000 + Math.cos(i * 1.1) * 10000 + (i === labels.length - 1 ? totalExpense * 0.1 : 0),
-    }));
-  }, [totalIncome, totalExpense]);
+    const labels = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ago', 'Sep', 'Okt', 'Nov', 'Des'];
+    const now = new Date();
+    const buckets: { label: string; income: number; expense: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      buckets.push({ label: labels[d.getMonth()], income: 0, expense: 0 });
+    }
+    entries.forEach((e) => {
+      const d = new Date(e.date);
+      const monthsAgo =
+        (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
+      if (monthsAgo < 0 || monthsAgo > 5) return;
+      const bucket = buckets[5 - monthsAgo];
+      if (e.amountTZS > 0) bucket.income += e.amountTZS;
+      else bucket.expense += Math.abs(e.amountTZS);
+    });
+    return buckets;
+  }, [entries]);
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     const amt = parseFloat(newAmount.replace(/,/g, ''));
     if (!newLabel || !amt || amt <= 0) {
       Alert.alert(language === 'sw' ? 'Tafadhali jaza fomu' : 'Please complete the form');
       return;
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    const entry: Entry = {
-      id: Date.now().toString(),
-      type: newType,
+    const id = `l_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const entry: LedgerEntry = {
+      id,
+      date: new Date().toISOString(),
       category: newCat,
-      label: newLabel,
-      amount: amt,
-      ts: Date.now(),
+      description: newLabel,
+      amountTZS: newType === 'income' ? amt : -amt,
     };
-    setEntries((prev) => [entry, ...prev]);
+    // Offline-first: saved locally immediately, then best-effort synced to
+    // the server ledger backing the real Agro-ID credit score (same pattern
+    // as agro-id.tsx's own entry form).
+    addLedgerEntry(entry);
     setShowAdd(false);
     setNewLabel('');
     setNewAmount('');
+    await pushLedgerEntry(entry);
   };
 
   const handleGenerateInvoice = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    const contract = CONTRACTS.find((c) => c.id === selectedContractId)!;
+    const contract = contracts.find((c) => c.id === selectedContractId);
+    if (!contract) return;
 
-    // Simulate generating invoice
-    setShowInvoiceModal(false);
-    Alert.alert(
-      language === 'sw' ? 'Ankara Imetengenezwa!' : 'Invoice Generated!',
-      language === 'sw'
-        ? `Ankara ya TSh ${fmt(contract.value / 3)} kwa ajili ya "${contract.milestone}" imehifadhiwa. Unaweza kuituma sasa.`
-        : `Invoice for TSh ${fmt(contract.value / 3)} for milestone "${contract.milestone}" is generated and ready to share.`
-    );
+    if (!INVOICE_GENERATION_LIVE) {
+      setShowInvoiceModal(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert(
+        language === 'sw' ? 'Bado Haipatikani' : 'Coming Soon',
+        language === 'sw'
+          ? 'Kutengeneza na kutuma ankara halisi haipatikani bado kwenye programu.'
+          : 'Generating and sending a real invoice isn’t available in the app yet.'
+      );
+      return;
+    }
   };
 
   return (
@@ -504,8 +463,10 @@ export default function FinanceScreen() {
           contentContainerStyle={{ paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Predictive Cash Flow Warning Banner */}
-          {profit < 50000 && (
+          {/* Cash Flow Warning Banner — a real threshold on the real ledger
+              totals, not a forecast. Previously worded as "Projected...next
+              month" implying a prediction model that doesn't exist. */}
+          {entries.length > 0 && profit < 50000 && (
             <Animated.View entering={FadeInUp} style={s.cashFlowWarning}>
               <ShieldAlert size={18} color="#ef4444" />
               <View style={{ flex: 1 }}>
@@ -514,8 +475,8 @@ export default function FinanceScreen() {
                 </Text>
                 <Text style={s.warningDesc}>
                   {language === 'sw'
-                    ? 'Matumizi yaliyokadiriwa ya mwezi ujao yanaweza kuzidi mapato ya kawaida ya mazao. Punguza gharama za pembejeo.'
-                    : 'Projected expenses next month exceed historical average sales. We recommend deferring heavy equipment expenses.'}
+                    ? 'Faida yako ya sasa iko chini. Fikiria kupunguza gharama za pembejeo mpaka mapato yaongezeke.'
+                    : 'Your current profit margin is low. Consider deferring input expenses until income picks up.'}
                 </Text>
               </View>
             </Animated.View>
@@ -629,7 +590,10 @@ export default function FinanceScreen() {
             </View>
           </Animated.View>
 
-          {/* Sync Mobile Money Accounts Hooks */}
+          {/* Mobile Money Integrations — no real Daraja/Tigo Pesa API wiring
+              exists in this codebase yet, so this is honestly disclosed as
+              not-yet-connected instead of showing fake "AUTO-SYNC" badges
+              with a moving "Last sync: Just now" timestamp. */}
           <Animated.View
             entering={FadeInDown.delay(100)}
             style={{ paddingHorizontal: 16, marginTop: 12 }}
@@ -637,36 +601,30 @@ export default function FinanceScreen() {
             <GlassCard style={{ padding: 16, gap: 10 }}>
               <Text style={[s.chartTitle, { color: colors.text }]}>
                 {language === 'sw'
-                  ? 'Akaunti za Mobile Money zilizounganishwa'
-                  : 'Linked Mobile Money Integrations'}
+                  ? 'Akaunti za Mobile Money'
+                  : 'Mobile Money Integrations'}
               </Text>
               <View style={s.syncRow}>
-                <Smartphone size={16} color={colors.primary} />
+                <Smartphone size={16} color={colors.textMute} />
                 <View style={{ flex: 1 }}>
                   <Text style={[s.syncTitle, { color: colors.text }]}>Vodacom M-Pesa</Text>
                   <Text
                     style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: colors.textMute }}
                   >
-                    Last sync: 2 hours ago
+                    {language === 'sw' ? 'Bado haijaunganishwa' : 'Not connected yet'}
                   </Text>
-                </View>
-                <View style={s.syncStatusBadge}>
-                  <Text style={s.syncStatusText}>AUTO-SYNC</Text>
                 </View>
               </View>
 
               <View style={s.syncRow}>
-                <Smartphone size={16} color="#f59e0b" />
+                <Smartphone size={16} color={colors.textMute} />
                 <View style={{ flex: 1 }}>
                   <Text style={[s.syncTitle, { color: colors.text }]}>Tigo Pesa</Text>
                   <Text
                     style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: colors.textMute }}
                   >
-                    Last sync: Just now
+                    {language === 'sw' ? 'Bado haijaunganishwa' : 'Not connected yet'}
                   </Text>
-                </View>
-                <View style={s.syncStatusBadge}>
-                  <Text style={s.syncStatusText}>AUTO-SYNC</Text>
                 </View>
               </View>
             </GlassCard>
@@ -818,7 +776,7 @@ export default function FinanceScreen() {
                   {language === 'sw' ? 'Ingiza Rekodi' : 'Add Entry'}
                 </Text>
                 <View style={s.typeRow}>
-                  {(['income', 'expense'] as EntryType[]).map((t) => (
+                  {(['income', 'expense'] as const).map((t) => (
                     <TouchableOpacity
                       key={t}
                       onPress={() => setNewType(t)}
@@ -962,8 +920,22 @@ export default function FinanceScreen() {
 
           {/* Entries list */}
           <View style={{ paddingHorizontal: 16, gap: 8 }}>
+            {entries.length === 0 && (
+              <EmptyState
+                icon={<FileText size={40} color={colors.primary} />}
+                title={language === 'sw' ? 'Hakuna rekodi bado' : 'No records yet'}
+                body={
+                  language === 'sw'
+                    ? 'Ongeza mapato na matumizi yako ili kuona muhtasari na alama yako ya mikopo.'
+                    : 'Add your income and expenses to see a summary and build your credit score.'
+                }
+                cta={language === 'sw' ? 'Ongeza Rekodi ya Kwanza' : 'Add First Record'}
+                onCta={() => setShowAdd(true)}
+              />
+            )}
             {filtered.map((e, i) => {
-              const meta = CAT_META[e.category];
+              const meta = CAT_META[categoryOf(e)];
+              const isIncome = e.amountTZS > 0;
               return (
                 <Animated.View key={e.id} entering={FadeInDown.delay(i * 40).springify()}>
                   <View
@@ -977,7 +949,7 @@ export default function FinanceScreen() {
                     </View>
                     <View style={{ flex: 1, gap: 2 }}>
                       <Text style={[s.entryLabel, { color: colors.text }]} numberOfLines={1}>
-                        {e.label}
+                        {e.description}
                       </Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <View style={[s.catBadge, { backgroundColor: meta.color + '18' }]}>
@@ -986,18 +958,15 @@ export default function FinanceScreen() {
                           </Text>
                         </View>
                         <Text style={[s.entryDate, { color: colors.textMute }]}>
-                          {fmtDate(e.ts)}
+                          {fmtDate(e.date)}
                         </Text>
                       </View>
                     </View>
                     <Text
-                      style={[
-                        s.entryAmt,
-                        { color: e.type === 'income' ? colors.primary : '#ef4444' },
-                      ]}
+                      style={[s.entryAmt, { color: isIncome ? colors.primary : '#ef4444' }]}
                     >
-                      {e.type === 'income' ? '+' : '-'}
-                      {fmtTZS(e.amount)}
+                      {isIncome ? '+' : '-'}
+                      {fmtTZS(Math.abs(e.amountTZS))}
                     </Text>
                   </View>
                 </Animated.View>
@@ -1076,58 +1045,89 @@ export default function FinanceScreen() {
               CHAGUA MKATABA ULIOKUBALIWA
             </Text>
 
-            <View style={{ gap: 8 }}>
-              {CONTRACTS.map((con) => {
-                const selected = selectedContractId === con.id;
-                return (
-                  <TouchableOpacity
-                    key={con.id}
-                    onPress={() => setSelectedContractId(con.id)}
-                    style={[
-                      s.contractOption,
-                      {
-                        borderColor: selected ? colors.primary : colors.border,
-                        backgroundColor: selected ? colors.primary + '10' : 'transparent',
-                      },
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      language === 'sw'
-                        ? `Chagua ${con.title}, mnunuzi ${con.buyer}`
-                        : `Select ${con.title}, buyer ${con.buyer}`
-                    }
-                    accessibilityState={{ selected }}
-                  >
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: colors.text }}>
-                      {con.title}
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontFamily: 'Inter_500Medium',
-                        color: colors.textMute,
-                      }}
+            {contracts.length === 0 ? (
+              <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontFamily: 'Inter_600SemiBold',
+                    color: colors.textMute,
+                    textAlign: 'center',
+                  }}
+                >
+                  {language === 'sw'
+                    ? 'Huna mkataba wowote bado. Tengeneza mkataba kwanza kwenye ukurasa wa Mikataba.'
+                    : 'You have no contracts yet. Create one on the Contracts page first.'}
+                </Text>
+              </View>
+            ) : (
+              <View style={{ gap: 8 }}>
+                {contracts.map((con) => {
+                  const selected = selectedContractId === con.id;
+                  const value = con.quantityKg * con.pricePerKgTZS;
+                  const nextMilestone = con.milestones.find((m) => !m.paid);
+                  return (
+                    <TouchableOpacity
+                      key={con.id}
+                      onPress={() => setSelectedContractId(con.id)}
+                      style={[
+                        s.contractOption,
+                        {
+                          borderColor: selected ? colors.primary : colors.border,
+                          backgroundColor: selected ? colors.primary + '10' : 'transparent',
+                        },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        language === 'sw'
+                          ? `Chagua ${con.title}, mnunuzi ${con.buyer}`
+                          : `Select ${con.title}, buyer ${con.buyer}`
+                      }
+                      accessibilityState={{ selected }}
                     >
-                      Buyer: {con.buyer} · Value: {fmtTZS(con.value)}
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontFamily: 'Inter_700Bold',
-                        color: colors.primary,
-                        marginTop: 4,
-                      }}
-                    >
-                      Milestone: {con.milestone} (TSh {fmt(con.value / 3)})
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+                      <Text
+                        style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: colors.text }}
+                      >
+                        {con.title}
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontFamily: 'Inter_500Medium',
+                          color: colors.textMute,
+                        }}
+                      >
+                        Buyer: {con.buyer} · Value: {fmtTZS(value)}
+                      </Text>
+                      {nextMilestone && (
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontFamily: 'Inter_700Bold',
+                            color: colors.primary,
+                            marginTop: 4,
+                          }}
+                        >
+                          Milestone: {nextMilestone.label} (TSh {fmt(nextMilestone.amountTZS)})
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
 
             <TouchableOpacity
               onPress={handleGenerateInvoice}
-              style={[s.saveBtn, { backgroundColor: colors.primary, marginTop: 12 }]}
+              disabled={!INVOICE_GENERATION_LIVE || !selectedContractId}
+              style={[
+                s.saveBtn,
+                {
+                  backgroundColor: colors.primary,
+                  marginTop: 12,
+                  opacity: INVOICE_GENERATION_LIVE && selectedContractId ? 1 : 0.5,
+                },
+              ]}
               accessibilityRole="button"
               accessibilityLabel={
                 language === 'sw'
@@ -1136,7 +1136,13 @@ export default function FinanceScreen() {
               }
             >
               <Text style={{ color: '#000', fontSize: 14, fontFamily: 'Inter_700Bold' }}>
-                {language === 'sw' ? 'Tengeneza Ankara' : 'Generate & Save'}
+                {INVOICE_GENERATION_LIVE
+                  ? language === 'sw'
+                    ? 'Tengeneza Ankara'
+                    : 'Generate & Save'
+                  : language === 'sw'
+                    ? 'Tengeneza Ankara (Hivi Karibuni)'
+                    : 'Generate & Save (Coming Soon)'}
               </Text>
             </TouchableOpacity>
           </View>
