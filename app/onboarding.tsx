@@ -57,7 +57,7 @@ import { useKilimoStore, FarmProfile, AppLanguage } from '../store/useKilimoStor
 import { CanonicalRole, allRoles, roleLabel, ROLE_DESCRIPTIONS } from '../lib/access';
 import { useAgroAuth } from '../hooks/useAgroAuth';
 import { mintAgroId, DocTag } from '../lib/agro/mintId';
-import { getSupabase } from '../lib/supabase';
+import { invokeAuthedFunction } from '../lib/supabase';
 import { useTheme } from '../constants/Theme';
 
 const { width: SW } = Dimensions.get('window');
@@ -445,8 +445,7 @@ export default function OnboardingWizard() {
       const verificationType = businessRoles.includes(role) ? 'business' : 'personal';
       const idField = idType === 'nida' ? 'nationalId' : idType === 'tin' ? 'tin' : 'regNumber';
       try {
-        const supabase = getSupabase();
-        await supabase?.functions.invoke('submit-verification', {
+        await invokeAuthedFunction('submit-verification', {
           body: { verificationType, [idField]: enteredId },
         });
       } catch {

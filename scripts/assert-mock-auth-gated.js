@@ -61,7 +61,13 @@ function assertMockAuthGated() {
     if (file.includes(`${path.sep}__tests__${path.sep}`)) continue;
     if (file.endsWith('assert-mock-auth-gated.js')) continue;
     const text = fs.readFileSync(file, 'utf8');
-    if (/token\s*===?\s*['"]123456['"]/.test(text)) {
+    // Catch either operand order, any identifier, and ', ", or ` quotes.
+    // Do NOT match bare '123456' placeholders (input fields, docs examples).
+    if (
+      /(?:\b[A-Za-z_$][\w$]*\s*===?\s*['"`]123456['"`]|['"`]123456['"`]\s*===?\s*[A-Za-z_$][\w$]*)/.test(
+        text
+      )
+    ) {
       fail(`mock OTP comparison found in ${path.relative(root, file)}`);
     }
   }

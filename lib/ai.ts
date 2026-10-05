@@ -17,7 +17,7 @@
  */
 
 import { FunctionsFetchError, FunctionsRelayError } from '@supabase/supabase-js';
-import { supabase } from './supabase';
+import { getSupabase, invokeAuthedFunction } from './supabase';
 
 const AI_FN = 'openai-proxy';
 
@@ -31,7 +31,7 @@ export class AIError extends Error {
 }
 
 export function aiConfigured(): boolean {
-  return !!supabase;
+  return !!getSupabase();
 }
 
 export interface ChatMessage {
@@ -39,11 +39,24 @@ export interface ChatMessage {
   content: string;
 }
 
+function isUnauthorizedInvokeError(error: any): boolean {
+  if (!error) return false;
+  if (error.status === 401) return true;
+  if (error.message === 'not_authenticated') return true;
+  if (error?.context?.status === 401) return true;
+  return false;
+}
+
 /** Invoke the AI proxy edge function with an action discriminator. */
 async function invokeAI<T = any>(body: Record<string, unknown>): Promise<T> {
-  if (!supabase) throw new AIError('AI backend not configured', 'not_configured');
-  const { data, error } = await supabase.functions.invoke(AI_FN, { body });
+  if (!getSupabase()) throw new AIError('AI backend not configured', 'not_configured');
+  // Always attach the caller's JWT. The edge gate uses auth.getUser() and
+  // rejects anon-key-only invokes with 401.
+  const { data, error } = await invokeAuthedFunction<T>(AI_FN, { body });
   if (error) {
+    if (isUnauthorizedInvokeError(error)) {
+      throw new AIError(error.message ?? 'Not authenticated', 'unauthorized');
+    }
     // FunctionsClient.invoke() (@supabase/functions-js) never rejects for a
     // connectivity failure — its own internals catch the fetch() rejection,
     // wrap it as FunctionsFetchError, and *return* it here as `error`, same
@@ -60,7 +73,11 @@ async function invokeAI<T = any>(body: Record<string, unknown>): Promise<T> {
     throw new AIError(error.message ?? 'AI proxy error', 'server');
   }
   if (data && (data as any).error) {
-    throw new AIError(String((data as any).error), 'server');
+    const errMsg = String((data as any).error);
+    if (errMsg === 'not_authenticated') {
+      throw new AIError(errMsg, 'unauthorized');
+    }
+    throw new AIError(errMsg, 'server');
   }
   return data as T;
 }
