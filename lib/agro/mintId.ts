@@ -11,7 +11,7 @@
  */
 
 import * as Crypto from 'expo-crypto';
-import { supabase } from '../supabase';
+import { getSupabase, invokeAuthedFunction } from '../supabase';
 
 export type DocTag = 'NIDA' | 'TIN' | 'LIC' | 'REG';
 
@@ -40,9 +40,11 @@ export function localAgroId(docTag: DocTag): string {
  * `serverMinted: false` as a non-verified/pending state, never as confirmed.
  */
 export async function mintAgroId(docTag: DocTag): Promise<{ id: string; serverMinted: boolean }> {
-  if (supabase) {
+  if (getSupabase()) {
     try {
-      const { data, error } = await supabase.functions.invoke('mint-agro-id', { body: { docTag } });
+      const { data, error } = await invokeAuthedFunction<{ agroId?: string }>('mint-agro-id', {
+        body: { docTag },
+      });
       if (!error && data?.agroId) return { id: data.agroId, serverMinted: true };
     } catch {
       /* fall through to local */

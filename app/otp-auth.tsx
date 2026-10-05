@@ -23,20 +23,10 @@ import * as Haptics from 'expo-haptics';
 import { Phone, ChevronLeft, ShieldCheck, AlertCircle } from 'lucide-react-native';
 import { useTheme } from '../constants/Theme';
 import { useKilimoStore } from '../store/useKilimoStore';
+import { cacheAccessToken, getSupabase } from '../lib/supabase';
 
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-const SUPABASE_ANON = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
-const SUPABASE_CONFIGURED = Boolean(SUPABASE_URL && SUPABASE_ANON);
-
-let supabase: any = null;
-if (SUPABASE_CONFIGURED) {
-  try {
-    const { createClient } = require('@supabase/supabase-js');
-    supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
-  } catch {
-    // no-op — Supabase package not installed
-  }
-}
+const supabase = getSupabase();
+const SUPABASE_CONFIGURED = Boolean(supabase);
 
 type AuthStep = 'phone' | 'otp' | 'success' | 'not_configured';
 
@@ -118,6 +108,7 @@ export function OtpAuthFlow({ onSuccess, onSkip, embedded = false }: Props) {
         type: 'sms',
       });
       if (err) throw err;
+      await cacheAccessToken(data.session?.access_token);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       updateAgroId({ phoneNumber: normalized, mpesaLinked: false });
       setStep('success');
