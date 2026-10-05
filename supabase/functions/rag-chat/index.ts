@@ -1,110 +1,137 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import OpenAI from 'https://esm.sh/openai@4.0.0'
+// KILIMO AI — RAG chat.
+//
+// The caller is taken from their JWT only. A `userId` field in the body is
+// ignored, including when it is the only identity the client sends. The
+// service role is used to read shared knowledge and the caller's own
+// farmer_profiles row; it is never pointed at a client-supplied user id.
+//
+// JWT verification is on (config.toml). Daily spend is claimed via
+// claim_ai_call before any OpenAI request.
 
-const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') })
+// @ts-nocheck — Deno runtime.
+import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import OpenAI from 'https://esm.sh/openai@4.0.0';
+import { corsHeadersFor } from '../_shared/cors.ts';
+import { AI_DAILY_LIMITS } from '../_shared/aiPolicy.ts';
+import { adminClient, userFromRequest } from '../_shared/user.ts';
+
+const MAX_QUERY_CHARS = 2000;
+
+function json(req: Request, body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeadersFor(req), 'Content-Type': 'application/json' },
+  });
+}
+
+function getOpenAI() {
+  const apiKey = Deno.env.get('OPENAI_API_KEY');
+  if (!apiKey) return null;
+  return new OpenAI({ apiKey });
+}
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: { 'Access-Control-Allow-Origin': '*' } })
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeadersFor(req) });
+  if (req.method !== 'POST') return json(req, { error: 'method_not_allowed' }, 405);
 
   try {
-    const { query, userId } = await req.json()
+    const user = await userFromRequest(req);
+    const userId = user?.id;
+    if (!userId) return json(req, { error: 'not_authenticated' }, 401);
 
-    // 1. Initialize Supabase Client
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+    const body = await req.json().catch(() => null);
+    const query = typeof body?.query === 'string' ? body.query.trim() : '';
+    if (!query) return json(req, { error: 'query_required' }, 400);
+    if (query.length > MAX_QUERY_CHARS) return json(req, { error: 'query_too_long' }, 400);
 
-    // 2. Fetch User Profile/Digital Twin Context
-    // Was querying `user_profiles`, a table that has never existed in any
-    // migration — this always silently returned nothing. The real farm
-    // profile (written by app/edit-profile.tsx's save()) lives in
-    // farmer_profiles (see supabase/migrations/20260814000000_farmer_profiles.sql).
+    const openai = getOpenAI();
+    if (!openai) return json(req, { error: 'openai_not_configured' }, 503);
+
+    const supabase = adminClient();
+    if (!supabase) return json(req, { error: 'budget_unavailable' }, 503);
+
+    const { data: claimed, error: claimErr } = await supabase.rpc('claim_ai_call', {
+      p_user_id: userId,
+      p_action: 'rag',
+      p_max: AI_DAILY_LIMITS.rag,
+    });
+    if (claimErr) {
+      console.error('[rag-chat] budget', claimErr.message);
+      return json(req, { error: 'budget_unavailable' }, 503);
+    }
+    if (claimed !== true) return json(req, { error: 'budget_exceeded' }, 429);
+
     const { data: userContext } = await supabase
       .from('farmer_profiles')
       .select('region, farm_size_acres, primary_crops')
       .eq('user_id', userId)
-      .single()
+      .maybeSingle();
 
-    // 3 & 4. Retrieve relevant local knowledge.
-    //   Primary: pgvector similarity via match_knowledge.
-    //   Fallback: keyword (ILIKE) search over knowledge_base — so RAG still
-    //   returns grounded context when the vector index is empty or the query
-    //   embedding can't be produced (keeps answers useful pre-embedding-backfill).
-    let ragKnowledge: any[] = []
+    let ragKnowledge: any[] = [];
     try {
       const embeddingResponse = await openai.embeddings.create({
-        model: "text-embedding-3-small",
+        model: 'text-embedding-3-small',
         input: query,
-      })
-      const queryEmbedding = embeddingResponse.data[0].embedding
+      });
+      const queryEmbedding = embeddingResponse.data[0].embedding;
       const { data } = await supabase.rpc('match_knowledge', {
         query_embedding: queryEmbedding,
         match_threshold: 0.7,
         match_count: 3,
-      })
-      ragKnowledge = data ?? []
+      });
+      ragKnowledge = data ?? [];
     } catch (e) {
-      console.warn('Vector retrieval unavailable; using keyword fallback.', e)
+      console.warn('Vector retrieval unavailable; using keyword fallback.', e);
     }
 
     if (!ragKnowledge.length) {
       const keywords = String(query)
         .toLowerCase()
         .split(/[^a-z0-9]+/)
-        .filter((w) => w.length > 3)
-        .slice(0, 5)
+        .filter((w: string) => w.length > 3)
+        .slice(0, 5);
       if (keywords.length) {
         const orFilter = keywords
-          .map((k) => `content.ilike.%${k}%,title.ilike.%${k}%`)
-          .join(',')
+          .map((k: string) => `content.ilike.%${k}%,title.ilike.%${k}%`)
+          .join(',');
         const { data } = await supabase
           .from('knowledge_base')
           .select('title, content, category')
           .or(orFilter)
-          .limit(3)
-        ragKnowledge = data ?? []
+          .limit(3);
+        ragKnowledge = data ?? [];
       }
     }
 
     const knowledgeContext =
-      ragKnowledge.map((k: any) => k.content).join('\n\n') || 'No specific local knowledge found.'
+      ragKnowledge.map((k: any) => k.content).join('\n\n') || 'No specific local knowledge found.';
 
-    // 5. Construct highly constrained prompt
     const systemPrompt = `
       You are Sankofa AI, a professional agronomist for East African farmers.
       You MUST base your advice on the provided Local Knowledge. Do not hallucinate treatments.
-      
+
       User Profile:
       - Location: ${userContext?.region || 'Unknown'}
       - Active Crops: ${userContext?.primary_crops?.join(', ') || 'None'}
-      
+
       Local Verified Knowledge:
       ${knowledgeContext}
-      
+
       Respond in Swahili or English based on the user's language. Keep it concise, professional, and actionable.
-    `
+    `;
 
-    // 6. Generate Response via LLM
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // Fast, capable model
+      model: 'gpt-4o-mini',
       messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: query }
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: query },
       ],
-      temperature: 0.2, // Low temp for factual accuracy
-    })
+      temperature: 0.2,
+    });
 
-    return new Response(
-      JSON.stringify({ response: completion.choices[0].message.content }),
-      { headers: { "Content-Type": "application/json", 'Access-Control-Allow-Origin': '*' } }
-    )
-
+    return json(req, { response: completion.choices[0].message.content });
   } catch (error) {
-    console.error("Error in RAG execution:", error)
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 })
+    console.error('[rag-chat]', error);
+    return json(req, { error: 'internal_error' }, 500);
   }
-})
+});

@@ -13,6 +13,13 @@ import { useEffect, useState, useCallback } from 'react';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { Platform } from 'react-native';
 import { useKilimoStore, AgroID } from '../store/useKilimoStore';
+import { acceptMockOtp, mockAuthAllowed, mockOtpDebugMessage } from '../lib/auth/mockAuthPolicy';
+import {
+  cacheAccessToken,
+  clearCachedAccessToken,
+  getSupabase,
+  invokeAuthedFunction,
+} from '../lib/supabase';
 
 const SESSION_KEY = 'kilimo_session_token';
 
@@ -55,19 +62,9 @@ const SecureStore = {
   },
 };
 
-// ─── Supabase client (only when real credentials are present) ────────────────
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const SUPABASE_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-
-let supabase: any = null;
-if (SUPABASE_URL && SUPABASE_KEY) {
-  try {
-    const { createClient } = require('@supabase/supabase-js');
-    supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-  } catch {
-    // supabase stays null — mock mode
-  }
-}
+// Shared client — same singleton used by lib/ai.ts and lib/sms so OTP sessions
+// propagate into functions.invoke Authorization headers.
+const supabase = getSupabase();
 
 // ─── Auth Hook ───────────────────────────────────────────────────────────────
 
@@ -138,14 +135,14 @@ export function useAgroAuth() {
     setLoading(true);
     try {
       if (!supabase) {
+        if (!mockAuthAllowed(__DEV__)) {
+          throw new Error('Authentication is not configured');
+        }
         if (__DEV__) console.log('[AgroAuth MOCK] Simulating phone OTP send for:', phone);
         await new Promise((r) => setTimeout(r, 1000));
         await SecureStore.setItemAsync('kilimo_phone', phone);
         const { Alert } = require('react-native');
-        Alert.alert(
-          'Kilimo AI (Mock Auth)',
-          `[DEBUG MOCK] Nambari ya siri (OTP) ya majaribio ni: 123456\n\n[DEBUG MOCK] Your test OTP verification code is: 123456`
-        );
+        Alert.alert('Kilimo AI (Mock Auth)', mockOtpDebugMessage('phone'));
         return;
       }
       const { error } = await supabase.auth.signInWithOtp({
@@ -165,14 +162,14 @@ export function useAgroAuth() {
     setLoading(true);
     try {
       if (!supabase) {
+        if (!mockAuthAllowed(__DEV__)) {
+          throw new Error('Authentication is not configured');
+        }
         if (__DEV__) console.log('[AgroAuth MOCK] Simulating email OTP send for:', email);
         await new Promise((r) => setTimeout(r, 1000));
         await SecureStore.setItemAsync('kilimo_email', email);
         const { Alert } = require('react-native');
-        Alert.alert(
-          'Kilimo AI (Mock Auth)',
-          `[DEBUG MOCK] Nambari ya siri (OTP) ya barua pepe ni: 123456\n\n[DEBUG MOCK] Your test email OTP verification code is: 123456`
-        );
+        Alert.alert('Kilimo AI (Mock Auth)', mockOtpDebugMessage('email'));
         return { success: true };
       }
       if (__DEV__) console.log('[AgroAuth] Calling Supabase signInWithOtp for email...');
@@ -200,6 +197,9 @@ export function useAgroAuth() {
       const isEmail = normalized.includes('@');
       try {
         if (!supabase) {
+          if (!mockAuthAllowed(__DEV__)) {
+            throw new Error('Authentication is not configured');
+          }
           if (__DEV__)
             console.log(
               '[AgroAuth MOCK] Simulating OTP verification for:',
@@ -208,8 +208,8 @@ export function useAgroAuth() {
               token
             );
           await new Promise((r) => setTimeout(r, 800));
-          if (token === '123456') {
-            await SecureStore.setItemAsync(SESSION_KEY, 'mock-access-token');
+          if (acceptMockOtp(token, __DEV__)) {
+            await cacheAccessToken('mock-access-token');
             const mockUserId = 'mock-user-' + normalized.replace(/[^a-zA-Z0-9]/g, '');
             const currentAgroId = useKilimoStore.getState().agroId;
             if (currentAgroId && currentAgroId.id === mockUserId) {
@@ -240,8 +240,9 @@ export function useAgroAuth() {
         const { data, error } = await supabase.auth.verifyOtp(verifyPayload);
         if (error) throw error;
 
-        // Persist session token securely
-        await SecureStore.setItemAsync(SESSION_KEY, data.session?.access_token ?? '');
+        // Persist session token so invokeAuthedFunction can attach Bearer JWT
+        // even if auth storage lags (shared client + SESSION_KEY fallback).
+        await cacheAccessToken(data.session?.access_token);
 
         // Check if profile exists, to hydrate if it's an existing user.
         const { data: profile, error: profileError } = await supabase
@@ -268,7 +269,7 @@ export function useAgroAuth() {
   const signOut = useCallback(async () => {
     setLoading(true);
     try {
-      await SecureStore.deleteItemAsync(SESSION_KEY);
+      await clearCachedAccessToken();
       if (supabase) await supabase.auth.signOut();
       clearAgroId();
     } catch (err) {
@@ -286,12 +287,19 @@ export function useAgroAuth() {
     setLoading(true);
     try {
       if (supabase) {
-        const { data, error } = await supabase.functions.invoke('delete-account', { body: {} });
-        if (error) return { ok: false, error: error.message ?? 'delete_failed' };
+        const { data, error } = await invokeAuthedFunction<{ error?: string }>('delete-account', {
+          body: {},
+        });
+        if (error) {
+          if (error.status === 401 || error.message === 'not_authenticated') {
+            return { ok: false, error: 'not_authenticated' };
+          }
+          return { ok: false, error: error.message ?? 'delete_failed' };
+        }
         if (data?.error) return { ok: false, error: String(data.error) };
       }
       // Clear local session regardless (also covers offline/mock mode).
-      await SecureStore.deleteItemAsync(SESSION_KEY);
+      await clearCachedAccessToken();
       if (supabase) {
         try {
           await supabase.auth.signOut();

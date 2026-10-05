@@ -15,7 +15,7 @@
  */
 
 import { useKilimoStore } from '../../store/useKilimoStore';
-import { supabase } from '../supabase';
+import { getSupabase, invokeAuthedFunction } from '../supabase';
 
 export type SmsEvent = 'critical_diagnosis' | 'price_alert' | 'severe_weather' | 'payment_received';
 
@@ -27,7 +27,7 @@ export interface SmsPayload {
 }
 
 export async function sendSms(payload: SmsPayload): Promise<{ ok: boolean; reason?: string }> {
-  if (!supabase) {
+  if (!getSupabase()) {
     if (__DEV__)
       console.log('[SMS:stub]', payload.event, '→', maskNumber(payload.to), '· [redacted]');
 
@@ -42,10 +42,16 @@ export async function sendSms(payload: SmsPayload): Promise<{ ok: boolean; reaso
   }
 
   try {
-    const { data, error } = await supabase.functions.invoke('sms-send', {
-      body: { to: payload.to, message: payload.body, event: payload.event, meta: payload.meta },
-    });
+    const { data, error } = await invokeAuthedFunction<{ ok?: boolean; reason?: string }>(
+      'sms-send',
+      {
+        body: { to: payload.to, message: payload.body, event: payload.event, meta: payload.meta },
+      }
+    );
     if (error) {
+      if (error.status === 401 || error.message === 'not_authenticated') {
+        return { ok: false, reason: 'not_authenticated' };
+      }
       // The edge function returns structured reasons (e.g. sms_provider_not_configured)
       // in the response body; on a non-2xx status supabase-js surfaces that body via
       // error.context, so read it before falling back to the generic message.
