@@ -741,7 +741,13 @@ export default function FinanceScreen() {
               style={[s.invoiceBtn, { borderColor: colors.primary }]}
               accessibilityRole="button"
               accessibilityLabel={
-                language === 'sw' ? 'Tengeneza ankara ya mkataba' : 'Generate contract invoice'
+                INVOICE_GENERATION_LIVE
+                  ? language === 'sw'
+                    ? 'Tengeneza ankara ya mkataba'
+                    : 'Generate contract invoice'
+                  : language === 'sw'
+                    ? 'Tengeneza ankara — bado haipatikani'
+                    : 'Generate invoice — coming soon'
               }
             >
               <FileText size={16} color={colors.primary} />
@@ -1130,9 +1136,13 @@ export default function FinanceScreen() {
               ]}
               accessibilityRole="button"
               accessibilityLabel={
-                language === 'sw'
-                  ? 'Tengeneza ankara ya mkataba na uhifadhi'
-                  : 'Generate contract invoice and save'
+                INVOICE_GENERATION_LIVE
+                  ? language === 'sw'
+                    ? 'Tengeneza ankara ya mkataba na uhifadhi'
+                    : 'Generate contract invoice and save'
+                  : language === 'sw'
+                    ? 'Tengeneza ankara — bado haipatikani'
+                    : 'Generate invoice — coming soon'
               }
             >
               <Text style={{ color: '#000', fontSize: 14, fontFamily: 'Inter_700Bold' }}>
