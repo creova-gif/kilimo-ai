@@ -80,6 +80,8 @@ export function MapView({
 
   useEffect(() => {
     function handleMessage(e: MessageEvent) {
+      // srcdoc iframe messages use the parent page origin — reject everything else.
+      if (e.origin !== window.location.origin) return;
       const data = e?.data;
       if (data?.type === 'kilimo-polygon-press' && data?.mapId === mapId) {
         onPressRef.current[data.polyId]?.();
