@@ -1251,22 +1251,35 @@ export default function MarketScreen() {
                             </View>
                             <View style={styles.actionGrid}>
                               <TouchableOpacity
-                                style={[styles.contractBtn, { backgroundColor: colors.primary }]}
+                                style={[
+                                  styles.contractBtn,
+                                  {
+                                    backgroundColor: isDark
+                                      ? 'rgba(255,255,255,0.1)'
+                                      : 'rgba(0,0,0,0.05)',
+                                  },
+                                ]}
                                 onPress={() => {
-                                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                                  setExpandedId(null);
-                                  setOfferItem(item);
+                                  Haptics.notificationAsync(
+                                    Haptics.NotificationFeedbackType.Warning
+                                  );
+                                  Alert.alert(
+                                    language === 'sw' ? 'Sampuli tu' : 'Sample data only',
+                                    language === 'sw'
+                                      ? 'Kadi hii ni rejea ya bei — si tangazo halisi. Tumia "Wanaouza Sasa" hapo juu kutoa ofa.'
+                                      : 'This card is a price reference sample, not a real listing. Use “Live Sell Listings” above to make an offer.'
+                                  );
                                 }}
                                 accessibilityRole="button"
                                 accessibilityLabel={
                                   language === 'sw'
-                                    ? `Toa ofa kwa ajili ya ${itemName}`
-                                    : `Make offer for ${itemName}`
+                                    ? `Sampuli — haiwezi kutoa ofa kwa ${itemName}`
+                                    : `Sample card — cannot make offer for ${itemName}`
                                 }
                               >
-                                <Wallet size={16} color="#000" />
-                                <Text style={[styles.contractBtnText, { color: '#000' }]}>
-                                  {language === 'sw' ? 'Toa Ofa' : 'Make Offer'}
+                                <Wallet size={16} color={colors.textMute} />
+                                <Text style={[styles.contractBtnText, { color: colors.textMute }]}>
+                                  {language === 'sw' ? 'Sampuli tu' : 'Sample only'}
                                 </Text>
                               </TouchableOpacity>
                               <TouchableOpacity
