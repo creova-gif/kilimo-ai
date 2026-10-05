@@ -681,12 +681,30 @@ export default function ScanScreen() {
                         <View style={styles.resultMeta}>
                           <Text style={[styles.resultName, { color: colors.text }]}>{disease}</Text>
                           <Animated.View entering={FadeInDown} style={styles.confBadge}>
-                            <Text style={styles.confText}>{cropLine}AI Diagnosis</Text>
+                            <Text style={styles.confText}>
+                              {cropLine}
+                              {aiConfigured()
+                                ? 'AI Diagnosis'
+                                : language === 'sw'
+                                  ? 'Mfano wa Onyesho'
+                                  : 'Sample Demo Result'}
+                            </Text>
                           </Animated.View>
                         </View>
                       </View>
 
-                      {isOffline && (
+                      {!aiConfigured() && (
+                        <Animated.View entering={FadeInDown} style={styles.offlineNoticeBox}>
+                          <AlertCircle size={16} color="#fbbf24" />
+                          <Text style={styles.offlineNoticeText}>
+                            {language === 'sw'
+                              ? 'Hali ya Onyesho: matokeo haya si uchambuzi wa picha yako halisi — ni mfano wa jinsi programu itakavyofanya kazi ukiunganishwa na AI. Usitumie ushauri huu wa dawa bila kushauriana na mtaalamu wa kilimo.'
+                              : 'Demo mode: this result is not a real analysis of your photo — it illustrates how the feature will behave once connected to the AI backend. Do not act on this treatment advice without consulting an agronomist.'}
+                          </Text>
+                        </Animated.View>
+                      )}
+
+                      {isOffline && aiConfigured() && (
                         <Animated.View entering={FadeInDown} style={styles.offlineNoticeBox}>
                           <CloudOff size={16} color="#fbbf24" />
                           <Text style={styles.offlineNoticeText}>
