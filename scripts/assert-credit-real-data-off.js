@@ -9,16 +9,29 @@
  *
  * Fails on ANY non-empty value (even "false"): presence alone is an error,
  * so nobody "temporarily" flips it. Checked:
- *   1. eas.json build.production.env and build.preview.env
+ *   1. eas.json: EVERY build profile (development included), with `extends`
+ *      chains resolved
  *   2. app.json expo.extra
- *   3. .env.production* files, and .env if it is committed to git
- *   4. process.env when NODE_ENV=production or EAS_BUILD_PROFILE is
- *      production/preview
- *   5. source scan: no `allowRealData: true` / `ALLOW_REAL_DATA = true`
- *      literals outside __tests__/, lib/credit/fixtures/ and the guard
+ *   3. env files: .env.production* always; a committed .env / .env.local
+ *      always; and every .env* file Expo would load (.env, .env.local,
+ *      .env.<mode>, .env.<mode>.local) during a production or EAS build
+ *   4. process.env when NODE_ENV=production or inside any EAS build
+ *      (EAS_BUILD / EAS_BUILD_PROFILE), which includes EAS dashboard env and
+ *      secrets via the eas-build-pre-install hook in package.json
+ *   5. the flag NAME anywhere in repo config or code (json, yml, toml,
+ *      .replit, app.config.*, babel/metro/tsconfig, any extends target)
+ *      outside the few files that implement the guard
+ *   6. hard-coded opt-ins in code (.ts/.tsx/.js/.jsx/.mjs/.cjs/.mts/.cts):
+ *      allowRealData: true | !0 | 1 | 'true', `const allowRealData = true`,
+ *      realDataAllowed({ raw: 'true' ... }) / isProduction: false,
+ *      parseAllowRealData('true'), assertScorableLedger(x, true), ...
+ *      outside __tests__/, lib/credit/fixtures/ and the guard
  *
- * Runs in three places: Babel (babel.config.js, so no bundle can be built),
- * CI (ci-validate.yml), and before EAS builds (eas-build.yml).
+ * Runs in five places, so it does not depend on Metro's transform cache:
+ * metro.config.js (every Metro start / export, cached or not),
+ * babel.config.js, CI (ci-validate.yml, before the export, which also uses
+ * --clear), eas-build.yml (on the GitHub runner), and the
+ * eas-build-pre-install npm hook (on the EAS worker, with dashboard env).
  *
  * Lifting the hold is a deliberate, reviewed change: link Rex's written
  * clearance in CRE-179, then edit LEGAL_CLEARANCE below in a PR. Setting an
@@ -32,7 +45,7 @@ const { execFileSync } = require('child_process');
 const LEGAL_CLEARANCE = Object.freeze({ cleared: false, reference: null });
 
 const FLAGS = ['CREDIT_SCORE_ALLOW_REAL_DATA', 'EXPO_PUBLIC_CREDIT_SCORE_ALLOW_REAL_DATA'];
-const GATED_EAS_PROFILES = ['production', 'preview'];
+const FLAG_NAME_RE = /CREDIT_SCORE_ALLOW_REAL_DATA/;
 const SKIP_DIRS = new Set([
   'node_modules',
   '.git',
@@ -41,8 +54,31 @@ const SKIP_DIRS = new Set([
   'web-build',
   'docs',
   '.expo',
+  '.cache',
+  'build',
 ]);
-const LITERAL_PATTERNS = [/\ballowRealData\s*:\s*true\b/, /\bALLOW_REAL_DATA\s*=\s*true\b/];
+const CODE_EXT = /\.(ts|tsx|js|jsx|mjs|cjs|mts|cts)$/;
+const CONFIG_EXT = /\.(json|jsonc|json5|ya?ml|toml|ini|cfg|conf|nix)$/;
+const CONFIG_NAMES = new Set(['.replit', 'replit.nix', '.npmrc', 'Procfile', 'Dockerfile']);
+
+const TRUTHY = String.raw`(?:true|!0|!!1|1(?![\d.])|['"\x60]true['"\x60])`;
+const LITERAL_PATTERNS = [
+  // allowRealData: true / !0 / 1 / 'true'  and  allowRealData = true
+  new RegExp(String.raw`\ballowRealData\s*[:=]\s*` + TRUTHY),
+  // const allowRealData = true; ... { allowRealData }  (shorthand)
+  new RegExp(
+    String.raw`\b(?:const|let|var)\s+\w*(?:allowReal|ALLOW_REAL)\w*\s*(?::\s*\w+\s*)?=\s*` + TRUTHY
+  ),
+  // ALLOW_REAL_DATA = true, CREDIT_ALLOW_REAL: true, process.env.X = 'true'
+  new RegExp(String.raw`\b\w*ALLOW_REAL\w*\s*[:=]\s*` + TRUTHY),
+  // realDataAllowed({ raw: 'true', ... }) or isProduction: false
+  new RegExp(String.raw`realDataAllowed\(\s*\{[^}]*raw\s*:\s*['"\x60]true`),
+  /\bisProduction\s*:\s*(?:false|!1|0(?![\d.]))/,
+  // parseAllowRealData('true')
+  /parseAllowRealData\(\s*['"`]true/,
+  // assertScorableLedger(x, true)
+  new RegExp(String.raw`assertScorableLedger\([^)]*,\s*` + TRUTHY + String.raw`\s*\)`),
+];
 
 const isSet = (v) => v !== undefined && v !== null && String(v).trim() !== '';
 
@@ -66,16 +102,26 @@ function parseDotEnv(text) {
   return out;
 }
 
-function dotEnvIsCommitted(root) {
+function committedFiles(root, names) {
+  if (!names.length) return new Set();
   try {
-    const out = execFileSync('git', ['ls-files', '--', '.env'], {
+    const out = execFileSync('git', ['ls-files', '--', ...names], {
       cwd: root,
       stdio: ['ignore', 'pipe', 'ignore'],
     });
-    return out.toString().trim() === '.env';
+    return new Set(out.toString().split('\n').filter(Boolean));
   } catch {
-    return false; // not a git checkout: nothing committed to check
+    return new Set(); // not a git checkout: nothing committed to check
   }
+}
+
+/** Merge env through an eas.json `extends` chain (child wins), cycle-safe. */
+function resolveEasEnv(profiles, name, seen = new Set()) {
+  const p = profiles[name];
+  if (!p || seen.has(name)) return {};
+  seen.add(name);
+  const parent = typeof p.extends === 'string' ? resolveEasEnv(profiles, p.extends, seen) : {};
+  return { ...parent, ...(p.env || {}) };
 }
 
 /**
@@ -85,10 +131,11 @@ function findCreditRealDataViolations({ root, env = {} }) {
   const errors = [];
   if (LEGAL_CLEARANCE.cleared === true) return errors;
 
-  // 1. eas.json
+  // 1. eas.json: every profile, with `extends` chains resolved
   const eas = readJson(path.join(root, 'eas.json'));
-  for (const profile of GATED_EAS_PROFILES) {
-    for (const f of flagsIn(eas?.build?.[profile]?.env)) {
+  const profiles = (eas && eas.build) || {};
+  for (const profile of Object.keys(profiles)) {
+    for (const f of flagsIn(resolveEasEnv(profiles, profile))) {
       errors.push(`eas.json build.${profile}.env sets ${f}`);
     }
   }
@@ -97,47 +144,71 @@ function findCreditRealDataViolations({ root, env = {} }) {
   const app = readJson(path.join(root, 'app.json'));
   for (const f of flagsIn(app?.expo?.extra)) errors.push(`app.json expo.extra sets ${f}`);
 
-  // 3. .env.production* (any), and .env only if committed
-  const envFiles = fs
+  // 3. env files
+  const easBuild = env.EAS_BUILD === 'true' || isSet(env.EAS_BUILD_PROFILE);
+  const prodLike = env.NODE_ENV === 'production' || easBuild;
+  const allEnvFiles = fs
     .readdirSync(root)
-    .filter((n) => /^\.env\.production/.test(n) && !/\.example$/.test(n));
-  if (fs.existsSync(path.join(root, '.env')) && dotEnvIsCommitted(root)) envFiles.push('.env');
+    .filter((n) => /^\.env(\..+)?$/.test(n) && !/\.(example|sample|template)$/.test(n));
+  const committed = committedFiles(root, allEnvFiles);
+  const envFiles = allEnvFiles.filter(
+    (n) => prodLike || /^\.env\.production/.test(n) || committed.has(n)
+  );
   for (const name of envFiles) {
     const vars = parseDotEnv(fs.readFileSync(path.join(root, name), 'utf8'));
     for (const f of flagsIn(vars)) errors.push(`${name} sets ${f}`);
   }
 
-  // 4. process.env for production / preview builds
-  const prodLike =
-    env.NODE_ENV === 'production' || GATED_EAS_PROFILES.includes(env.EAS_BUILD_PROFILE);
+  // 4. process.env for production builds and ANY EAS build (dev profile too)
   if (prodLike) {
     for (const f of flagsIn(env)) {
       errors.push(
-        `${f} is set in the environment of a ${env.EAS_BUILD_PROFILE || 'production'} build`
+        `${f} is set in the environment of a ${
+          easBuild
+            ? `EAS ${env.EAS_BUILD_PROFILE || ''} build`.replace('  ', ' ')
+            : 'production build'
+        }`
       );
     }
   }
 
-  // 5. source scan for hard-coded opens
-  const guardPath = path.join(root, 'lib', 'credit', 'dataSourceGuard.ts');
-  const fixturesDir = `${path.sep}lib${path.sep}credit${path.sep}fixtures${path.sep}`;
+  // 5 + 6. repo scan: flag name in config/code, hard-coded opt-ins in code
+  const rel = (p) => path.relative(root, p).split(path.sep).join('/');
+  const NAME_ALLOWED = new Set([
+    'lib/credit/dataSourceGuard.ts',
+    'lib/credit/realDataFlag.ts',
+    'scripts/assert-credit-real-data-off.js',
+  ]);
+  const LITERAL_ALLOWED = new Set([
+    'lib/credit/dataSourceGuard.ts',
+    'scripts/assert-credit-real-data-off.js',
+  ]);
+  const isTestOrFixture = (r) =>
+    r.startsWith('__tests__/') || r.includes('/__tests__/') || r.startsWith('lib/credit/fixtures/');
   const files = [];
   (function walk(dir) {
     for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
       if (SKIP_DIRS.has(ent.name)) continue;
       const p = path.join(dir, ent.name);
       if (ent.isDirectory()) walk(p);
-      else if (/\.(ts|tsx|js|jsx)$/.test(ent.name)) files.push(p);
+      else if (CODE_EXT.test(ent.name) || CONFIG_EXT.test(ent.name) || CONFIG_NAMES.has(ent.name)) {
+        files.push(p);
+      }
     }
   })(root);
   for (const file of files) {
-    if (file === guardPath) continue;
-    if (file === __filename) continue;
-    if (file.includes(`${path.sep}__tests__${path.sep}`)) continue;
-    if (file.includes(fixturesDir)) continue;
+    const r = rel(file);
+    if (isTestOrFixture(r)) continue;
     const text = fs.readFileSync(file, 'utf8');
-    if (LITERAL_PATTERNS.some((re) => re.test(text))) {
-      errors.push(`hard-coded real-data opt-in in ${path.relative(root, file)}`);
+    if (!NAME_ALLOWED.has(r) && r !== 'eas.json' && r !== 'app.json' && FLAG_NAME_RE.test(text)) {
+      errors.push(
+        `real-data flag referenced in ${r} (only lib/credit/realDataFlag.ts may read it)`
+      );
+    }
+    if (CODE_EXT.test(file) && !LITERAL_ALLOWED.has(r)) {
+      if (LITERAL_PATTERNS.some((re) => re.test(text))) {
+        errors.push(`hard-coded real-data opt-in in ${r}`);
+      }
     }
   }
 

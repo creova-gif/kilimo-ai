@@ -20,7 +20,9 @@
     "eas:build:ios": "eas build --platform ios --profile production --non-interactive",
     "eas:build:all": "eas build --platform all --profile production --non-interactive",
     "eas:submit:android": "eas submit --platform android",
-    "eas:submit:ios": "eas submit --platform ios"
+    "eas:submit:ios": "eas submit --platform ios",
+    "eas-build-pre-install": "node scripts/assert-credit-real-data-off.js",
+    "check:credit-hold": "node scripts/assert-credit-real-data-off.js"
   },
   "dependencies": {
     "@expo-google-fonts/instrument-sans": "^0.4.2",

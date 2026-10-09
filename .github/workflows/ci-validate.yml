@@ -48,7 +48,9 @@ jobs:
         # this is a fast, credential-free check that the app actually
         # bundles, since a passing lint+test run previously proved nothing
         # about whether the app builds at all.
-        run: npx expo export --platform web
+        # --clear: never reuse cached transforms, so the CRE-179 checks in
+        # babel.config.js run on a cold cache (metro.config.js runs them anyway).
+        run: npx expo export --platform web --clear
 
   # STAGING: dress-rehearsal signal on merge to staging.
   # No deploy step yet — this repo ships via EAS builds (see eas-build.yml,
