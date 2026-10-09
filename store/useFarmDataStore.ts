@@ -139,12 +139,24 @@ export interface Consultation {
 }
 
 // ─── P&L Ledger ──────────────────────────────────────────────────────────────
+/**
+ * Provenance of a ledger entry. Mirrors the `agro_ledger.source` column
+ * (supabase/migrations/20260625000000_agro_ledger.sql).
+ *
+ * CRE-179 legal hold: a MISSING source means real data. Entries persisted
+ * before this field existed have no source and are treated as real (fail
+ * closed). Do not back-fill 'synthetic' onto existing entries; only the
+ * fixtures in lib/credit/fixtures/ may set it.
+ */
+export type LedgerSource = 'synthetic' | 'self_reported' | 'verified';
+
 export interface LedgerEntry {
   id: string;
   date: string; // ISO
   category: string; // e.g. "Sale · Maize", "Input · Fertilizer"
   description: string;
   amountTZS: number; // +income / -expense
+  source?: LedgerSource;
 }
 
 // ─── Store ───────────────────────────────────────────────────────────────────

@@ -387,6 +387,8 @@ export default function FinanceScreen() {
       category: newCat,
       description: newLabel,
       amountTZS: newType === 'income' ? amt : -amt,
+      // Farmer-typed entry: real data (CRE-179).
+      source: 'self_reported',
     };
     // Offline-first: saved locally immediately, then best-effort synced to
     // the server ledger backing the real Agro-ID credit score (same pattern

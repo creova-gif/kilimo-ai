@@ -166,6 +166,8 @@ export default function AgroIdScreen() {
       category: cat,
       description: entryNote.trim() || cat,
       amountTZS: entryType === 'income' ? amt : -amt,
+      // Farmer-typed entry: real data (CRE-179).
+      source: 'self_reported' as const,
     };
 
     setSavingEntry(true);
