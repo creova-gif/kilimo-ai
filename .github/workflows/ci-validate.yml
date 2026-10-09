@@ -30,6 +30,11 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      - name: Dependency audit gate (runtime criticals, CRE-259)
+        # Fails the build if any production dependency has a critical
+        # advisory. Dev-only and high findings are tracked in CRE-259.
+        run: npm audit --omit=dev --audit-level=critical
+
       - name: Run Linter
         run: npm run lint
 
