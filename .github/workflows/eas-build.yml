@@ -47,5 +47,11 @@ jobs:
       - name: 📦 Install dependencies
         run: npm install
 
+      - name: ⚖️ Credit score legal hold (no real-data flag)
+        # CRE-179: refuse to build if the real-data flag is set for this profile.
+        env:
+          EAS_BUILD_PROFILE: ${{ github.event.inputs.profile || 'preview' }}
+        run: node scripts/assert-credit-real-data-off.js
+
       - name: 🚀 Build on EAS
         run: eas build --platform ${{ github.event.inputs.platform || 'android' }} --profile ${{ github.event.inputs.profile || 'preview' }} --non-interactive

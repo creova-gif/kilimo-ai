@@ -39,6 +39,10 @@ jobs:
       - name: Run Tests
         run: npm run test
 
+      - name: Credit score legal hold (no real-data flag)
+        # CRE-179: credit score is synthetic-only until Legal clears it.
+        run: node scripts/assert-credit-real-data-off.js
+
       - name: Build sanity check (Expo web export)
         # Not a substitute for the real EAS native builds (eas-build.yml) —
         # this is a fast, credential-free check that the app actually
