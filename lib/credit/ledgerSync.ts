@@ -10,18 +10,35 @@
  *
  * Requires the `agro_ledger` table + RLS (see
  * supabase/migrations/*_agro_ledger.sql).
+ *
+ * CRE-179 / Legal ruling (Rex, via Dr Mafie, 2026-10-09): real farmer
+ * ledger data must NOT leave the device until CRE-83 clears. Only entries
+ * explicitly marked source 'synthetic' may sync. Anything else (including
+ * entries with no source) is refused with reason 'legal_hold'. This is
+ * hard-off: there is deliberately NO flag or environment override here.
  */
 
 import { supabase } from '../supabase';
 import type { LedgerEntry } from '../../store/useFarmDataStore';
+import { isSyntheticEntry } from './dataSourceGuard';
+
+export type SyncFailureReason =
+  | 'legal_hold'
+  | 'no_backend'
+  | 'not_authenticated'
+  | 'insert_failed'
+  | 'network_error';
 
 export interface SyncResult {
   ok: boolean;
-  reason?: string;
+  /** A fixed code, never raw server text. */
+  reason?: SyncFailureReason;
 }
 
 /** Push a single ledger entry to the server. Best-effort. */
 export async function pushLedgerEntry(entry: LedgerEntry): Promise<SyncResult> {
+  // CRE-179 hard-off: real data never syncs (no flag, no env override).
+  if (!isSyntheticEntry(entry)) return { ok: false, reason: 'legal_hold' };
   if (!supabase) return { ok: false, reason: 'no_backend' };
   try {
     const { data: sess } = await supabase.auth.getSession();
@@ -35,30 +52,44 @@ export async function pushLedgerEntry(entry: LedgerEntry): Promise<SyncResult> {
       category: entry.category,
       description: entry.description,
       amount_tzs: entry.amountTZS,
+      // Never let a synthetic row land with the server default
+      // 'self_reported'. Migration 20261009000000_agro_ledger_legal_hold.sql
+      // makes RLS accept ONLY synthetic rows (until it is applied, the old
+      // policy rejects them, which also fails closed).
+      source: 'synthetic',
     });
-    if (error) return { ok: false, reason: error.message };
+    // Generic codes only: raw Postgres/network messages can echo row values.
+    if (error) return { ok: false, reason: 'insert_failed' };
     return { ok: true };
-  } catch (e: any) {
-    return { ok: false, reason: e?.message ?? 'network_error' };
+  } catch {
+    return { ok: false, reason: 'network_error' };
   }
 }
 
-/** Fetch the server-side ledger for the signed-in user (newest first). */
+/**
+ * Fetch the signed-in user's server-side SYNTHETIC ledger rows (newest
+ * first). CRE-179 hard-off: real rows are never pulled back; the query is
+ * filtered to source = 'synthetic' server-side and re-checked here.
+ */
 export async function fetchLedger(): Promise<LedgerEntry[] | null> {
   if (!supabase) return null;
   try {
     const { data, error } = await supabase
       .from('agro_ledger')
-      .select('client_id, entry_date, category, description, amount_tzs')
+      .select('client_id, entry_date, category, description, amount_tzs, source')
+      .eq('source', 'synthetic')
       .order('entry_date', { ascending: false });
     if (error || !data) return null;
-    return data.map((r: any) => ({
-      id: r.client_id,
-      date: r.entry_date,
-      category: r.category,
-      description: r.description,
-      amountTZS: r.amount_tzs,
-    }));
+    return data
+      .filter((r: any) => r.source === 'synthetic')
+      .map((r: any) => ({
+        id: r.client_id,
+        date: r.entry_date,
+        category: r.category,
+        description: r.description,
+        amountTZS: r.amount_tzs,
+        source: 'synthetic' as const,
+      }));
   } catch {
     return null;
   }

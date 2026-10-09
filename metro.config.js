@@ -1,3 +1,8 @@
+// CRE-179 legal hold: Metro loads this file on every start/export, even when
+// its transform cache is warm (babel.config.js is not re-run then), so the
+// real-data flag check lives here too.
+require('./scripts/assert-credit-real-data-off');
+
 const { getDefaultConfig } = require('expo/metro-config');
 const path = require('path');
 

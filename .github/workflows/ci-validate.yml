@@ -39,12 +39,18 @@ jobs:
       - name: Run Tests
         run: npm run test
 
+      - name: Credit score legal hold (no real-data flag)
+        # CRE-179: credit score is synthetic-only until Legal clears it.
+        run: node scripts/assert-credit-real-data-off.js
+
       - name: Build sanity check (Expo web export)
         # Not a substitute for the real EAS native builds (eas-build.yml) —
         # this is a fast, credential-free check that the app actually
         # bundles, since a passing lint+test run previously proved nothing
         # about whether the app builds at all.
-        run: npx expo export --platform web
+        # --clear: never reuse cached transforms, so the CRE-179 checks in
+        # babel.config.js run on a cold cache (metro.config.js runs them anyway).
+        run: npx expo export --platform web --clear
 
   # STAGING: dress-rehearsal signal on merge to staging.
   # No deploy step yet — this repo ships via EAS builds (see eas-build.yml,
