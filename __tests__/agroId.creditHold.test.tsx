@@ -132,6 +132,18 @@ describe('Agro-ID credit score under the CRE-179 legal hold', () => {
     expect(unavailable).toBe(true);
     expect(texts).not.toContain('/ 850');
   });
+
+  it('shows no score for an empty ledger (insurance status alone is not scored)', () => {
+    useFarmDataStore.setState({
+      ledger: [],
+      insurance: [{ id: 'p1', status: 'active' }],
+    } as any);
+    setAgroId('en');
+    const { texts, unavailable } = renderTexts();
+    expect(unavailable).toBe(true);
+    expect(texts).not.toContain('/ 850');
+    expect(texts.some((t) => SCORE_RE.test(t.trim()))).toBe(false);
+  });
 });
 
 describe('Agro-ID sharing under the CRE-179 / CRE-83 hold', () => {

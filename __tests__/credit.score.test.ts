@@ -93,4 +93,16 @@ describe('computeCreditScore — CRE-179 legal hold', () => {
     const r = computeCreditScore({ ledger: [real], nowISO: NOW, allowRealData: true });
     expect(r.score).toBeGreaterThanOrEqual(300);
   });
+
+  it('ignores non-ledger inputs (insurance, contracts) when real data is not allowed', () => {
+    const r = computeCreditScore({
+      ledger: SYNTHETIC_LEDGERS.empty,
+      nowISO: NOW,
+      hasActiveInsurance: true,
+      contractsCompleted: 3,
+      allowRealData: false,
+    });
+    expect(r.score).toBe(300);
+    expect(r.factors.find((f) => f.key === 'formal')!.score).toBe(0);
+  });
 });

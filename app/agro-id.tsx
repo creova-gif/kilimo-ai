@@ -114,7 +114,9 @@ export default function AgroIdScreen() {
       }),
     [ledger, insurance]
   );
-  const credit = creditResult.status === 'ok' ? creditResult.score : null;
+  // No ledger, no score: an empty ledger would only show the 300 floor (and
+  // used to add real insurance status), which is not a meaningful number.
+  const credit = creditResult.status === 'ok' && ledger.length > 0 ? creditResult.score : null;
 
   // Verifiable QR — points at the public verify-agro-id edge function when the
   // backend URL is configured, falling back to the marketing verify page.

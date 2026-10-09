@@ -85,6 +85,12 @@ export type CreditScoreResult =
  */
 export function computeCreditScore(input: GuardedCreditInputs): CreditScore {
   assertScorableLedger(input.ledger, input.allowRealData);
+  if (input.allowRealData !== true) {
+    // hasActiveInsurance and contractsCompleted come from the farmer's real
+    // stores, not the (synthetic) ledger, so they are not scored under the
+    // hold either.
+    return scoreLedgerUnchecked({ ...input, hasActiveInsurance: false, contractsCompleted: 0 });
+  }
   return scoreLedgerUnchecked(input);
 }
 

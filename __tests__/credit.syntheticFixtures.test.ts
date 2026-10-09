@@ -46,6 +46,12 @@ describe('synthetic credit fixtures (CRE-179)', () => {
     expect(factor(expOnly, 'profitability').score).toBe(0);
     expect(factor(expOnly, 'profitability').detail).toBe('No income logged yet');
 
-    expect(score(SYNTHETIC_LEDGERS.maxedOut, MAXED_OUT_EXTRAS).score).toBe(850);
+    // Under the hold, non-ledger inputs (insurance, contracts) are not scored,
+    // so the 850 cap is only reachable in the explicit real-data mode. The
+    // ledger here is still 100% synthetic.
+    expect(
+      score(SYNTHETIC_LEDGERS.maxedOut, { ...MAXED_OUT_EXTRAS, allowRealData: true }).score
+    ).toBe(850);
+    expect(score(SYNTHETIC_LEDGERS.maxedOut, MAXED_OUT_EXTRAS).score).toBe(800);
   });
 });
