@@ -22,9 +22,17 @@ import { supabase } from '../supabase';
 import type { LedgerEntry } from '../../store/useFarmDataStore';
 import { isSyntheticEntry } from './dataSourceGuard';
 
+export type SyncFailureReason =
+  | 'legal_hold'
+  | 'no_backend'
+  | 'not_authenticated'
+  | 'insert_failed'
+  | 'network_error';
+
 export interface SyncResult {
   ok: boolean;
-  reason?: string;
+  /** A fixed code, never raw server text. */
+  reason?: SyncFailureReason;
 }
 
 /** Push a single ledger entry to the server. Best-effort. */
@@ -45,15 +53,16 @@ export async function pushLedgerEntry(entry: LedgerEntry): Promise<SyncResult> {
       description: entry.description,
       amount_tzs: entry.amountTZS,
       // Never let a synthetic row land with the server default
-      // 'self_reported'. Note: the current RLS insert policy only accepts
-      // 'self_reported', so synthetic rows are rejected server-side until a
-      // migration allows them; that fails closed.
+      // 'self_reported'. Migration 20261009000000_agro_ledger_legal_hold.sql
+      // makes RLS accept ONLY synthetic rows (until it is applied, the old
+      // policy rejects them, which also fails closed).
       source: 'synthetic',
     });
-    if (error) return { ok: false, reason: error.message };
+    // Generic codes only: raw Postgres/network messages can echo row values.
+    if (error) return { ok: false, reason: 'insert_failed' };
     return { ok: true };
-  } catch (e: any) {
-    return { ok: false, reason: e?.message ?? 'network_error' };
+  } catch {
+    return { ok: false, reason: 'network_error' };
   }
 }
 

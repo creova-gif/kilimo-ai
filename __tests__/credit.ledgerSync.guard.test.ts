@@ -74,6 +74,26 @@ describe('pushLedgerEntry under the CRE-179 hard-off', () => {
   });
 });
 
+describe('pushLedgerEntry returns generic failure codes', () => {
+  it('maps a server error to insert_failed without echoing its text', async () => {
+    insert.mockResolvedValueOnce({
+      error: { message: 'duplicate key value (client_id)=(l_1) amount_tzs=100000' },
+    });
+    await expect(pushLedgerEntry(entry('synthetic'))).resolves.toEqual({
+      ok: false,
+      reason: 'insert_failed',
+    });
+  });
+
+  it('maps a thrown error to network_error', async () => {
+    getSession.mockRejectedValueOnce(new Error('fetch failed: https://x.supabase.co token=abc'));
+    await expect(pushLedgerEntry(entry('synthetic'))).resolves.toEqual({
+      ok: false,
+      reason: 'network_error',
+    });
+  });
+});
+
 describe('fetchLedger under the CRE-179 hard-off', () => {
   it('only requests and returns synthetic rows', async () => {
     order.mockResolvedValueOnce({
