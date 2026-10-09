@@ -191,9 +191,14 @@ export default function AgroIdScreen() {
         ? sw
           ? 'Muamala umehifadhiwa na kusawazishwa.'
           : 'Entry saved and synced to your ledger.'
-        : sw
-          ? 'Muamala umehifadhiwa kwenye kifaa; itasawazishwa ukiwa mtandaoni.'
-          : 'Entry saved on device; it will sync when you’re online.'
+        : sync.reason === 'legal_hold'
+          ? // CRE-179: real entries stay on the device; don't promise a sync.
+            sw
+            ? 'Muamala umehifadhiwa kwenye kifaa hiki.'
+            : 'Entry saved on this device.'
+          : sw
+            ? 'Muamala umehifadhiwa kwenye kifaa; itasawazishwa ukiwa mtandaoni.'
+            : 'Entry saved on device; it will sync when you’re online.'
     );
   }
 
