@@ -24,9 +24,19 @@ serve((req) => {
   const url = new URL(req.url);
   // Accept `token` (preferred) and fall back to `id` for older QR codes.
   const agroId = url.searchParams.get('token') ?? url.searchParams.get('id');
-  const { status, body } = verifyAgroIdHoldResponse(agroId);
-  return new Response(JSON.stringify(body), {
+  // Browsers (QR scanned with a phone camera) get a readable EN/SW page;
+  // API clients get JSON. Both are 410 Gone.
+  const { status, contentType, body } = verifyAgroIdHoldResponse(
+    agroId,
+    req.headers.get('accept'),
+  );
+  return new Response(body, {
     status,
-    headers: { ...corsHeadersFor(req), 'Content-Type': 'application/json' },
+    headers: {
+      ...corsHeadersFor(req),
+      'Content-Type': contentType,
+      'Cache-Control': 'no-store',
+      Vary: 'Accept',
+    },
   });
 });

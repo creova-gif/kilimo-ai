@@ -49,10 +49,14 @@ import { Card } from '../components/ui/Card';
 import { tryComputeCreditScore } from '../lib/credit/score';
 import { pushLedgerEntry } from '../lib/credit/ledgerSync';
 import { CREDIT_ALLOW_REAL } from '../lib/credit/realDataFlag';
+import { agroIdSharingAllowed, SHARING_PAUSED_COPY } from '../lib/credit/legalHold';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+
+// CRE-179 / CRE-83: QR verification and the "Verified" P&L PDF are off.
+const SHARING_ALLOWED = agroIdSharingAllowed();
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.abs(n));
@@ -119,7 +123,8 @@ export default function AgroIdScreen() {
     : `https://kilimo.ai/verify/${agroId?.id ?? 'unknown'}`;
 
   async function handleExport() {
-    if (!agroId) return;
+    // CRE-179 / CRE-83: never export a shareable ledger document under the hold.
+    if (!agroId || !SHARING_ALLOWED) return;
     setExporting(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     try {
@@ -818,7 +823,11 @@ export default function AgroIdScreen() {
               >
                 <QrCode size={18} color={isDark ? '#FFFFFF' : colors.primary} />
                 <Text style={[styles.downloadText, { color: isDark ? '#FFFFFF' : colors.primary }]}>
-                  Download QR
+                  {SHARING_ALLOWED
+                    ? 'Download QR'
+                    : sw
+                      ? SHARING_PAUSED_COPY.title.sw
+                      : SHARING_PAUSED_COPY.title.en}
                 </Text>
               </TouchableOpacity>
 
@@ -856,38 +865,50 @@ export default function AgroIdScreen() {
               <View style={styles.modalHeader}>
                 <ShieldCheck size={24} color={colors.primary} />
                 <Text style={[styles.modalTitle, { color: colors.text }]}>
-                  Verified Crop Passport
+                  {SHARING_ALLOWED ? 'Verified Crop Passport' : 'Agro-ID'}
                 </Text>
               </View>
               <Text style={[styles.modalDesc, { color: colors.textMute }]}>
                 ID: {agroId.id} • {agroId.name}
               </Text>
 
-              <View style={styles.modalQrContainer}>
-                <QRCode value={qrPayload} size={160} backgroundColor="#fff" color="#000" />
-              </View>
-
-              <Text style={[styles.modalHint, { color: colors.textMute }]}>
-                Banks, buyers, and agricultural cooperatives scan this code to instantly verify your
-                farm record, certifications, and P&L history.
-              </Text>
-
-              <TouchableOpacity
-                style={[
-                  styles.modalCtaBtn,
-                  { backgroundColor: colors.primary, opacity: exporting ? 0.6 : 1 },
-                ]}
-                onPress={() => {
-                  setQrModalVisible(false);
-                  handleExport();
-                }}
-                disabled={exporting}
-              >
-                <Download size={18} color="#FFFFFF" />
-                <Text style={styles.modalCtaText}>
-                  {exporting ? 'Exporting PDF...' : 'Download Verified PDF'}
+              {/* CRE-179 / CRE-83: no QR, no lender-facing copy, no "Verified"
+                  PDF while the hold is on. */}
+              {!SHARING_ALLOWED ? (
+                <Text
+                  testID="agro-id-sharing-paused"
+                  style={[styles.modalHint, { color: colors.textMute }]}
+                >
+                  {sw ? SHARING_PAUSED_COPY.body.sw : SHARING_PAUSED_COPY.body.en}
                 </Text>
-              </TouchableOpacity>
+              ) : (
+                <>
+                  <View style={styles.modalQrContainer}>
+                    <QRCode value={qrPayload} size={160} backgroundColor="#fff" color="#000" />
+                  </View>
+
+                  <Text style={[styles.modalHint, { color: colors.textMute }]}>
+                    Scanning this code shows the current verification status of this Agro-ID.
+                  </Text>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.modalCtaBtn,
+                      { backgroundColor: colors.primary, opacity: exporting ? 0.6 : 1 },
+                    ]}
+                    onPress={() => {
+                      setQrModalVisible(false);
+                      handleExport();
+                    }}
+                    disabled={exporting}
+                  >
+                    <Download size={18} color="#FFFFFF" />
+                    <Text style={styles.modalCtaText}>
+                      {exporting ? 'Exporting PDF...' : 'Download Verified PDF'}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
 
               <TouchableOpacity
                 style={styles.modalCloseBtn}

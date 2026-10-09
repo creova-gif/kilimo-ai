@@ -8,7 +8,11 @@ import TestRenderer, { act } from 'react-test-renderer';
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn(), back: jest.fn(), replace: jest.fn() }),
 }));
-jest.mock('react-native-qrcode-svg', () => () => null);
+jest.mock('react-native-qrcode-svg', () => {
+  const QRCode = () => null;
+  QRCode.displayName = 'QRCode';
+  return QRCode;
+});
 jest.mock('expo-blur', () => ({ BlurView: ({ children }: any) => children ?? null }));
 jest.mock('expo-haptics', () => ({
   notificationAsync: jest.fn(),
@@ -40,17 +44,34 @@ import { useKilimoStore } from '../store/useKilimoStore';
 import { SYNTHETIC_LEDGERS } from '../lib/credit/fixtures/syntheticLedgers';
 import { CREDIT_ALLOW_REAL } from '../lib/credit/realDataFlag';
 
-function renderTexts() {
+const textOf = (n: TestRenderer.ReactTestInstance) =>
+  n
+    .findAll((c) => c.type === 'Text')
+    .map((c) => ([] as unknown[]).concat(c.props.children ?? []).join(''))
+    .join(' ');
+
+/** Press the first pressable whose text contains `label`. */
+const press = (label: string) => (tree: TestRenderer.ReactTestRenderer) => {
+  const target = tree.root.findAll(
+    (n) => typeof n.props.onPress === 'function' && textOf(n).includes(label)
+  )[0];
+  if (!target) throw new Error(`no pressable labelled ${label}`);
+  target.props.onPress();
+};
+
+function renderTexts(onMount?: (tree: TestRenderer.ReactTestRenderer) => void) {
   let tree!: TestRenderer.ReactTestRenderer;
   act(() => {
     tree = TestRenderer.create(<AgroIdScreen />);
   });
+  if (onMount) act(() => onMount(tree));
   const texts = tree.root
     .findAll((n) => typeof n.type === 'string' && n.type === 'Text')
     .map((n) => ([] as unknown[]).concat(n.props.children ?? []).join(''));
   const unavailable = tree.root.findAll((n) => n.props.testID === 'credit-score-unavailable');
+  const qrCodes = tree.root.findAll((n) => (n.type as any)?.displayName === 'QRCode').length;
   act(() => tree.unmount());
-  return { texts, unavailable: unavailable.length > 0 };
+  return { texts, unavailable: unavailable.length > 0, qrCodes };
 }
 
 const setAgroId = (language: 'en' | 'sw') =>
@@ -101,5 +122,37 @@ describe('Agro-ID credit score under the CRE-179 legal hold', () => {
     const { texts, unavailable } = renderTexts();
     expect(unavailable).toBe(false);
     expect(texts).toContain('/ 850');
+  });
+
+  it('treats a legacy entry with no source as real data', () => {
+    const { source: _omit, ...legacy } = realEntry;
+    useFarmDataStore.setState({ ledger: [legacy] } as any);
+    setAgroId('en');
+    const { texts, unavailable } = renderTexts();
+    expect(unavailable).toBe(true);
+    expect(texts).not.toContain('/ 850');
+  });
+});
+
+describe('Agro-ID sharing under the CRE-179 / CRE-83 hold', () => {
+  beforeEach(() => {
+    useFarmDataStore.setState({ ledger: [realEntry], insurance: [] } as any);
+  });
+
+  it('the share button promises nothing and the modal has no QR, no lender copy and no PDF', () => {
+    setAgroId('en');
+    const { texts, qrCodes } = renderTexts(press('Sharing paused'));
+    expect(texts).not.toContain('Download QR');
+    expect(texts.join(' ')).toContain('is paused while we complete regulatory registration');
+    expect(qrCodes).toBe(0);
+    expect(texts).not.toContain('Download Verified PDF');
+    expect(texts).not.toContain('Verified Crop Passport');
+    expect(texts.join(' ')).not.toMatch(/P&L|Banks, buyers/);
+  });
+
+  it('shows the Swahili paused copy', () => {
+    setAgroId('sw');
+    const { texts } = renderTexts(press('Kushiriki kumesimamishwa'));
+    expect(texts.join(' ')).toContain('Kushiriki rekodi yako ya Agro-ID');
   });
 });
