@@ -1,79 +1,49 @@
-import { computeCreditScore, bandFor } from '../lib/credit/score';
+import { computeCreditScore, tryComputeCreditScore, bandFor } from '../lib/credit/score';
+import { CreditDataSourceError } from '../lib/credit/dataSourceGuard';
+import { SYNTHETIC_LEDGERS, SYNTHETIC_NOW } from '../lib/credit/fixtures/syntheticLedgers';
 import type { LedgerEntry } from '../store/useFarmDataStore';
 
-const NOW = '2026-06-01T00:00:00.000Z';
-const daysAgo = (d: number) => new Date(new Date(NOW).getTime() - d * 86400_000).toISOString();
+const NOW = SYNTHETIC_NOW;
 
 describe('computeCreditScore', () => {
   it('returns base-floor score for an empty ledger', () => {
-    const r = computeCreditScore({ ledger: [], nowISO: NOW });
+    const r = computeCreditScore({
+      ledger: SYNTHETIC_LEDGERS.empty,
+      nowISO: NOW,
+      allowRealData: false,
+    });
     expect(r.score).toBe(300);
     expect(r.band).toBe('building');
     expect(r.factors).toHaveLength(5);
   });
 
   it('rewards a profitable, consistent, long-tenure farmer with a higher score', () => {
-    const ledger: LedgerEntry[] = [
-      {
-        id: '1',
-        date: daysAgo(360),
-        category: 'Input · Seed',
-        description: 'seed',
-        amountTZS: -200_000,
-      },
-      {
-        id: '2',
-        date: daysAgo(330),
-        category: 'Sale · Maize',
-        description: 'maize',
-        amountTZS: 800_000,
-      },
-      {
-        id: '3',
-        date: daysAgo(300),
-        category: 'Cooperative',
-        description: 'AMCOS payout',
-        amountTZS: 300_000,
-      },
-      {
-        id: '4',
-        date: daysAgo(200),
-        category: 'Sale · Beans',
-        description: 'beans',
-        amountTZS: 400_000,
-      },
-      {
-        id: '5',
-        date: daysAgo(60),
-        category: 'Sale · Maize',
-        description: 'maize',
-        amountTZS: 600_000,
-      },
-    ];
     const r = computeCreditScore({
-      ledger,
+      ledger: SYNTHETIC_LEDGERS.steadyMaize,
       nowISO: NOW,
       hasActiveInsurance: true,
       contractsCompleted: 2,
+      allowRealData: false,
     });
     expect(r.score).toBeGreaterThan(600);
     expect(r.score).toBeLessThanOrEqual(850);
     expect(['good', 'strong']).toContain(r.band);
+    // and it outranks a brand-new farmer
+    const fresh = computeCreditScore({
+      ledger: SYNTHETIC_LEDGERS.newFarmer,
+      nowISO: NOW,
+      allowRealData: false,
+    });
+    expect(r.score).toBeGreaterThan(fresh.score);
   });
 
   it('never exceeds the 300–850 bounds', () => {
-    const ledger: LedgerEntry[] = Array.from({ length: 50 }, (_, i) => ({
-      id: String(i),
-      date: daysAgo(400 - i),
-      category: `Sale · Crop${i % 5}`,
-      description: 'x',
-      amountTZS: 1_000_000,
-    }));
     const r = computeCreditScore({
-      ledger,
+      ledger: SYNTHETIC_LEDGERS.maxedOut,
       nowISO: NOW,
       hasActiveInsurance: true,
       contractsCompleted: 9,
+      allowRealData: false,
     });
     expect(r.score).toBeLessThanOrEqual(850);
     expect(r.score).toBeGreaterThanOrEqual(300);
@@ -84,5 +54,43 @@ describe('computeCreditScore', () => {
     expect(bandFor(560)).toBe('fair');
     expect(bandFor(660)).toBe('good');
     expect(bandFor(800)).toBe('strong');
+  });
+});
+
+describe('computeCreditScore — CRE-179 legal hold', () => {
+  const real: LedgerEntry = {
+    id: 'l_real_1',
+    date: NOW,
+    category: 'Sale · Maize',
+    description: 'farmer-typed',
+    amountTZS: 500_000,
+    source: 'self_reported',
+  };
+
+  it('throws on real data when allowRealData is false', () => {
+    expect(() => computeCreditScore({ ledger: [real], nowISO: NOW, allowRealData: false })).toThrow(
+      CreditDataSourceError
+    );
+  });
+
+  it('tryComputeCreditScore reports blocked instead of throwing', () => {
+    expect(tryComputeCreditScore({ ledger: [real], nowISO: NOW, allowRealData: false })).toEqual({
+      status: 'blocked',
+      reason: 'legal_hold',
+    });
+  });
+
+  it('tryComputeCreditScore scores synthetic data', () => {
+    const r = tryComputeCreditScore({
+      ledger: SYNTHETIC_LEDGERS.steadyMaize,
+      nowISO: NOW,
+      allowRealData: false,
+    });
+    expect(r.status).toBe('ok');
+  });
+
+  it('scores real data only when explicitly allowed', () => {
+    const r = computeCreditScore({ ledger: [real], nowISO: NOW, allowRealData: true });
+    expect(r.score).toBeGreaterThanOrEqual(300);
   });
 });

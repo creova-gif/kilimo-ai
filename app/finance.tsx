@@ -46,6 +46,7 @@ import { useKilimoStore } from '../store/useKilimoStore';
 import { useFarmDataStore, LedgerEntry } from '../store/useFarmDataStore';
 import { useContractsStore } from '../store/useContractsStore';
 import { pushLedgerEntry } from '../lib/credit/ledgerSync';
+import { CREDIT_ALLOW_REAL } from '../lib/credit/realDataFlag';
 import Svg, {
   Line as SvgLine,
   Text as SvgText,
@@ -391,7 +392,7 @@ export default function FinanceScreen() {
       source: 'self_reported',
     };
     // Offline-first: saved locally immediately, then best-effort synced to
-    // the server ledger backing the real Agro-ID credit score (same pattern
+    // the server ledger backing the Agro-ID credit score (same pattern
     // as agro-id.tsx's own entry form).
     addLedgerEntry(entry);
     setShowAdd(false);
@@ -927,9 +928,14 @@ export default function FinanceScreen() {
                 icon={<FileText size={40} color={colors.primary} />}
                 title={language === 'sw' ? 'Hakuna rekodi bado' : 'No records yet'}
                 body={
-                  language === 'sw'
-                    ? 'Ongeza mapato na matumizi yako ili kuona muhtasari na alama yako ya mikopo.'
-                    : 'Add your income and expenses to see a summary and build your credit score.'
+                  // CRE-179: don't promise a credit score while the legal hold is on.
+                  CREDIT_ALLOW_REAL
+                    ? language === 'sw'
+                      ? 'Ongeza mapato na matumizi yako ili kuona muhtasari na alama yako ya mikopo.'
+                      : 'Add your income and expenses to see a summary and build your credit score.'
+                    : language === 'sw'
+                      ? 'Ongeza mapato na matumizi yako ili kuona muhtasari.'
+                      : 'Add your income and expenses to see a summary.'
                 }
                 cta={language === 'sw' ? 'Ongeza Rekodi ya Kwanza' : 'Add First Record'}
                 onCta={() => setShowAdd(true)}

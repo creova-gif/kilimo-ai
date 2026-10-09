@@ -16,6 +16,7 @@
  */
 
 import type { LedgerEntry } from '../../store/useFarmDataStore';
+import { assertScorableLedger, CreditDataSourceError } from './dataSourceGuard';
 
 export type CreditBand = 'building' | 'fair' | 'good' | 'strong';
 
@@ -67,7 +68,38 @@ const BAND_LABELS: Record<CreditBand, { en: string; sw: string }> = {
   strong: { en: 'Strong', sw: 'Imara' },
 };
 
-export function computeCreditScore(input: CreditInputs): CreditScore {
+/**
+ * CRE-179 legal hold: every caller must decide explicitly whether real
+ * (non-synthetic) ledger data may be scored. Required, not optional, so tsc
+ * breaks any call site that does not decide.
+ */
+export type GuardedCreditInputs = CreditInputs & { allowRealData: boolean };
+
+export type CreditScoreResult =
+  | { status: 'ok'; score: CreditScore }
+  | { status: 'blocked'; reason: 'legal_hold' };
+
+/**
+ * Score a ledger. Throws CreditDataSourceError if the ledger contains real
+ * data and allowRealData is false. An empty ledger is allowed (base 300).
+ */
+export function computeCreditScore(input: GuardedCreditInputs): CreditScore {
+  assertScorableLedger(input.ledger, input.allowRealData);
+  return scoreLedgerUnchecked(input);
+}
+
+/** Non-throwing variant for UI code (e.g. inside useMemo). */
+export function tryComputeCreditScore(input: GuardedCreditInputs): CreditScoreResult {
+  try {
+    return { status: 'ok', score: computeCreditScore(input) };
+  } catch (e) {
+    if (e instanceof CreditDataSourceError) return { status: 'blocked', reason: 'legal_hold' };
+    throw e;
+  }
+}
+
+// Unguarded scorer. Not exported: all callers go through computeCreditScore.
+function scoreLedgerUnchecked(input: CreditInputs): CreditScore {
   const { ledger, nowISO } = input;
   const income = ledger.filter((e) => e.amountTZS > 0);
   const expense = ledger.filter((e) => e.amountTZS < 0);

@@ -46,8 +46,9 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import { Card } from '../components/ui/Card';
-import { computeCreditScore } from '../lib/credit/score';
+import { tryComputeCreditScore } from '../lib/credit/score';
 import { pushLedgerEntry } from '../lib/credit/ledgerSync';
+import { CREDIT_ALLOW_REAL } from '../lib/credit/realDataFlag';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -96,16 +97,20 @@ export default function AgroIdScreen() {
   }, [ledger]);
 
   // Transparent, rule-based credit score derived from the verified ledger.
-  const credit = useMemo(
+  // CRE-179 legal hold: real (non-synthetic) ledger data is never scored
+  // unless CREDIT_ALLOW_REAL (always false on production builds).
+  const creditResult = useMemo(
     () =>
-      computeCreditScore({
+      tryComputeCreditScore({
         ledger,
         nowISO: new Date().toISOString(),
         hasActiveInsurance: insurance.some((p) => p.status === 'active'),
         contractsCompleted: 0,
+        allowRealData: CREDIT_ALLOW_REAL,
       }),
     [ledger, insurance]
   );
+  const credit = creditResult.status === 'ok' ? creditResult.score : null;
 
   // Verifiable QR — points at the public verify-agro-id edge function when the
   // backend URL is configured, falling back to the marketing verify page.
@@ -331,94 +336,123 @@ export default function AgroIdScreen() {
                   : 'My Farm'}
             </Text>
 
-            {/* Credit Score — transparent, ledger-derived */}
-            <View
-              style={[
-                styles.creditCard,
-                {
-                  backgroundColor: isDark ? colors.primary + '14' : colors.primary + '0D',
-                  borderColor: colors.primary + '33',
-                },
-              ]}
-            >
-              <View style={styles.creditTop}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.creditLabel, { color: colors.textMute }]}>
-                    {sw ? 'ALAMA YA MIKOPO' : 'CREDIT SCORE'}
-                  </Text>
-                  <View style={styles.creditScoreRow}>
-                    <Text style={[styles.creditScoreNum, { color: colors.primary }]}>
-                      {credit.score}
-                    </Text>
-                    <Text style={[styles.creditScoreMax, { color: colors.textMute }]}>/ 850</Text>
-                  </View>
-                </View>
-                <View style={{ alignItems: 'flex-end', gap: 8 }}>
-                  <View style={[styles.creditBandPill, { backgroundColor: colors.primary + '18' }]}>
-                    <ShieldCheck size={11} color={colors.primary} />
-                    <Text style={[styles.creditBandText, { color: colors.primary }]}>
-                      {sw ? credit.bandLabelSw : credit.bandLabel}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => handleInfoPress(sw ? 'Alama ya Mikopo' : 'Credit Score')}
-                    style={styles.infoCircle}
-                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                    accessibilityRole="button"
-                    accessibilityLabel={sw ? 'Maelezo ya alama ya mikopo' : 'About credit score'}
-                  >
-                    <Info size={12} color={colors.primary} />
-                  </TouchableOpacity>
-                </View>
+            {/* Credit Score — transparent, ledger-derived. CRE-179: when the
+                legal hold blocks real data, show a plain unavailable state
+                (no number, band or factor bars). */}
+            {credit === null ? (
+              <View
+                testID="credit-score-unavailable"
+                style={[
+                  styles.creditCard,
+                  {
+                    backgroundColor: isDark ? colors.primary + '14' : colors.primary + '0D',
+                    borderColor: colors.primary + '33',
+                  },
+                ]}
+              >
+                <Text style={[styles.creditLabel, { color: colors.textMute }]}>
+                  {sw ? 'ALAMA YA MIKOPO' : 'CREDIT SCORE'}
+                </Text>
+                <Text style={[styles.factorLabel, { color: colors.text, marginTop: 8 }]}>
+                  {sw
+                    ? 'Alama ya mikopo haipatikani kwa sasa tunapokamilisha usajili wa kisheria.'
+                    : 'Credit score unavailable while we complete regulatory registration.'}
+                </Text>
               </View>
-
-              <View style={[styles.creditTrack, { backgroundColor: colors.border }]}>
-                <View
-                  style={[
-                    styles.creditFill,
-                    {
-                      width: `${Math.round(((credit.score - 300) / 550) * 100)}%`,
-                      backgroundColor: colors.primary,
-                    },
-                  ]}
-                />
-              </View>
-
-              <View style={styles.factorList}>
-                {credit.factors.map((f) => (
-                  <View key={f.key} style={styles.factorRow}>
-                    <View style={{ flex: 1.4 }}>
-                      <Text style={[styles.factorLabel, { color: colors.text }]} numberOfLines={1}>
-                        {sw ? f.labelSw : f.label}
+            ) : (
+              <View
+                style={[
+                  styles.creditCard,
+                  {
+                    backgroundColor: isDark ? colors.primary + '14' : colors.primary + '0D',
+                    borderColor: colors.primary + '33',
+                  },
+                ]}
+              >
+                <View style={styles.creditTop}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.creditLabel, { color: colors.textMute }]}>
+                      {sw ? 'ALAMA YA MIKOPO' : 'CREDIT SCORE'}
+                    </Text>
+                    <View style={styles.creditScoreRow}>
+                      <Text style={[styles.creditScoreNum, { color: colors.primary }]}>
+                        {credit.score}
                       </Text>
-                      <Text
-                        style={[styles.factorDetail, { color: colors.textMute }]}
-                        numberOfLines={1}
-                      >
-                        {sw ? f.detailSw : f.detail}
-                      </Text>
-                    </View>
-                    <View style={[styles.factorBarTrack, { backgroundColor: colors.border }]}>
-                      <View
-                        style={[
-                          styles.factorBarFill,
-                          {
-                            width: `${Math.round((f.score / f.max) * 100)}%`,
-                            backgroundColor: colors.primary,
-                          },
-                        ]}
-                      />
+                      <Text style={[styles.creditScoreMax, { color: colors.textMute }]}>/ 850</Text>
                     </View>
                   </View>
-                ))}
-              </View>
+                  <View style={{ alignItems: 'flex-end', gap: 8 }}>
+                    <View
+                      style={[styles.creditBandPill, { backgroundColor: colors.primary + '18' }]}
+                    >
+                      <ShieldCheck size={11} color={colors.primary} />
+                      <Text style={[styles.creditBandText, { color: colors.primary }]}>
+                        {sw ? credit.bandLabelSw : credit.bandLabel}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => handleInfoPress(sw ? 'Alama ya Mikopo' : 'Credit Score')}
+                      style={styles.infoCircle}
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={sw ? 'Maelezo ya alama ya mikopo' : 'About credit score'}
+                    >
+                      <Info size={12} color={colors.primary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
 
-              <Text style={[styles.creditFootnote, { color: colors.textMute }]}>
-                {sw
-                  ? 'Imehesabiwa kutoka leja yako iliyothibitishwa. Si ushauri wa kifedha.'
-                  : 'Computed from your verified ledger. Not financial advice.'}
-              </Text>
-            </View>
+                <View style={[styles.creditTrack, { backgroundColor: colors.border }]}>
+                  <View
+                    style={[
+                      styles.creditFill,
+                      {
+                        width: `${Math.round(((credit.score - 300) / 550) * 100)}%`,
+                        backgroundColor: colors.primary,
+                      },
+                    ]}
+                  />
+                </View>
+
+                <View style={styles.factorList}>
+                  {credit.factors.map((f) => (
+                    <View key={f.key} style={styles.factorRow}>
+                      <View style={{ flex: 1.4 }}>
+                        <Text
+                          style={[styles.factorLabel, { color: colors.text }]}
+                          numberOfLines={1}
+                        >
+                          {sw ? f.labelSw : f.label}
+                        </Text>
+                        <Text
+                          style={[styles.factorDetail, { color: colors.textMute }]}
+                          numberOfLines={1}
+                        >
+                          {sw ? f.detailSw : f.detail}
+                        </Text>
+                      </View>
+                      <View style={[styles.factorBarTrack, { backgroundColor: colors.border }]}>
+                        <View
+                          style={[
+                            styles.factorBarFill,
+                            {
+                              width: `${Math.round((f.score / f.max) * 100)}%`,
+                              backgroundColor: colors.primary,
+                            },
+                          ]}
+                        />
+                      </View>
+                    </View>
+                  ))}
+                </View>
+
+                <Text style={[styles.creditFootnote, { color: colors.textMute }]}>
+                  {sw
+                    ? 'Imehesabiwa kutoka leja yako iliyothibitishwa. Si ushauri wa kifedha.'
+                    : 'Computed from your verified ledger. Not financial advice.'}
+                </Text>
+              </View>
+            )}
 
             {/* Section 1: Market Conditions — sample data below (see comment
                 on handleInfoPress above); no live market-price backend is
